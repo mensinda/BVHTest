@@ -1,0 +1,116 @@
+---
+Language:        Cpp
+BasedOnStyle:    LLVM
+
+ColumnLimit:      120
+IndentWidth:      2
+TabWidth:         2
+PointerAlignment: Right
+Standard:         Cpp11
+UseTab:           Never
+
+AccessModifierOffset:         -1
+AlignAfterOpenBracket:        Align
+AlignConsecutiveAssignments:  true
+AlignConsecutiveDeclarations: true
+AlignEscapedNewlines:         Right
+AlignOperands:                true
+AlignTrailingComments:        true
+
+AllowAllParametersOfDeclarationOnNextLine: true
+AllowShortBlocksOnASingleLine:             true
+AllowShortCaseLabelsOnASingleLine:         true
+AllowShortFunctionsOnASingleLine:          All
+AllowShortIfStatementsOnASingleLine:       false
+AllowShortLoopsOnASingleLine:              false
+
+AlwaysBreakAfterDefinitionReturnType: None
+AlwaysBreakAfterReturnType:           None
+AlwaysBreakBeforeMultilineStrings:    true
+AlwaysBreakTemplateDeclarations:      true
+
+BinPackArguments:  false
+BinPackParameters: false
+
+BreakAfterJavaFieldAnnotations:          true
+BreakBeforeBinaryOperators:              None
+BreakBeforeBraces:                       Attach
+BreakBeforeInheritanceComma:             false
+BreakBeforeTernaryOperators:             true
+BreakConstructorInitializersBeforeComma: false
+BreakConstructorInitializers:            BeforeColon
+BreakStringLiterals:                     true
+
+CommentPragmas:    '^ IWYU pragma:'
+CompactNamespaces: false
+
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+ConstructorInitializerIndentWidth:              4
+ContinuationIndentWidth:                        4
+Cpp11BracedListStyle:                           true
+
+DerivePointerAlignment:           false
+DisableFormat:                    false
+ExperimentalAutoDetectBinPacking: false
+FixNamespaceComments:             true
+
+ForEachMacros:
+  - foreach
+  - Q_FOREACH
+  - BOOST_FOREACH
+
+SortIncludes:          true
+SortUsingDeclarations: true
+ReflowComments:        true
+
+IncludeCategories:
+ - Regex: 'BVHTestCfg.hpp'
+   Priority: -1
+ - Regex: 'catch.hpp'
+   Priority: 5
+ - Regex: '[a-z]+/[A-Z][a-zA-Z0-9]*.[ch]pp'
+   Priority: 9
+ - Regex: '[A-Z][a-zA-Z0-9]*.[ch]pp'
+   Priority: 10
+ - Regex: '.*'
+   Priority: 15
+
+IncludeIsMainRegex: '(Test)?$'
+
+IndentCaseLabels:           true
+IndentPPDirectives:         AfterHash
+IndentWrappedFunctionNames: false
+JavaScriptQuotes:           Double
+JavaScriptWrapImports:      true
+
+KeepEmptyLinesAtTheStartOfBlocks: true
+MaxEmptyLinesToKeep:              4
+
+MacroBlockBegin: ''
+MacroBlockEnd:   ''
+
+NamespaceIndentation:        None
+ObjCBlockIndentWidth:        2
+ObjCSpaceAfterProperty:      false
+ObjCSpaceBeforeProtocolList: true
+
+PenaltyBreakAssignment:               2
+PenaltyBreakBeforeFirstCallParameter: 19
+PenaltyBreakComment:                  10000
+PenaltyBreakFirstLessLess:            120
+PenaltyBreakString:                   1000
+PenaltyExcessCharacter:               100
+PenaltyReturnTypeOnItsOwnLine:        200
+
+SpaceAfterCStyleCast:           false
+SpaceAfterTemplateKeyword:      true
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens:              ControlStatements
+SpaceInEmptyParentheses:        false
+SpacesBeforeTrailingComments:   1
+SpacesInAngles:                 false
+SpacesInCStyleCastParentheses:  false
+SpacesInContainerLiterals:      false
+SpacesInParentheses:            false
+SpacesInSquareBrackets:         false
+...

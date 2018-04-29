@@ -1,0 +1,3 @@
+[submodule "external/enumGen"]
+	path = external/enumGen
+	url = https://github.com/mensinda/enumGen.git
