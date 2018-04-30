@@ -1,0 +1,15 @@
+{
+  "class": {
+    "funcName": "toStr",
+    "namespace": "BVHTest",
+    "useNamespace": true,
+    "enableBitfields": true,
+    "bitfieldType": "uint64_t"
+  },
+  "generator": {
+    "hppFile": "@CLASS_NAME@.hpp",
+    "cppFile": "@CLASS_NAME@.cpp",
+    "indent": 2,
+    "bitfieldConcat": " | "
+  }
+}

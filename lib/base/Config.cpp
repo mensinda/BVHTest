@@ -14,25 +14,17 @@
  * limitations under the License.
  */
 
-#pragma once
+#include "Config.hpp"
 
-#include "base/Configurable.hpp"
-#include <string>
+using namespace BVHTest::base;
+using namespace std;
 
-namespace BVHTest {
+Config::~Config() {}
 
-class Config final : public base::Configurable {
-  std::string name = "BVHTest default run";
+void Config::fromJSON(json const &_j) {
+  vName       = _j.at("name").get<string>();
+  vMaxThreads = _j.at("maxThreads").get<uint32_t>();
+  vVerbose    = _j.at("verbose").get<bool>();
+}
 
- public:
-  Config() = default;
-  ~Config();
-
-  void fromJSON(json const& _j)  override;
-  json toJSON() const override;
-};
-
-void to_json(json &_j, const Config &_cfg)  { _j = _cfg.toJSON(); }
-void from_json(const json &_j, Config &_cfg) { _cfg.fromJSON(_j); }
-
-} // namespace BVHTest
+json Config::toJSON() const { return json{{"name", vName}, {"maxThreads", vMaxThreads}, {"verbose", vVerbose}}; }

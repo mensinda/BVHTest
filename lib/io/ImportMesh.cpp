@@ -14,21 +14,21 @@
  * limitations under the License.
  */
 
-#include <iostream>
-#include <vector>
-#include <string>
+#include "ImportMesh.hpp"
 
-using namespace std;
+using namespace BVHTest::IO;
+using namespace BVHTest::base;
 
-int main(int argc, char *argv[]) {
-  // argc + argv to vector<string>
-  vector<string> args;
-  for(int i = 1; i < argc; ++i)
-    args.push_back(argv[i]);
+ImportMesh::~ImportMesh() {}
 
-  for(auto &i : args) {
-    cout << i << endl;
-  }
+void ImportMesh::fromJSON(const json &_j) {
+  vSourcePath = _j.at("sourcePath").get<std::string>();
+  vDestPath   = _j.at("destPath").get<std::string>();
+}
 
-  return 0;
+json ImportMesh::toJSON() const { return json{{"sourcePath", vSourcePath}, {"destPath", vDestPath}}; }
+
+ErrorCode ImportMesh::runImpl(State &_state) {
+  (void)_state;
+  return ErrorCode::OK;
 }

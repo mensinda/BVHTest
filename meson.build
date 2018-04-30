@@ -9,14 +9,26 @@ project( 'BVHTest', 'cpp',
   version : '0.0.1',
   license : 'Apache 2')
 
-externalInc = include_directories('external', 'src')
-assimp      = dependency('assimp')
+incDirs = include_directories('external', 'external/spdlog/include', 'lib', '.', './lib')
+assimp  = dependency('assimp')
+threads = dependency('threads')
+
+cfgData = configuration_data()
+cfgData.set_quoted('BVHTEST_VERSION', meson.project_version())
+cfgData.set_quoted('LOGGER_NAME',     meson.project_name())
+
+configure_file(
+  configuration: cfgData,
+  input:         'BVHTestCfg.hpp.in',
+  output:        'BVHTestCfg.hpp'
+)
 
 fullLibDirPath = get_option('prefix') + '/' + get_option('libdir')
 
-# Build libs
-subdir('src/base')
+enumGen = find_program(['external/enumGen/enumGen.py', 'enumGen.py', '/usr/bin/enumGen.py', '/bin/enumGen.py'], required : true)
+enumParser = generator(enumGen, output: '@BASENAME@.json', arguments: ['-d', '@BUILD_DIR@', 'parse', '@INPUT@'])
 
-# Build exes
-subdir('src/BVHTest')
+# Build
+subdir('lib')
+subdir('src')
 subdir('test')

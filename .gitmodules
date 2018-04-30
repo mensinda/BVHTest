@@ -1,3 +1,6 @@
 [submodule "external/enumGen"]
 	path = external/enumGen
 	url = https://github.com/mensinda/enumGen.git
+[submodule "external/spdlog"]
+	path = external/spdlog
+	url = https://github.com/gabime/spdlog.git

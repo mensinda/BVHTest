@@ -14,15 +14,16 @@
  * limitations under the License.
  */
 
-#include "Config.hpp"
+#include "BVHTestCfg.hpp"
+#include "Command.hpp"
+#include <chrono>
 
-using namespace BVHTest;
-using namespace std;
+using namespace BVHTest::base;
 
-Config::~Config() {}
+Command::~Command() {}
 
-void BVHTest::Config::fromJSON(json const& _j) {
-  name = _j.at("name").get<string>();
+ErrorCode Command::run(State &_state) {
+  auto lLogger = getLogger();
+  lLogger->info("Running command {}", getName());
+  return runImpl(_state);
 }
-
-json BVHTest::Config::toJSON() const { return json{{"name", name}}; }
