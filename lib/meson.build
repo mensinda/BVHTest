@@ -21,10 +21,12 @@ baseInc = files([
 
 # IO lib
 ioSrc = files([
+  'io/ExportMesh.cpp',
   'io/ImportMesh.cpp'
 ])
 
 ioInc = files([
+  'io/ExportMesh.hpp',
   'io/ImportMesh.hpp'
 ])
 
@@ -53,18 +55,19 @@ enum2Str = custom_target('Enum2Str',
 enum2StrLib = library('enum2Str', enum2Str,
   include_directories: incDirs,
   install: true,
-  dependencies: [threads],
+  dependencies: baseDeps,
 )
 
 baseLib = library('base', baseSrc,
   include_directories: incDirs,
   install: true,
-  dependencies: [threads],
+  link_with: [enum2StrLib],
+  dependencies: baseDeps,
 )
 
 ioLib = library('io', ioSrc,
   include_directories: incDirs,
   install: true,
-  link_with: baseLib,
-  dependencies: [threads],
+  link_with: [baseLib, enum2StrLib],
+  dependencies: baseDeps + [assimp],
 )

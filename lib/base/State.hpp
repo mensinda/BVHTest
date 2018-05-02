@@ -17,6 +17,8 @@
 #pragma once
 
 #include <stdint.h>
+#include <string>
+#include <vector>
 
 namespace BVHTest::base {
 
@@ -29,8 +31,36 @@ enum class CommandType {
   EXPORT    = (1 << 24) // Data was exported
 };
 
+struct Triangle final {
+  uint32_t v1;
+  uint32_t v2;
+  uint32_t v3;
+};
+
+struct Vertex final {
+  float x;
+  float y;
+  float z;
+};
+
+struct Mesh final {
+  std::vector<Vertex>   vert;
+  std::vector<Vertex>   norm;
+  std::vector<Triangle> faces;
+};
+
 struct State final {
-  uint64_t commandsRun = 0;
+  uint64_t    commandsRun = 0;
+  std::string input       = "";
+
+  struct CMD final {
+    std::string name;
+    uint64_t    duration;
+  };
+
+  std::vector<CMD> commands;
+
+  Mesh mesh;
 };
 
 } // namespace BVHTest::base

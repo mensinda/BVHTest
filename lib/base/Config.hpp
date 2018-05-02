@@ -33,9 +33,10 @@ class Config final : public base::Configurable {
  private:
   FUNC_PTR commandFromString;
 
-  std::string vName       = "BVHTest default run";
-  uint32_t    vMaxThreads = 4;
-  bool        vVerbose    = false;
+  std::string              vName       = "BVHTest default run";
+  uint32_t                 vMaxThreads = 4;
+  bool                     vVerbose    = true;
+  std::vector<std::string> vInput      = {};
 
   std::vector<CMD_PTR> vCommands;
 
@@ -43,6 +44,13 @@ class Config final : public base::Configurable {
   Config() = delete;
   Config(FUNC_PTR _fromString) : commandFromString(_fromString) {}
   ~Config();
+
+  bool                 addCommand(std::string _name) noexcept;
+  std::vector<CMD_PTR> getCommands();
+
+  inline std::string              getName() const { return vName; }
+  inline std::vector<std::string> getInput() const { return vInput; }
+  inline bool                     getIsVerbose() const { return vVerbose; }
 
   void fromJSON(json const &_j) override;
   json toJSON() const override;

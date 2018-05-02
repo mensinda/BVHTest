@@ -14,21 +14,76 @@
  * limitations under the License.
  */
 
+#include "BVHTestCfg.hpp"
 #include "ImportMesh.hpp"
+#include <assimp/Importer.hpp>
+#include <assimp/SceneCombiner.h>
+#include <assimp/postprocess.h>
+#include <assimp/scene.h>
 
 using namespace BVHTest::IO;
 using namespace BVHTest::base;
+using namespace Assimp;
 
 ImportMesh::~ImportMesh() {}
 
-void ImportMesh::fromJSON(const json &_j) {
-  vSourcePath = _j.at("sourcePath").get<std::string>();
-  vDestPath   = _j.at("destPath").get<std::string>();
-}
-
-json ImportMesh::toJSON() const { return json{{"sourcePath", vSourcePath}, {"destPath", vDestPath}}; }
+void ImportMesh::fromJSON(const json &_j) { vOptimize = _j.value("optimize", vOptimize); }
+json ImportMesh::toJSON() const { return json{{"optimize", vOptimize}}; }
 
 ErrorCode ImportMesh::runImpl(State &_state) {
-  (void)_state;
+  auto lLogger = getLogger();
+
+  unsigned int lFlags =
+      aiProcess_Triangulate | aiProcess_OptimizeMeshes | aiProcess_OptimizeGraph | aiProcess_RemoveComponent |
+      aiProcess_GenSmoothNormals; // aiProcess_FindDegenerates | aiProcess_SortByPType | aiProcess_JoinIdenticalVertices
+
+  if (vOptimize) lFlags |= aiProcess_ImproveCacheLocality;
+
+  Importer lImp;
+  lImp.SetPropertyInteger(AI_CONFIG_PP_SBP_REMOVE, aiPrimitiveType_LINE | aiPrimitiveType_POINT);
+  lImp.SetPropertyInteger(AI_CONFIG_PP_RVC_FLAGS,
+                          aiComponent_TANGENTS_AND_BITANGENTS | aiComponent_COLORS | aiComponent_TEXCOORDS |
+                              aiComponent_BONEWEIGHTS | aiComponent_ANIMATIONS | aiComponent_TEXTURES |
+                              aiComponent_LIGHTS | aiComponent_CAMERAS | aiComponent_MATERIALS);
+
+  const aiScene *lScene = lImp.ReadFile(_state.input, lFlags);
+
+  if (!lScene) {
+    lLogger->error("Failed to load file {}", _state.input);
+    lLogger->error("{}", lImp.GetErrorString());
+    return ErrorCode::IO_ERROR;
+  }
+
+  if (lScene->mNumMeshes != 1) {
+    lLogger->warn("Scene has {} meshes but only one mesh is supported", lScene->mNumMeshes);
+    return ErrorCode::PARSE_ERROR;
+  }
+
+  aiMesh *lMesh = lScene->mMeshes[0];
+  if (lMesh->mPrimitiveTypes != aiPrimitiveType_TRIANGLE) {
+    lLogger->error("Mesh has non triangles");
+    return ErrorCode::PARSE_ERROR;
+  }
+
+  _state.mesh.vert.resize(lMesh->mNumVertices);
+  _state.mesh.norm.resize(lMesh->mNumVertices);
+  _state.mesh.faces.resize(lMesh->mNumFaces);
+
+  for (size_t i = 0; i < lMesh->mNumVertices; ++i) {
+    _state.mesh.vert[i].x = lMesh->mVertices[i].x;
+    _state.mesh.vert[i].y = lMesh->mVertices[i].y;
+    _state.mesh.vert[i].z = lMesh->mVertices[i].z;
+
+    _state.mesh.norm[i].x = lMesh->mNormals[i].x;
+    _state.mesh.norm[i].y = lMesh->mNormals[i].y;
+    _state.mesh.norm[i].z = lMesh->mNormals[i].z;
+  }
+
+  for (size_t i = 0; i < lMesh->mNumFaces; ++i) {
+    _state.mesh.faces[i].v1 = lMesh->mFaces[i].mIndices[0];
+    _state.mesh.faces[i].v2 = lMesh->mFaces[i].mIndices[1];
+    _state.mesh.faces[i].v3 = lMesh->mFaces[i].mIndices[2];
+  }
+
   return ErrorCode::OK;
 }

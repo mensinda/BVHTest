@@ -23,6 +23,8 @@ namespace BVHTest::base {
 
 enum class ErrorCode {
   OK,           // Everything went fine
+  IO_ERROR,     // Failed to read / write a file
+  PARSE_ERROR,  // Paring a file failed
   GENERIC_ERROR // Something went wrong
 };
 

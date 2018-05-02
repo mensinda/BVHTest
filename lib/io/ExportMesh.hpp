@@ -20,18 +20,18 @@
 
 namespace BVHTest::IO {
 
-class ImportMesh final : public base::Command {
+class ExportMesh final : public base::Command {
  private:
-  bool vOptimize = false;
+  std::string vOutDir = ".";
 
  public:
-  ImportMesh() = default;
-  ~ImportMesh();
+  ExportMesh() = default;
+  virtual ~ExportMesh();
 
-  inline std::string       getName() const override { return "import"; }
-  inline std::string       getDesc() const override { return "import 3D object from data file"; }
-  inline base::CommandType getType() const override { return base::CommandType::IMPORT; }
-  inline uint64_t          getRequiredCommands() const override { return 0; }
+  inline std::string       getName() const override { return "export"; }
+  inline std::string       getDesc() const override { return "exports mesh to custom format"; }
+  inline base::CommandType getType() const override { return base::CommandType::EXPORT; }
+  inline uint64_t getRequiredCommands() const override { return static_cast<uint64_t>(base::CommandType::IMPORT); }
 
   base::ErrorCode runImpl(base::State &_state) override;
 

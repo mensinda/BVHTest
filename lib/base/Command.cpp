@@ -16,14 +16,40 @@
 
 #include "BVHTestCfg.hpp"
 #include "Command.hpp"
+#include "Enum2Str.hpp"
 #include <chrono>
 
 using namespace BVHTest::base;
+using namespace BVHTest::Enum2Str;
+using namespace std;
+using namespace std::chrono;
 
 Command::~Command() {}
 
 ErrorCode Command::run(State &_state) {
   auto lLogger = getLogger();
-  lLogger->info("Running command {}", getName());
-  return runImpl(_state);
+  lLogger->info("Running:  [{:^10}] command {:<10} -- {}", toStr(getType()), getName(), getDesc());
+
+  if ((_state.commandsRun & getRequiredCommands()) != getRequiredCommands()) {
+    lLogger->error("Command {} has unmet requirements: Required: {}", getName());
+    lLogger->error("  - Required:         {}", base_ErrorCode_toStr(getRequiredCommands()));
+    lLogger->error("  - Already executed: {}", base_ErrorCode_toStr(_state.commandsRun));
+  }
+
+  auto      lStart = high_resolution_clock::now();
+  ErrorCode lRet   = runImpl(_state);
+  auto      lEnd   = high_resolution_clock::now();
+
+  if (lRet != ErrorCode::OK) {
+    lLogger->error("Command {} returned {}", getName(), toStr(lRet));
+    return lRet;
+  }
+
+  milliseconds lDur = duration_cast<milliseconds>(lEnd - lStart);
+  auto         lSec = duration_cast<seconds>(lDur).count();
+  lLogger->info("Duration: {:>3}s {:>3}ms", lSec, lDur.count() - lSec * 1000);
+
+  _state.commandsRun |= static_cast<uint64_t>(getType());
+  _state.commands.push_back({getName(), static_cast<uint64_t>(lDur.count())});
+  return ErrorCode::OK;
 }

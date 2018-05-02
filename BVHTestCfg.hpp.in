@@ -17,15 +17,17 @@
 #pragma once
 
 #include <spdlog/spdlog.h>
+#include <@FS_INC@>
 
 namespace spd = spdlog;
+namespace fs  = @FS_NS@;
 
 #mesondefine BVHTEST_VERSION
 #mesondefine LOGGER_NAME
 
 namespace BVHTest {
 
-auto getLogger() {
+inline auto getLogger() {
   auto lLogger = spd::get(LOGGER_NAME);
   if (!lLogger) {
     lLogger = spd::stdout_color_mt(LOGGER_NAME);

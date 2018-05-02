@@ -17,6 +17,7 @@
 #include "BVHTestCfg.hpp"
 #include "base/Config.hpp"
 #include "base/StringHash.hpp"
+#include "io/ExportMesh.hpp"
 #include "io/ImportMesh.hpp"
 #include "Enum2Str.hpp"
 #include <fstream>
@@ -30,13 +31,15 @@ using namespace BVHTest::base;
 using namespace BVHTest::IO;
 using namespace fmt;
 using namespace Enum2Str;
+using namespace nlohmann;
 
-const vector<string> gCommandList = {"import"};
+const vector<string> gCommandList = {"import", "export"};
 
 // String command to object
 Config::CMD_PTR fromString(string _s) {
   switch (fnv1aHash(_s)) {
     case "import"_h: return make_shared<ImportMesh>();
+    case "export"_h: return make_shared<ExportMesh>();
   }
   return nullptr;
 }
@@ -75,8 +78,12 @@ int generate(vector<string> &args, size_t _start = 1) {
   }
 
   Config lCfg([](string _s) { return fromString(_s); });
-  json   lOutCfg = lCfg;
 
+  for (size_t i = _start + 1; i < args.size(); ++i) {
+    if (!lCfg.addCommand(args[i])) { return 2; }
+  }
+
+  json    lOutCfg = lCfg;
   fstream lFile(args[_start], lFile.out);
   if (!lFile.is_open()) {
     lLogger->error("Failed to open {} for writing", args[_start]);
@@ -89,21 +96,79 @@ int generate(vector<string> &args, size_t _start = 1) {
   return 0;
 }
 
+bool run(string _file) {
+  auto lLogger = getLogger();
+
+  try {
+    // Parse and update config
+    fstream lFile(_file, lFile.in);
+    json    lJSON;
+    lFile >> lJSON;
+    lFile.close();
+
+    Config lCfg([](string _s) { return fromString(_s); });
+    lCfg.fromJSON(lJSON);
+
+    lJSON = lCfg;
+    lFile.open(_file, lFile.out | lFile.trunc);
+    lFile << lJSON.dump(2);
+    lFile.close();
+
+    // Start executing
+    if (lCfg.getIsVerbose()) {
+      lLogger->set_level(spd::level::info);
+    } else {
+      lLogger->set_level(spd::level::warn);
+    }
+
+    auto lInput    = lCfg.getInput();
+    auto lCommands = lCfg.getCommands();
+
+    for (auto &i : lInput) {
+      lLogger->info("Processing {}", i);
+      State lState;
+      lState.input = i;
+
+      for (auto &j : lCommands) {
+        j->run(lState);
+      }
+
+      lLogger->info("");
+    }
+
+  } catch (detail::exception e) {
+    lLogger->error("JSON exception: {}", e.what());
+    return false;
+  }
+
+  return true;
+}
+
 int main(int argc, char *argv[]) {
+  auto           lLogger = getLogger();
   vector<string> args;
   for (int i = 1; i < argc; ++i)
     args.push_back(argv[i]);
 
-  if (args.size() == 0)
-    return usage();
+  if (args.size() == 0) return usage();
 
-  switch (fnv1aHash(args[0])) {
-    case "list"_h: return list();
-    case "generate"_h: return generate(args);
-    case "help"_h:
-    case "-h"_h:
-    case "--help"_h:
-    default: return usage();
+  for (size_t i = 0; i < args.size(); ++i) {
+    switch (fnv1aHash(args[i])) {
+      case "list"_h: return list();
+      case "generate"_h: return generate(args, i + 1);
+      case "run"_h:
+        if (++i >= args.size()) {
+          lLogger->error("Argument required for 'run'");
+          return 1;
+        }
+        if (!run(args[i])) return 2;
+        break;
+
+      case "help"_h:
+      case "-h"_h:
+      case "--help"_h:
+      default: return usage();
+    }
   }
 
   return 0;
