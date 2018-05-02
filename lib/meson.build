@@ -7,7 +7,8 @@ baseSrc = files([
   'base/Configurable.cpp',
   'base/Config.cpp',
   'base/Command.cpp',
-  'base/State.cpp'
+  'base/State.cpp',
+  'base/StatusDump.cpp'
 ])
 
 baseInc = files([
@@ -15,6 +16,7 @@ baseInc = files([
   'base/Config.hpp',
   'base/Command.hpp',
   'base/State.hpp',
+  'base/StatusDump.hpp',
   'base/StringHash.hpp'
 ])
 

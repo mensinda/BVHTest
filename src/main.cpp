@@ -16,6 +16,7 @@
 
 #include "BVHTestCfg.hpp"
 #include "base/Config.hpp"
+#include "base/StatusDump.hpp"
 #include "base/StringHash.hpp"
 #include "io/ExportMesh.hpp"
 #include "io/ImportMesh.hpp"
@@ -33,13 +34,14 @@ using namespace fmt;
 using namespace Enum2Str;
 using namespace nlohmann;
 
-const vector<string> gCommandList = {"import", "export"};
+const vector<string> gCommandList = {"import", "export", "status"};
 
 // String command to object
 Config::CMD_PTR fromString(string _s) {
   switch (fnv1aHash(_s)) {
     case "import"_h: return make_shared<ImportMesh>();
     case "export"_h: return make_shared<ExportMesh>();
+    case "status"_h: return make_shared<StatusDump>();
   }
   return nullptr;
 }
@@ -129,11 +131,8 @@ bool run(string _file) {
       State lState;
       lState.input = i;
 
-      for (auto &j : lCommands) {
-        j->run(lState);
-      }
-
-      lLogger->info("");
+      for (auto &j : lCommands)
+        if (j->run(lState) != ErrorCode::OK) break;
     }
 
   } catch (detail::exception e) {

@@ -28,10 +28,11 @@ Command::~Command() {}
 
 ErrorCode Command::run(State &_state) {
   auto lLogger = getLogger();
-  lLogger->info("Running:  [{:^10}] command {:<10} -- {}", toStr(getType()), getName(), getDesc());
+  auto lName   = getName();
+  lLogger->info("Running:  [{:^10}] command {:<10} -- {}", toStr(getType()), lName, getDesc());
 
   if ((_state.commandsRun & getRequiredCommands()) != getRequiredCommands()) {
-    lLogger->error("Command {} has unmet requirements: Required: {}", getName());
+    lLogger->error("Command {} has unmet requirements: Required: {}", lName);
     lLogger->error("  - Required:         {}", base_ErrorCode_toStr(getRequiredCommands()));
     lLogger->error("  - Already executed: {}", base_ErrorCode_toStr(_state.commandsRun));
   }
@@ -41,15 +42,11 @@ ErrorCode Command::run(State &_state) {
   auto      lEnd   = high_resolution_clock::now();
 
   if (lRet != ErrorCode::OK) {
-    lLogger->error("Command {} returned {}", getName(), toStr(lRet));
+    lLogger->error("Command {} returned {}", lName, toStr(lRet));
     return lRet;
   }
 
-  milliseconds lDur = duration_cast<milliseconds>(lEnd - lStart);
-  auto         lSec = duration_cast<seconds>(lDur).count();
-  lLogger->info("Duration: {:>3}s {:>3}ms", lSec, lDur.count() - lSec * 1000);
-
   _state.commandsRun |= static_cast<uint64_t>(getType());
-  _state.commands.push_back({getName(), static_cast<uint64_t>(lDur.count())});
+  _state.commands.push_back({lName, duration_cast<milliseconds>(lEnd - lStart)});
   return ErrorCode::OK;
 }

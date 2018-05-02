@@ -16,9 +16,12 @@
 
 #pragma once
 
+#include <chrono>
 #include <stdint.h>
 #include <string>
 #include <vector>
+
+using std::chrono::milliseconds;
 
 namespace BVHTest::base {
 
@@ -28,7 +31,8 @@ enum class CommandType {
   BVH_OPT1  = (1 << 5),
   BVH_OPT2  = (1 << 6),
   RAY_TRACE = (1 << 16),
-  EXPORT    = (1 << 24) // Data was exported
+  EXPORT    = (1 << 24), // Data was exported
+  SUMMARY   = (1 << 28)
 };
 
 struct Triangle final {
@@ -54,8 +58,8 @@ struct State final {
   std::string input       = "";
 
   struct CMD final {
-    std::string name;
-    uint64_t    duration;
+    std::string  name;
+    milliseconds duration;
   };
 
   std::vector<CMD> commands;

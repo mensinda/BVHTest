@@ -34,7 +34,7 @@ void Config::fromJSON(json const &_j) {
 
   if (_j.count("commands") == 0 || !_j["commands"].is_array()) return;
   for (auto const &i : _j["commands"]) {
-    string lName = i.at("id").get<string>();
+    string lName = i.at("cmd").get<string>();
 
     auto lCmd = commandFromString(lName);
     if (!lCmd) {
@@ -42,7 +42,7 @@ void Config::fromJSON(json const &_j) {
       continue;
     }
 
-    lCmd->fromJSON(i.at("info"));
+    lCmd->fromJSON(i.at("options"));
     vCommands.push_back(lCmd);
   }
 }
@@ -53,7 +53,7 @@ json Config::toJSON() const {
            {"commands", json::array()}};
 
   for (auto &i : vCommands)
-    lJSON["commands"].push_back(json{{"id", i->getName()}, {"info", i->toJSON()}});
+    lJSON["commands"].push_back(json{{"cmd", i->getName()}, {"options", i->toJSON()}});
 
   return lJSON;
 }
