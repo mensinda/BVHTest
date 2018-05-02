@@ -11,8 +11,8 @@ project( 'BVHTest', 'cpp',
   license : 'Apache 2')
 
 incDirs = include_directories('external', 'external/spdlog/include', 'lib', '.', './lib')
-assimp  = dependency('assimp')
-threads = dependency('threads')
+assimp  = dependency('assimp',  required: true, version: '>=4.1.0')
+threads = dependency('threads', required: true)
 
 compiler = meson.get_compiler('cpp')
 cfgData  = configuration_data()
@@ -34,6 +34,10 @@ else
   error('Unable to find C++17 filesystem')
 endif
 
+if not ['c++17', 'c++2a'].contains(get_option('cpp_std'))
+  error('At least c++17 required but ' + get_option('cpp_std') + ' provided')
+endif
+
 configure_file(
   configuration: cfgData,
   input:         'BVHTestCfg.hpp.in',
@@ -48,4 +52,4 @@ enumParser = generator(enumGen, output: '@BASENAME@.json', arguments: ['-d', '@B
 # Build
 subdir('lib')
 subdir('src')
-subdir('test')
+#subdir('test')
