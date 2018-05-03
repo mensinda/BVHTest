@@ -32,7 +32,8 @@ enum class CommandType {
   BVH_OPT2  = (1 << 6),
   RAY_TRACE = (1 << 16),
   EXPORT    = (1 << 24), // Data was exported
-  SUMMARY   = (1 << 28)
+  SUMMARY   = (1 << 28),
+  VIEWER    = (1 << 29) // Debug OGL viewer for the mesh, BVH, etc.
 };
 
 struct Triangle final {
@@ -55,6 +56,7 @@ struct Mesh final {
 
 struct State final {
   uint64_t    commandsRun = 0;
+  std::string basePath    = "";
   std::string input       = "";
 
   struct CMD final {

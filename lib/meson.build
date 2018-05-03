@@ -21,15 +21,42 @@ baseInc = files([
 ])
 
 
+# Base lib
+cameraSrc = files([
+  'camera/Camera.cpp'
+])
+
+cameraInc = files([
+  'camera/Camera.hpp'
+])
+
+
 # IO lib
 ioSrc = files([
   'io/ExportMesh.cpp',
-  'io/ImportMesh.cpp'
+  'io/ImportMesh.cpp',
+  'io/Load.cpp'
 ])
 
 ioInc = files([
   'io/ExportMesh.hpp',
-  'io/ImportMesh.hpp'
+  'io/ImportMesh.hpp',
+  'io/Load.hpp'
+])
+
+
+# Viewer lib
+viewerSrc = files([
+  'viewer/gl3w.c',
+  'viewer/MeshRenderer.cpp',
+  'viewer/Viewer.cpp',
+  'viewer/Window.cpp'
+])
+
+viewerInc = files([
+  'viewer/MeshRenderer.hpp',
+  'viewer/Viewer.hpp',
+  'viewer/Window.hpp'
 ])
 
 
@@ -37,7 +64,7 @@ ioInc = files([
 #### Generate Enum2Str class ####
 #################################
 
-allInc = baseInc + ioInc
+allInc = baseInc + ioInc + viewerInc
 enumData = []
 
 foreach i : allInc
@@ -67,9 +94,23 @@ baseLib = library('base', baseSrc,
   dependencies: baseDeps,
 )
 
+cameraLib = library('camera', cameraSrc,
+  include_directories: incDirs,
+  install: true,
+  link_with: [baseLib, enum2StrLib],
+  dependencies: baseDeps,
+)
+
 ioLib = library('io', ioSrc,
   include_directories: incDirs,
   install: true,
   link_with: [baseLib, enum2StrLib],
   dependencies: baseDeps + [assimp],
+)
+
+viewerLib = library('viewer', viewerSrc,
+  include_directories: incDirs,
+  install: true,
+  link_with: [baseLib, cameraLib, enum2StrLib],
+  dependencies: baseDeps + [GL, glfw, dl, glm],
 )

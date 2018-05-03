@@ -20,17 +20,16 @@
 
 namespace BVHTest::IO {
 
-class ImportMesh final : public base::Command {
+class Load final : public base::Command {
  private:
-  bool vOptimize  = false;
-  bool vNormalize = false;
+  const uint32_t vLoaderVersion = 1;
 
  public:
-  ImportMesh() = default;
-  ~ImportMesh();
+  Load() = default;
+  ~Load();
 
-  inline std::string       getName() const override { return "import"; }
-  inline std::string       getDesc() const override { return "import 3D object from data file"; }
+  inline std::string       getName() const override { return "load"; }
+  inline std::string       getDesc() const override { return "load custom binary file"; }
   inline base::CommandType getType() const override { return base::CommandType::IMPORT; }
   inline uint64_t          getRequiredCommands() const override { return 0; }
 

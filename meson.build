@@ -1,4 +1,4 @@
-project( 'BVHTest', 'cpp',
+project( 'BVHTest', ['cpp', 'c'],
   default_options : [
     'cpp_std=c++17',
     'warning_level=3',
@@ -12,6 +12,10 @@ project( 'BVHTest', 'cpp',
 
 incDirs = include_directories('external', 'external/spdlog/include', 'lib', '.', './lib')
 assimp  = dependency('assimp',  required: true, version: '>=4.1.0')
+glfw    = dependency('glfw3',   required: true, version: '>=3.1.0')
+GL      = dependency('GL',      required: true, version: '>=3.3')
+glm     = dependency('glm',     required: true)
+dl      = meson.get_compiler('c').find_library('dl', required : true)
 threads = dependency('threads', required: true)
 
 compiler = meson.get_compiler('cpp')

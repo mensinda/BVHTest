@@ -25,6 +25,7 @@ enum class ErrorCode {
   OK,           // Everything went fine
   IO_ERROR,     // Failed to read / write a file
   PARSE_ERROR,  // Paring a file failed
+  GL_ERROR,     // OpenGL error
   GENERIC_ERROR // Something went wrong
 };
 
@@ -36,7 +37,7 @@ class Command : public Configurable {
   Command() = default;
   virtual ~Command();
 
-  virtual ErrorCode run(State &_state);
+  ErrorCode run(State &_state);
 
   virtual std::string getName() const             = 0;
   virtual std::string getDesc() const             = 0;

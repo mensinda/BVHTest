@@ -20,6 +20,8 @@
 #include "base/StringHash.hpp"
 #include "io/ExportMesh.hpp"
 #include "io/ImportMesh.hpp"
+#include "io/Load.hpp"
+#include "viewer/Viewer.hpp"
 #include "Enum2Str.hpp"
 #include <fstream>
 #include <iostream>
@@ -34,14 +36,16 @@ using namespace fmt;
 using namespace Enum2Str;
 using namespace nlohmann;
 
-const vector<string> gCommandList = {"import", "export", "status"};
+const vector<string> gCommandList = {"import", "load", "export", "status", "viewer"};
 
 // String command to object
 Config::CMD_PTR fromString(string _s) {
   switch (fnv1aHash(_s)) {
-    case "import"_h: return make_shared<ImportMesh>();
-    case "export"_h: return make_shared<ExportMesh>();
-    case "status"_h: return make_shared<StatusDump>();
+    case "import"_h: return make_shared<IO::ImportMesh>();
+    case "load"_h: return make_shared<IO::Load>();
+    case "export"_h: return make_shared<IO::ExportMesh>();
+    case "status"_h: return make_shared<base::StatusDump>();
+    case "viewer"_h: return make_shared<view::Viewer>();
   }
   return nullptr;
 }
@@ -51,7 +55,7 @@ int usage() {
        << "  help              -- display this help message" << endl
        << "  run CFG           -- run BVHTest with configuration file CFG" << endl
        << "  list              -- list all commands and exit" << endl
-       << "  genrate FILE CMDs -- generate config file with commands CMDs" << endl
+       << "  genrate FILE CMDs -- generate config file with commands CMDs (use - for stdout)" << endl
        << endl;
 
   return 0;
@@ -85,15 +89,19 @@ int generate(vector<string> &args, size_t _start = 1) {
     if (!lCfg.addCommand(args[i])) { return 2; }
   }
 
-  json    lOutCfg = lCfg;
-  fstream lFile(args[_start], lFile.out);
-  if (!lFile.is_open()) {
-    lLogger->error("Failed to open {} for writing", args[_start]);
-    return 1;
-  }
+  json lOutCfg = lCfg;
+  if (args[_start] == "-") {
+    cout << lOutCfg.dump(2);
+  } else {
+    fstream lFile(args[_start], lFile.out);
+    if (!lFile.is_open()) {
+      lLogger->error("Failed to open {} for writing", args[_start]);
+      return 1;
+    }
 
-  lLogger->info("Writing file {}", args[_start]);
-  lFile << lOutCfg.dump(2) << endl;
+    lLogger->info("Writing file {}", args[_start]);
+    lFile << lOutCfg.dump(2);
+  }
 
   return 0;
 }
@@ -129,7 +137,8 @@ bool run(string _file) {
     for (auto &i : lInput) {
       lLogger->info("Processing {}", i);
       State lState;
-      lState.input = i;
+      lState.input    = i;
+      lState.basePath = lCfg.getBasePath();
 
       for (auto &j : lCommands)
         if (j->run(lState) != ErrorCode::OK) break;

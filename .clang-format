@@ -75,7 +75,7 @@ IncludeCategories:
  - Regex: '.*'
    Priority: 15
 
-IncludeIsMainRegex: '(Test)?$'
+IncludeIsMainRegex: ''
 
 IndentCaseLabels:           true
 IndentPPDirectives:         AfterHash

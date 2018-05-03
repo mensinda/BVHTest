@@ -24,6 +24,8 @@ class ExportMesh final : public base::Command {
  private:
   std::string vOutDir = ".";
 
+  const uint32_t vFormatVers = 1;
+
  public:
   ExportMesh() = default;
   virtual ~ExportMesh();

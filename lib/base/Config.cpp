@@ -29,6 +29,7 @@ void Config::fromJSON(json const &_j) {
     vName       = _j["baseConfig"].value("name", vName);
     vMaxThreads = _j["baseConfig"].value("maxThreads", vMaxThreads);
     vVerbose    = _j["baseConfig"].value("verbose", vVerbose);
+    vBasePath   = _j["baseConfig"].value("basePath", vBasePath);
     vInput      = _j["baseConfig"].value("input", vInput);
   }
 
@@ -48,9 +49,13 @@ void Config::fromJSON(json const &_j) {
 }
 
 json Config::toJSON() const {
-  auto lJSON =
-      json{{"baseConfig", {{"name", vName}, {"maxThreads", vMaxThreads}, {"verbose", vVerbose}, {"input", vInput}}},
-           {"commands", json::array()}};
+  auto lJSON = json{{"baseConfig",
+                     {{"name", vName},
+                      {"maxThreads", vMaxThreads},
+                      {"verbose", vVerbose},
+                      {"basePath", vBasePath},
+                      {"input", vInput}}},
+                    {"commands", json::array()}};
 
   for (auto &i : vCommands)
     lJSON["commands"].push_back(json{{"cmd", i->getName()}, {"options", i->toJSON()}});

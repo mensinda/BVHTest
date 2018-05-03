@@ -27,29 +27,39 @@ using namespace Assimp;
 
 ImportMesh::~ImportMesh() {}
 
-void ImportMesh::fromJSON(const json &_j) { vOptimize = _j.value("optimize", vOptimize); }
-json ImportMesh::toJSON() const { return json{{"optimize", vOptimize}}; }
+void ImportMesh::fromJSON(const json &_j) {
+  vOptimize  = _j.value("optimize", vOptimize);
+  vNormalize = _j.value("normalize", vNormalize);
+}
+
+json ImportMesh::toJSON() const { return json{{"optimize", vOptimize}, {"normalize", vNormalize}}; }
 
 ErrorCode ImportMesh::runImpl(State &_state) {
-  auto lLogger = getLogger();
+  auto     lLogger = getLogger();
+  fs::path lPath   = fs::absolute(_state.basePath) / _state.input;
+  lPath            = fs::canonical(lPath);
+  Importer lImp;
 
   unsigned int lFlags =
       aiProcess_Triangulate | aiProcess_OptimizeMeshes | aiProcess_OptimizeGraph | aiProcess_RemoveComponent |
       aiProcess_GenSmoothNormals; // aiProcess_FindDegenerates | aiProcess_SortByPType | aiProcess_JoinIdenticalVertices
 
   if (vOptimize) lFlags |= aiProcess_ImproveCacheLocality;
+  if (vNormalize) {
+    lFlags |= aiProcess_PreTransformVertices;
+    lImp.SetPropertyInteger(AI_CONFIG_PP_PTV_NORMALIZE, 1);
+  }
 
-  Importer lImp;
   lImp.SetPropertyInteger(AI_CONFIG_PP_SBP_REMOVE, aiPrimitiveType_LINE | aiPrimitiveType_POINT);
   lImp.SetPropertyInteger(AI_CONFIG_PP_RVC_FLAGS,
                           aiComponent_TANGENTS_AND_BITANGENTS | aiComponent_COLORS | aiComponent_TEXCOORDS |
                               aiComponent_BONEWEIGHTS | aiComponent_ANIMATIONS | aiComponent_TEXTURES |
                               aiComponent_LIGHTS | aiComponent_CAMERAS | aiComponent_MATERIALS);
 
-  const aiScene *lScene = lImp.ReadFile(_state.input, lFlags);
+  const aiScene *lScene = lImp.ReadFile(lPath.string(), lFlags);
 
   if (!lScene) {
-    lLogger->error("Failed to load file {}", _state.input);
+    lLogger->error("Failed to load file {}", lPath.string());
     lLogger->error("{}", lImp.GetErrorString());
     return ErrorCode::IO_ERROR;
   }

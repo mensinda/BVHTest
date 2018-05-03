@@ -7,6 +7,9 @@ Source code for my Bachelor thesis
   - meson
   - ninja
   - assimp v4.1
+  - OpenGL 3.3
+  - GLFW   3.1
+  - glm
   - a C++17 compiler
 
 ## Building

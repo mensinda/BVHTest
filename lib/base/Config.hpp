@@ -36,6 +36,7 @@ class Config final : public base::Configurable {
   std::string              vName       = "BVHTest default run";
   uint32_t                 vMaxThreads = 4;
   bool                     vVerbose    = true;
+  std::string              vBasePath   = ".";
   std::vector<std::string> vInput      = {};
 
   std::vector<CMD_PTR> vCommands;
@@ -49,6 +50,7 @@ class Config final : public base::Configurable {
   std::vector<CMD_PTR> getCommands();
 
   inline std::string              getName() const { return vName; }
+  inline std::string              getBasePath() const { return vBasePath; }
   inline std::vector<std::string> getInput() const { return vInput; }
   inline bool                     getIsVerbose() const { return vVerbose; }
 
