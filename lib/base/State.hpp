@@ -16,7 +16,9 @@
 
 #pragma once
 
+#include "CameraBase.hpp"
 #include <chrono>
+#include <memory>
 #include <stdint.h>
 #include <string>
 #include <vector>
@@ -55,6 +57,8 @@ struct Mesh final {
 };
 
 struct State final {
+  typedef std::shared_ptr<CameraBase> CAM_PTR;
+
   uint64_t    commandsRun = 0;
   std::string basePath    = "";
   std::string input       = "";
@@ -66,7 +70,8 @@ struct State final {
 
   std::vector<CMD> commands;
 
-  Mesh mesh;
+  Mesh                 mesh;
+  std::vector<CAM_PTR> cameras;
 };
 
 } // namespace BVHTest::base

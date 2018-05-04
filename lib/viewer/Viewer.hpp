@@ -37,12 +37,14 @@ class Viewer final : public base::Command {
 
     bool vOverlay    = true;
     int  vSpeedLevel = 10;
+
+    uint32_t vCurrCam = UINT32_MAX;
   } vRState;
 
   struct ClearColor {
-    float r = 0.47f;
-    float g = 0.81f;
-    float b = 1.00f;
+    float r = .47656250f;
+    float g = .65625000f;
+    float b = .89843750f;
     float a = 1.00f;
   } vClearColor;
 
@@ -57,7 +59,7 @@ class Viewer final : public base::Command {
   } vGLFWInit;
 
   void processInput(Window &_win, camera::Camera &_cam, uint32_t _time);
-  void keyCallback(Window &_win, int _key);
+  void keyCallback(Window &_win, base::State &_state, camera::Camera &_cam, int _key);
 
   bool checkSetup(Window &_win, base::State &_state);
   void oglSetup();

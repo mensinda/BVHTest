@@ -16,12 +16,12 @@
 
 #pragma once
 
-#include "base/Configurable.hpp"
+#include "base/CameraBase.hpp"
 #include <glm/glm.hpp>
 
 namespace BVHTest::camera {
 
-class Camera : public base::Configurable {
+class Camera : public base::CameraBase {
  public:
   struct RES {
     uint32_t width;
@@ -62,6 +62,8 @@ class Camera : public base::Configurable {
   inline float  getFOV() const { return vFOV; }
   inline RES    getResolution() const { return {vWidth, vHeight}; }
   inline CAMERA getCamera() const { return {vPos, vLookAt, vUp}; }
+
+  inline base::CameraType getType() const override { return base::CameraType::PERSPECTIVE; }
 
   glm::mat4 getViewProjection();
 

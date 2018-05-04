@@ -19,6 +19,7 @@
 #include "BVHTestCfg.hpp"
 #include "Viewer.hpp"
 
+#include "camera/Camera.hpp"
 #include "MeshRenderer.hpp"
 #include "Window.hpp"
 #include <GLFW/glfw3.h>
@@ -102,10 +103,13 @@ void Viewer::processInput(Window &_win, Camera &_cam, uint32_t _time) {
   double lScroll = _win.getScrollOffset();
   auto [lX, lY]  = _win.getMouseOffset();
 
+  if (lX != 0 || lY != 0 || lScroll != 0) { vRState.vCurrCam = UINT32_MAX; }
+  if (vRState.vCurrCam != UINT32_MAX) { return; }
+
   // Get current stats
   auto [lPos, lLookAt, lUp] = _cam.getCamera();
+  float lDelta              = _time * vCamSpeed * (static_cast<float>(vRState.vSpeedLevel) / 10.0f);
   float lFOV                = _cam.getFOV();
-  float lDelta              = _time * static_cast<float>(vCamSpeed) * (static_cast<float>(vRState.vSpeedLevel) / 10.0f);
 
   // Scrolling
   lFOV += static_cast<float>(lScroll);
@@ -119,11 +123,11 @@ void Viewer::processInput(Window &_win, Camera &_cam, uint32_t _time) {
   if (vRState.vPitch > 89.0) vRState.vPitch = 89.0;
   if (vRState.vPitch < -89.0) vRState.vPitch = -89.0;
 
+
   glm::vec3 lFront;
   lFront.x = cos(glm::radians(vRState.vYaw)) * cos(glm::radians(vRState.vPitch));
   lFront.y = sin(glm::radians(vRState.vPitch));
   lFront.z = sin(glm::radians(vRState.vYaw)) * cos(glm::radians(vRState.vPitch));
-  lFront   = glm::normalize(lFront);
 
   // Movement (WASD)
   if (_win.isKeyPressed(GLFW_KEY_W)) lPos += lDelta * lFront;
@@ -138,12 +142,39 @@ void Viewer::processInput(Window &_win, Camera &_cam, uint32_t _time) {
   _cam.setFOV(lFOV);
 }
 
-void Viewer::keyCallback(Window &_win, int _key) {
+void Viewer::keyCallback(Window &_win, State &_state, Camera &_cam, int _key) {
   switch (_key) {
     case GLFW_KEY_ESCAPE: _win.setWindowShouldClose(); break;
     case GLFW_KEY_KP_ADD: vRState.vSpeedLevel++; break;
     case GLFW_KEY_KP_SUBTRACT: vRState.vSpeedLevel--; break;
-    case GLFW_KEY_BACKSPACE: vRState.vOverlay = !vRState.vOverlay;
+    case GLFW_KEY_BACKSPACE: vRState.vOverlay = !vRState.vOverlay; break;
+    case GLFW_KEY_ENTER: _state.cameras.push_back(make_shared<Camera>(_cam)); break;
+    case GLFW_KEY_C: {
+      if (_state.cameras.empty()) { break; }
+
+      vRState.vCurrCam++; // Undefined is UINT32_MAX --> UINT32_MAX + 1 == 0 (overflow by design!)
+      if (vRState.vCurrCam != UINT32_MAX) {
+        if (vRState.vCurrCam >= _state.cameras.size()) { vRState.vCurrCam = 0; }
+      }
+
+      Camera *lCamSaved = dynamic_cast<Camera *>(_state.cameras[vRState.vCurrCam].get());
+      if (!lCamSaved) break;
+
+      _cam           = *lCamSaved;
+      vRState.vPitch = 0;
+      vRState.vYaw   = -90;
+      break;
+    }
+    case GLFW_KEY_DELETE:
+      if (vRState.vCurrCam == UINT32_MAX) { break; }
+      _state.cameras.erase(_state.cameras.begin() + vRState.vCurrCam);
+      vRState.vCurrCam = UINT32_MAX;
+      break;
+
+    case GLFW_KEY_W:
+    case GLFW_KEY_A:
+    case GLFW_KEY_S:
+    case GLFW_KEY_D: vRState.vCurrCam = UINT32_MAX; break;
   }
 
   if (vRState.vSpeedLevel < 1) vRState.vSpeedLevel = 1;
@@ -171,10 +202,7 @@ void Viewer::oglSetup() {
   glCullFace(GL_BACK);
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_BLEND);
-  glDisable(GL_CULL_FACE);
-  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
 
   if (vFaceCulling) { glEnable(GL_CULL_FACE); }
   if (vWireframe) { glPolygonMode(GL_FRONT_AND_BACK, GL_LINE); }
@@ -187,13 +215,12 @@ void Viewer::oglSetup() {
 
 // Main loop
 ErrorCode Viewer::runImpl(State &_state) {
+  vRState = RenderState(); // Reset internal state
+
   Window lWindow;
   lWindow.create(_state.input, vResX, vResY);
-  lWindow.setKeyCallback([&](int _key) -> void { keyCallback(lWindow, _key); });
-
   if (!checkSetup(lWindow, _state)) return ErrorCode::GL_ERROR;
 
-  vRState = RenderState(); // Reset internal state
   TextInit     lTextInit;
   MeshRenderer lMesh(_state.mesh);
   Camera       lCam;
@@ -204,14 +231,20 @@ ErrorCode Viewer::runImpl(State &_state) {
   uint32_t     lLastFPS = 0;
   uint32_t     lFPS     = 0;
 
+  lWindow.setKeyCallback([&](int _key) -> void { keyCallback(lWindow, _state, lCam, _key); });
+
   oglSetup();
 
   lFPSText.setLine(0);
   lControl.setLine(1);
 
   lUsage.set(
-      "USAGE   ###   Movemet: WASD + Mouse   ###   Zoom: Scroll wheel   ###   Speed: KP +/-   ###   Toggle overlay: "
-      "BACKSPACE");
+      "Movemet:   WASD + Mouse + Scroll wheel    ###   Movement Speed: KP +/-"
+      "\nCameras:"
+      "\n - Cycle: C"
+      "\n - Add: ENTER"
+      "\n - Delete: DELETE"
+      "\nToggle overlay: BACKSPACE");
 
   auto lCurr         = high_resolution_clock::now();
   auto lFPSTimeStamp = high_resolution_clock::now();
@@ -238,8 +271,11 @@ ErrorCode Viewer::runImpl(State &_state) {
 
       gltViewport(width, height);
       lFPSText.set(fmt::format("FPS: {}; Frametime: {}ms", lFPS, lFrameTime));
-      lControl.set(fmt::format("Speed level: {}", vRState.vSpeedLevel));
-      lUsage.setPos(0, static_cast<float>(height) - lUsage.lineHeight());
+      lControl.set(fmt::format("Speed level: {}\nSaved cameras: {}\nCurrent camera: {}",
+                               vRState.vSpeedLevel,
+                               _state.cameras.size(),
+                               vRState.vCurrCam == UINT32_MAX ? "-" : to_string(vRState.vCurrCam)));
+      lUsage.setPos(0, static_cast<float>(height) - lUsage.lineHeight() * 6);
       lFPSText.draw();
       lControl.draw();
       lUsage.draw();

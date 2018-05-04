@@ -65,7 +65,7 @@ bool Window::create(std::string _title, uint32_t _x, uint32_t _y) {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-  glfwWindowHint(GLFW_RESIZABLE, GL_TRUE);
+  glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
 
   vWindow = glfwCreateWindow(_x, _y, _title.c_str(), nullptr, nullptr);
 
@@ -73,6 +73,7 @@ bool Window::create(std::string _title, uint32_t _x, uint32_t _y) {
 
   glfwMakeContextCurrent(vWindow);
   glfwSetInputMode(vWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+  glfwSetWindowPos(vWindow, 0, 0);
 
   glfwSetWindowUserPointer(vWindow, this);
   glfwSetFramebufferSizeCallback(vWindow, resizeHandler);
