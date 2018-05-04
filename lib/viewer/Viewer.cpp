@@ -24,12 +24,47 @@
 #include <GLFW/glfw3.h>
 #include <chrono>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#pragma GCC diagnostic ignored "-Wunused-function"
+#define GLT_MANUAL_VIEWPORT
+#include "gltext.h"
+#pragma GCC diagnostic pop
+
 using namespace std;
 using namespace std::chrono;
 using namespace BVHTest;
 using namespace BVHTest::base;
 using namespace BVHTest::view;
 using namespace BVHTest::camera;
+
+class TextInit final {
+ public:
+  TextInit() { gltInit(); }
+  ~TextInit() { gltTerminate(); }
+};
+
+class Text final {
+ private:
+  GLTtext *vText  = nullptr;
+  GLfloat  vScale = 1;
+  GLfloat  vPosX  = 0;
+  GLfloat  vPosY  = 0;
+
+ public:
+  Text() { vText = gltCreateText(); }
+  ~Text() { gltDeleteText(vText); }
+
+  float lineHeight() { return gltGetLineHeight(vScale); }
+  void  set(string _s) { gltSetText(vText, _s.c_str()); }
+  void  setScale(GLfloat _scale) { vScale = _scale; }
+  void  setPos(GLfloat _x, GLfloat _y) {
+    vPosX = _x;
+    vPosY = _y;
+  }
+  void setLine(int _l) { vPosY = lineHeight() * _l; }
+  void draw() { gltDrawText2D(vText, vPosX, vPosY, vScale); }
+};
 
 Viewer::GLFWInitHelper::GLFWInitHelper() { isInit = glfwInit() == GLFW_TRUE && gl3wInit() != 0; }
 Viewer::GLFWInitHelper::~GLFWInitHelper() { glfwTerminate(); }
@@ -64,15 +99,13 @@ json Viewer::toJSON() const {
 }
 
 void Viewer::processInput(Window &_win, Camera &_cam, uint32_t _time) {
-  if (_win.isKeyPressed(GLFW_KEY_ESCAPE)) _win.setWindowShouldClose();
-
   double lScroll = _win.getScrollOffset();
   auto [lX, lY]  = _win.getMouseOffset();
 
   // Get current stats
   auto [lPos, lLookAt, lUp] = _cam.getCamera();
   float lFOV                = _cam.getFOV();
-  float lDelta              = _time * static_cast<float>(vCamSpeed);
+  float lDelta              = _time * static_cast<float>(vCamSpeed) * (static_cast<float>(vRState.vSpeedLevel) / 10.0f);
 
   // Scrolling
   lFOV += static_cast<float>(lScroll);
@@ -80,16 +113,16 @@ void Viewer::processInput(Window &_win, Camera &_cam, uint32_t _time) {
   if (lFOV > 50.0) lFOV = 50.0;
 
   // Camera
-  vYaw += lX * vMouseSensitivity;
-  vPitch += lY * vMouseSensitivity;
+  vRState.vYaw += lX * vMouseSensitivity;
+  vRState.vPitch += lY * vMouseSensitivity;
 
-  if (vPitch > 89.0) vPitch = 89.0;
-  if (vPitch < -89.0) vPitch = -89.0;
+  if (vRState.vPitch > 89.0) vRState.vPitch = 89.0;
+  if (vRState.vPitch < -89.0) vRState.vPitch = -89.0;
 
   glm::vec3 lFront;
-  lFront.x = cos(glm::radians(vYaw)) * cos(glm::radians(vPitch));
-  lFront.y = sin(glm::radians(vPitch));
-  lFront.z = sin(glm::radians(vYaw)) * cos(glm::radians(vPitch));
+  lFront.x = cos(glm::radians(vRState.vYaw)) * cos(glm::radians(vRState.vPitch));
+  lFront.y = sin(glm::radians(vRState.vPitch));
+  lFront.z = sin(glm::radians(vRState.vYaw)) * cos(glm::radians(vRState.vPitch));
   lFront   = glm::normalize(lFront);
 
   // Movement (WASD)
@@ -97,66 +130,124 @@ void Viewer::processInput(Window &_win, Camera &_cam, uint32_t _time) {
   if (_win.isKeyPressed(GLFW_KEY_S)) lPos -= lDelta * lFront;
   if (_win.isKeyPressed(GLFW_KEY_A)) lPos -= lDelta * normalize(cross(lFront, lUp));
   if (_win.isKeyPressed(GLFW_KEY_D)) lPos += lDelta * normalize(cross(lFront, lUp));
-  if (_win.isKeyPressed(GLFW_KEY_Q)) vRoll -= lDelta * 50;
-  if (_win.isKeyPressed(GLFW_KEY_E)) vRoll += lDelta * 50;
   if (_win.isKeyPressed(GLFW_KEY_LEFT_SHIFT)) lPos += lDelta * lUp;
   if (_win.isKeyPressed(GLFW_KEY_LEFT_CONTROL)) lPos -= lDelta * lUp;
-
-  lUp.x = cos(glm::radians(vRoll));
-  lUp.y = sin(glm::radians(vRoll));
-  lUp.z = 0;
 
   lLookAt = lPos + lFront;
   _cam.setCamera(lPos, lLookAt, lUp);
   _cam.setFOV(lFOV);
 }
 
+void Viewer::keyCallback(Window &_win, int _key) {
+  switch (_key) {
+    case GLFW_KEY_ESCAPE: _win.setWindowShouldClose(); break;
+    case GLFW_KEY_KP_ADD: vRState.vSpeedLevel++; break;
+    case GLFW_KEY_KP_SUBTRACT: vRState.vSpeedLevel--; break;
+    case GLFW_KEY_BACKSPACE: vRState.vOverlay = !vRState.vOverlay;
+  }
 
-// Main loop
-ErrorCode Viewer::runImpl(State &_state) {
-  auto   lLogger = getLogger();
-  Window lWindow;
+  if (vRState.vSpeedLevel < 1) vRState.vSpeedLevel = 1;
+  if (vRState.vSpeedLevel > 19) vRState.vSpeedLevel = 19;
+}
 
-  vYaw   = -90;
-  vPitch = 0;
-  vRoll  = 90;
 
-  if (!vGLFWInit.ok() || !lWindow.create(_state.input, vResX, vResY)) {
+bool Viewer::checkSetup(Window &_win, State &_state) {
+  auto lLogger = getLogger();
+  if (!vGLFWInit.ok() || !_win.getIsCreated()) {
     lLogger->error("Failed to create Window");
-    return ErrorCode::GL_ERROR;
+    return false;
   }
 
   if (_state.mesh.vert.size() != _state.mesh.norm.size()) {
     lLogger->error("Invalid mesh data");
-    return ErrorCode::GL_ERROR;
+    return false;
   }
 
-  MeshRenderer lMesh(_state.mesh);
-  Camera       lCam;
+  return true;
+}
 
+void Viewer::oglSetup() {
   glClearColor(vClearColor.r, vClearColor.g, vClearColor.b, vClearColor.a);
   glCullFace(GL_BACK);
   glEnable(GL_DEPTH_TEST);
+  glEnable(GL_BLEND);
   glDisable(GL_CULL_FACE);
   glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
 
   if (vFaceCulling) { glEnable(GL_CULL_FACE); }
   if (vWireframe) { glPolygonMode(GL_FRONT_AND_BACK, GL_LINE); }
 
-  auto lCurr = system_clock::now();
+  gltInit();
+  gltColor(1.0f, 1.0f, 1.0f, 1.0f);
+}
+
+
+
+// Main loop
+ErrorCode Viewer::runImpl(State &_state) {
+  Window lWindow;
+  lWindow.create(_state.input, vResX, vResY);
+  lWindow.setKeyCallback([&](int _key) -> void { keyCallback(lWindow, _key); });
+
+  if (!checkSetup(lWindow, _state)) return ErrorCode::GL_ERROR;
+
+  vRState = RenderState(); // Reset internal state
+  TextInit     lTextInit;
+  MeshRenderer lMesh(_state.mesh);
+  Camera       lCam;
+  Text         lFPSText;
+  Text         lControl;
+  Text         lUsage;
+  uint32_t     lFrames  = 0;
+  uint32_t     lLastFPS = 0;
+  uint32_t     lFPS     = 0;
+
+  oglSetup();
+
+  lFPSText.setLine(0);
+  lControl.setLine(1);
+
+  lUsage.set(
+      "USAGE   ###   Movemet: WASD + Mouse   ###   Zoom: Scroll wheel   ###   Speed: KP +/-   ###   Toggle overlay: "
+      "BACKSPACE");
+
+  auto lCurr         = high_resolution_clock::now();
+  auto lFPSTimeStamp = high_resolution_clock::now();
 
   // main loop
   while (lWindow.pollAndSwap()) {
-    auto lLast              = lCurr;
-    lCurr                   = system_clock::now();
-    milliseconds lFrameTime = duration_cast<milliseconds>(lCurr - lLast);
+    auto lLast          = lCurr;
+    lCurr               = high_resolution_clock::now();
+    uint32_t lFrameTime = duration_cast<milliseconds>(lCurr - lLast).count();
 
-    processInput(lWindow, lCam, lFrameTime.count());
+    processInput(lWindow, lCam, lFrameTime);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     lMesh.update(lCam.getViewProjection());
     lMesh.render();
+
+    if (vRState.vOverlay) {
+      auto [width, height] = lWindow.getResolution();
+      if (duration_cast<milliseconds>(high_resolution_clock::now() - lFPSTimeStamp) > milliseconds(500)) {
+        lFPSTimeStamp = high_resolution_clock::now();
+        lFPS          = (lFrames - lLastFPS - 1) * 2;
+        lLastFPS      = lFrames;
+      }
+
+      gltViewport(width, height);
+      lFPSText.set(fmt::format("FPS: {}; Frametime: {}ms", lFPS, lFrameTime));
+      lControl.set(fmt::format("Speed level: {}", vRState.vSpeedLevel));
+      lUsage.setPos(0, static_cast<float>(height) - lUsage.lineHeight());
+      lFPSText.draw();
+      lControl.draw();
+      lUsage.draw();
+    }
+
+    lFrames++;
   }
 
+  gltTerminate();
   return ErrorCode::OK;
 }

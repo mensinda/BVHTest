@@ -53,7 +53,7 @@ in  vec4 vNorm;
 out vec4 oColor;
 
 void main() {
-  oColor = normalize(vNorm);
+  oColor = vec4(normalize(vNorm).xyz, 1.0);
 }
 )__GLSL__";
 
@@ -130,6 +130,11 @@ MeshRenderer::MeshRenderer(const Mesh &_mesh) {
     lLogger->error("{}", infoLog);
   }
 
+  glDetachShader(vShaderProg, vVertexShader);
+  glDetachShader(vShaderProg, vFragmentShader);
+  glDeleteShader(vVertexShader);
+  glDeleteShader(vFragmentShader);
+
   vUniformLoc = glGetUniformLocation(vShaderProg, "uMVP");
 }
 
@@ -138,12 +143,13 @@ MeshRenderer::~MeshRenderer() {
   glDeleteBuffers(1, &vEBO);
   glDeleteVertexArrays(1, &vVAO);
 
-  glDeleteShader(vVertexShader);
-  glDeleteShader(vFragmentShader);
   glDeleteProgram(vShaderProg);
 }
 
-void MeshRenderer::update(glm::mat4 _mvp) { glUniformMatrix4fv(vUniformLoc, 1, GL_FALSE, glm::value_ptr(_mvp)); }
+void MeshRenderer::update(glm::mat4 _mvp) {
+  glUseProgram(vShaderProg);
+  glUniformMatrix4fv(vUniformLoc, 1, GL_FALSE, glm::value_ptr(_mvp));
+}
 
 void MeshRenderer::render() {
   glUseProgram(vShaderProg);

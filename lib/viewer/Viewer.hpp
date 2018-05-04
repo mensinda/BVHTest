@@ -31,9 +31,13 @@ class Viewer final : public base::Command {
   bool     vFaceCulling      = false;
   bool     vWireframe        = false;
 
-  double vYaw   = -90;
-  double vPitch = 0;
-  double vRoll  = 90;
+  struct RenderState {
+    double vYaw   = -90;
+    double vPitch = 0;
+
+    bool vOverlay    = true;
+    int  vSpeedLevel = 10;
+  } vRState;
 
   struct ClearColor {
     float r = 0.47f;
@@ -53,6 +57,10 @@ class Viewer final : public base::Command {
   } vGLFWInit;
 
   void processInput(Window &_win, camera::Camera &_cam, uint32_t _time);
+  void keyCallback(Window &_win, int _key);
+
+  bool checkSetup(Window &_win, base::State &_state);
+  void oglSetup();
 
  public:
   Viewer() = default;

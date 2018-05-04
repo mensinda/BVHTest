@@ -18,6 +18,7 @@
 
 #include <GLFW/glfw3.h>
 #include <cmath>
+#include <functional>
 #include <string>
 
 namespace BVHTest::view {
@@ -48,9 +49,12 @@ class Window {
   double vOffsetY      = 0;
   double vOffsetScroll = 0;
 
+  std::function<void(int)> vKeyCallback = [](int) -> void {};
+
   static void resizeHandler(GLFWwindow *_win, int _x, int _y);
   static void mouseHandler(GLFWwindow *_win, double _x, double _y);
   static void scrollHandler(GLFWwindow *_win, double _xoffset, double _yoffset);
+  static void keyHandler(GLFWwindow *_win, int _key, int _scancode, int _action, int _mods);
 
  public:
   Window() = default;
@@ -62,6 +66,8 @@ class Window {
   bool pollAndSwap();
   bool isKeyPressed(int _key);
   void setWindowShouldClose();
+
+  inline void setKeyCallback(std::function<void(int)> _cb) { vKeyCallback = _cb; }
 
   inline bool getIsCreated() const { return vWindow != nullptr; }
   RES         getResolution() const;

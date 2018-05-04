@@ -32,9 +32,13 @@ ErrorCode StatusDump::runImpl(State &_state) {
   auto lLogger = getLogger();
 
   lLogger->info("Status:");
+  lLogger->info("  -- Mesh info:");
+  lLogger->info("    - Vertices: {}", _state.mesh.vert.size());
+  lLogger->info("    - Faces:    {}", _state.mesh.faces.size());
+  lLogger->info("  -- Command times:");
   for (auto const &i : _state.commands) {
     seconds lSec = duration_cast<seconds>(i.duration);
-    lLogger->info("  -- {:<10} -- {:>3}s {:>3}ms", i.name, lSec.count(), duration_cast<ms>(i.duration - lSec).count());
+    lLogger->info("    - {:<10} -- {:>3}s {:>3}ms", i.name, lSec.count(), duration_cast<ms>(i.duration - lSec).count());
   }
 
   lLogger->info("");
