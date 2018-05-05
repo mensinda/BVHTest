@@ -17,7 +17,8 @@
 #pragma once
 
 #include "base/CameraBase.hpp"
-#include <glm/glm.hpp>
+#include <glm/mat4x4.hpp>
+#include <glm/vec3.hpp>
 
 namespace BVHTest::camera {
 

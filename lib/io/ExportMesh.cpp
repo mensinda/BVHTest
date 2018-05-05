@@ -18,6 +18,16 @@
 #include "ExportMesh.hpp"
 #include <fstream>
 
+#if __has_include(<filesystem>)
+#  include <filesystem>
+namespace fs = std::filesystem;
+#elif __has_include(<experimental/filesystem>)
+#  include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#else
+#  error "std filesystem is not supported"
+#endif
+
 using namespace std;
 using namespace BVHTest;
 using namespace BVHTest::IO;
@@ -74,8 +84,8 @@ ErrorCode ExportMesh::runImpl(State &_state) {
   lControlFile << lCfg.dump(2);
   lControlFile.close();
 
-  lBin.write(reinterpret_cast<char *>(_state.mesh.vert.data()), _state.mesh.vert.size() * sizeof(Vertex));
-  lBin.write(reinterpret_cast<char *>(_state.mesh.norm.data()), _state.mesh.norm.size() * sizeof(Vertex));
+  lBin.write(reinterpret_cast<char *>(_state.mesh.vert.data()), _state.mesh.vert.size() * sizeof(glm::vec3));
+  lBin.write(reinterpret_cast<char *>(_state.mesh.norm.data()), _state.mesh.norm.size() * sizeof(glm::vec3));
   lBin.write(reinterpret_cast<char *>(_state.mesh.faces.data()), _state.mesh.faces.size() * sizeof(Triangle));
   lBin.close();
 

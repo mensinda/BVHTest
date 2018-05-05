@@ -16,25 +16,33 @@
 
 #pragma once
 
-#include "base/State.hpp"
-#include "RendererBase.hpp"
+#include <glm/vec3.hpp>
+#include <vector>
 
-namespace BVHTest::view {
+namespace BVHTest::base {
 
-class MeshRenderer : public RendererBase {
- private:
-  GLint vUniformLoc = 0;
-
-  size_t vNumIndex = 0;
-
- public:
-  MeshRenderer() = delete;
-  MeshRenderer(base::Mesh const &_mesh);
-  ~MeshRenderer();
-
-  void     render() override;
-  void     update(glm::mat4 _mvp) override;
-  Renderer getType() const override { return Renderer::MESH; }
+struct Triangle final {
+  uint32_t v1;
+  uint32_t v2;
+  uint32_t v3;
 };
 
-} // namespace BVHTest::view
+struct Mesh final {
+  std::vector<glm::vec3> vert;
+  std::vector<glm::vec3> norm;
+  std::vector<Triangle>  faces;
+};
+
+struct AABB {
+  glm::vec3 min;
+  glm::vec3 max;
+};
+
+struct BVH {
+  AABB     bbox;
+  uint32_t left;
+  uint32_t right;
+};
+
+
+} // namespace BVHTest::base

@@ -18,6 +18,7 @@
 #include "base/Config.hpp"
 #include "base/StatusDump.hpp"
 #include "base/StringHash.hpp"
+#include "builder/Wald07.hpp"
 #include "io/ExportMesh.hpp"
 #include "io/ImportMesh.hpp"
 #include "io/Load.hpp"
@@ -31,12 +32,11 @@
 using namespace std;
 using namespace BVHTest;
 using namespace BVHTest::base;
-using namespace BVHTest::IO;
 using namespace fmt;
 using namespace Enum2Str;
 using namespace nlohmann;
 
-const vector<string> gCommandList = {"import", "load", "export", "status", "viewer"};
+const vector<string> gCommandList = {"import", "load", "export", "wald07", "status", "viewer"};
 
 // String command to object
 Config::CMD_PTR fromString(string _s) {
@@ -44,6 +44,7 @@ Config::CMD_PTR fromString(string _s) {
     case "import"_h: return make_shared<IO::ImportMesh>();
     case "load"_h: return make_shared<IO::Load>();
     case "export"_h: return make_shared<IO::ExportMesh>();
+    case "wald07"_h: return make_shared<builder::Wald07>();
     case "status"_h: return make_shared<base::StatusDump>();
     case "viewer"_h: return make_shared<view::Viewer>();
   }

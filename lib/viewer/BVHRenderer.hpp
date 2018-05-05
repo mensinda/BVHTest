@@ -14,6 +14,26 @@
  * limitations under the License.
  */
 
-#include "State.hpp"
+#pragma once
 
-using namespace BVHTest::base;
+#include "base/BVH.hpp"
+#include "RendererBase.hpp"
+
+namespace BVHTest::view {
+
+class BVHRenderer : public RendererBase {
+  GLint vUniformLoc = 0;
+
+  size_t vNumIndex = 0;
+
+ public:
+  BVHRenderer() = delete;
+  BVHRenderer(base::Mesh const &_mesh);
+  ~BVHRenderer();
+
+  void     render() override;
+  void     update(glm::mat4 _mvp) override;
+  Renderer getType() const override { return Renderer::BVH; }
+};
+
+} // namespace BVHTest::view

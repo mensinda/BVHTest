@@ -18,6 +18,7 @@
 
 #include "base/Command.hpp"
 #include "camera/Camera.hpp"
+#include "RendererBase.hpp"
 #include "Window.hpp"
 
 namespace BVHTest::view {
@@ -39,6 +40,9 @@ class Viewer final : public base::Command {
     int  vSpeedLevel = 10;
 
     uint32_t vCurrCam = UINT32_MAX;
+
+    //   std::shared_ptr<RendererBase> vRenderer     = nullptr;
+    Renderer vRendererType = Renderer::MESH;
   } vRState;
 
   struct ClearColor {

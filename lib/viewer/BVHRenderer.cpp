@@ -14,10 +14,16 @@
  * limitations under the License.
  */
 
-#include "MeshRenderer.hpp"
+#include "BVHTestCfg.hpp"
+#include "BVHRenderer.hpp"
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <string>
+
+using namespace std;
+using namespace BVHTest;
+using namespace BVHTest::view;
+using namespace BVHTest::base;
 
 using namespace std;
 using namespace BVHTest;
@@ -57,7 +63,7 @@ void main() {
 )__GLSL__";
 
 
-MeshRenderer::MeshRenderer(const Mesh &_mesh) {
+BVHRenderer::BVHRenderer(const Mesh &_mesh) {
   // Generate OpenGL VBO data
   std::vector<VBOData> lOGLData;
   lOGLData.resize(_mesh.vert.size());
@@ -86,14 +92,14 @@ MeshRenderer::MeshRenderer(const Mesh &_mesh) {
   vUniformLoc = getLocation("uMVP");
 }
 
-MeshRenderer::~MeshRenderer() {}
+BVHRenderer::~BVHRenderer() {}
 
-void MeshRenderer::update(glm::mat4 _mvp) {
+void BVHRenderer::update(glm::mat4 _mvp) {
   useProg();
   glUniformMatrix4fv(vUniformLoc, 1, GL_FALSE, glm::value_ptr(_mvp));
 }
 
-void MeshRenderer::render() {
+void BVHRenderer::render() {
   useProg();
   bindVAO();
   glDrawElements(GL_TRIANGLES, vNumIndex, GL_UNSIGNED_INT, 0);

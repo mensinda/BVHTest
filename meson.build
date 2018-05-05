@@ -18,23 +18,19 @@ glm     = dependency('glm',     required: true)
 dl      = meson.get_compiler('c').find_library('dl', required : true)
 threads = dependency('threads', required: true)
 
+if get_option('buildtype') == 'debugoptimized'
+  add_global_arguments('-fno-omit-frame-pointer', language: 'cpp')
+  message('Enabling perf stuff')
+endif
+
 compiler = meson.get_compiler('cpp')
 cfgData  = configuration_data()
 cfgData.set_quoted('BVHTEST_VERSION', meson.project_version())
 cfgData.set_quoted('LOGGER_NAME',     meson.project_name())
 
-baseDeps = [threads]
+baseDeps = [threads, compiler.find_library('stdc++fs', required: true)]
 
-if compiler.has_header('filesystem')
-  cfgData.set('FS_INC', 'filesystem')
-  cfgData.set('FS_NS',  'std::filesystem')
-  message('Using C++17 filesystem')
-elif compiler.has_header('experimental/filesystem')
-  cfgData.set('FS_INC', 'experimental/filesystem')
-  cfgData.set('FS_NS',  'std::experimental::filesystem')
-  baseDeps += compiler.find_library('stdc++fs', required: true)
-  message('Using C++17 EXPERIMENTAL filesystem')
-else
+if not compiler.has_header('filesystem') and not compiler.has_header('experimental/filesystem')
   error('Unable to find C++17 filesystem')
 endif
 

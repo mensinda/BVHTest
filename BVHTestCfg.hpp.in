@@ -17,10 +17,8 @@
 #pragma once
 
 #include <spdlog/spdlog.h>
-#include <@FS_INC@>
 
 namespace spd = spdlog;
-namespace fs  = @FS_NS@;
 
 #mesondefine BVHTEST_VERSION
 #mesondefine LOGGER_NAME

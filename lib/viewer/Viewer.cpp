@@ -19,9 +19,8 @@
 #include "BVHTestCfg.hpp"
 #include "Viewer.hpp"
 
-#include "camera/Camera.hpp"
+#include <glm/glm.hpp>
 #include "MeshRenderer.hpp"
-#include "Window.hpp"
 #include <GLFW/glfw3.h>
 #include <chrono>
 
@@ -87,6 +86,8 @@ void Viewer::fromJSON(const json &_j) {
   vClearColor.g = tmp["clearColor"].value("g", vClearColor.g);
   vClearColor.b = tmp["clearColor"].value("b", vClearColor.b);
   vClearColor.a = tmp["clearColor"].value("a", vClearColor.a);
+
+  vRState.vYaw = 0;
 }
 
 json Viewer::toJSON() const {
@@ -221,15 +222,14 @@ ErrorCode Viewer::runImpl(State &_state) {
   lWindow.create(_state.input, vResX, vResY);
   if (!checkSetup(lWindow, _state)) return ErrorCode::GL_ERROR;
 
-  TextInit     lTextInit;
-  MeshRenderer lMesh(_state.mesh);
-  Camera       lCam;
-  Text         lFPSText;
-  Text         lControl;
-  Text         lUsage;
-  uint32_t     lFrames  = 0;
-  uint32_t     lLastFPS = 0;
-  uint32_t     lFPS     = 0;
+  TextInit lTextInit;
+  Camera   lCam;
+  Text     lFPSText;
+  Text     lControl;
+  Text     lUsage;
+  uint32_t lFrames  = 0;
+  uint32_t lLastFPS = 0;
+  uint32_t lFPS     = 0;
 
   lWindow.setKeyCallback([&](int _key) -> void { keyCallback(lWindow, _state, lCam, _key); });
 
@@ -257,9 +257,11 @@ ErrorCode Viewer::runImpl(State &_state) {
 
     processInput(lWindow, lCam, lFrameTime);
 
+    if (!vRState.vRenderer) {}
+
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    lMesh.update(lCam.getViewProjection());
-    lMesh.render();
+    vRState.vRenderer->update(lCam.getViewProjection());
+    vRState.vRenderer->render();
 
     if (vRState.vOverlay) {
       auto [width, height] = lWindow.getResolution();

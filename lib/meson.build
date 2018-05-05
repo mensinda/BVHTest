@@ -8,11 +8,11 @@ baseSrc = files([
   'base/Configurable.cpp',
   'base/Config.cpp',
   'base/Command.cpp',
-  'base/State.cpp',
   'base/StatusDump.cpp'
 ])
 
 baseInc = files([
+  'base/BVH.hpp',
   'base/CameraBase.hpp',
   'base/Configurable.hpp',
   'base/Config.hpp',
@@ -23,7 +23,20 @@ baseInc = files([
 ])
 
 
-# Base lib
+# Builder lib
+builderSrc = files([
+  'builder/BuilderBase.cpp',
+  'builder/Wald07.cpp'
+])
+
+
+builderInc = files([
+  'builder/BuilderBase.hpp',
+  'builder/Wald07.hpp'
+])
+
+
+# Camera lib
 cameraSrc = files([
   'camera/Camera.cpp'
 ])
@@ -49,14 +62,18 @@ ioInc = files([
 
 # Viewer lib
 viewerSrc = files([
-  'viewer/gl3w.c',
+  '../external/gl3w.c',
+  'viewer/BVHRenderer.cpp',
   'viewer/MeshRenderer.cpp',
+  'viewer/RendererBase.cpp',
   'viewer/Viewer.cpp',
   'viewer/Window.cpp'
 ])
 
 viewerInc = files([
+  'viewer/BVHRenderer.hpp',
   'viewer/MeshRenderer.hpp',
+  'viewer/RendererBase.hpp',
   'viewer/Viewer.hpp',
   'viewer/Window.hpp'
 ])
@@ -66,10 +83,11 @@ viewerInc = files([
 #### Generate Enum2Str class ####
 #################################
 
-allInc = baseInc + ioInc + viewerInc
+allInc = baseInc + builderInc + cameraInc + ioInc + viewerInc
 enumData = []
 
-foreach i : allInc
+#foreach i : allInc
+foreach i : files(['base/BVH.hpp', 'base/Command.hpp', 'base/CameraBase.hpp', 'base/State.hpp', 'viewer/RendererBase.hpp'])
   enumData += enumParser.process(i)
 endforeach
 
@@ -93,6 +111,13 @@ baseLib = library('base', baseSrc,
   include_directories: incDirs,
   install: true,
   link_with: [enum2StrLib],
+  dependencies: baseDeps,
+)
+
+builderLib = library('builder', builderSrc,
+  include_directories: incDirs,
+  install: true,
+  link_with: [baseLib, enum2StrLib],
   dependencies: baseDeps,
 )
 

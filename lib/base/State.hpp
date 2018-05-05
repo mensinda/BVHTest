@@ -16,10 +16,10 @@
 
 #pragma once
 
+#include "BVH.hpp"
 #include "CameraBase.hpp"
 #include <chrono>
 #include <memory>
-#include <stdint.h>
 #include <string>
 #include <vector>
 
@@ -38,23 +38,6 @@ enum class CommandType {
   VIEWER    = (1 << 29) // Debug OGL viewer for the mesh, BVH, etc.
 };
 
-struct Triangle final {
-  uint32_t v1;
-  uint32_t v2;
-  uint32_t v3;
-};
-
-struct Vertex final {
-  float x;
-  float y;
-  float z;
-};
-
-struct Mesh final {
-  std::vector<Vertex>   vert;
-  std::vector<Vertex>   norm;
-  std::vector<Triangle> faces;
-};
 
 struct State final {
   typedef std::shared_ptr<CameraBase> CAM_PTR;
@@ -71,7 +54,9 @@ struct State final {
   std::vector<CMD> commands;
 
   Mesh                 mesh;
+  BVH                  bvh;
   std::vector<CAM_PTR> cameras;
+  std::vector<AABB>    aabbs;
 };
 
 } // namespace BVHTest::base

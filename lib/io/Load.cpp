@@ -18,6 +18,16 @@
 #include "Load.hpp"
 #include <fstream>
 
+#if __has_include(<filesystem>)
+#  include <filesystem>
+namespace fs = std::filesystem;
+#elif __has_include(<experimental/filesystem>)
+#  include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#else
+#  error "std filesystem is not supported"
+#endif
+
 using namespace std;
 using namespace BVHTest;
 using namespace BVHTest::base;
@@ -74,8 +84,8 @@ ErrorCode Load::runImpl(State &_state) {
   _state.mesh.norm.resize(lNormal);
   _state.mesh.faces.resize(lFaces);
 
-  lBinFile.read(reinterpret_cast<char *>(_state.mesh.vert.data()), lVert * sizeof(Vertex));
-  lBinFile.read(reinterpret_cast<char *>(_state.mesh.norm.data()), lNormal * sizeof(Vertex));
+  lBinFile.read(reinterpret_cast<char *>(_state.mesh.vert.data()), lVert * sizeof(glm::vec3));
+  lBinFile.read(reinterpret_cast<char *>(_state.mesh.norm.data()), lNormal * sizeof(glm::vec3));
   lBinFile.read(reinterpret_cast<char *>(_state.mesh.faces.data()), lFaces * sizeof(Triangle));
   lBinFile.close();
 
