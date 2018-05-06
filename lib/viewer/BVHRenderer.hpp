@@ -29,7 +29,7 @@ class BVHRenderer : public RendererBase {
 
  public:
   BVHRenderer() = delete;
-  BVHRenderer(std::vector<AABB> const &_bboxes);
+  BVHRenderer(std::vector<base::AABB> const &_bboxes);
   ~BVHRenderer();
 
   void     render() override;

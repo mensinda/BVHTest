@@ -22,6 +22,7 @@
 #include "camera/Camera.hpp"
 #include <glm/glm.hpp>
 #include "BVHRenderer.hpp"
+#include "Enum2Str.hpp"
 #include "MeshRenderer.hpp"
 #include <GLFW/glfw3.h>
 #include <chrono>
@@ -40,6 +41,7 @@ using namespace BVHTest;
 using namespace BVHTest::base;
 using namespace BVHTest::view;
 using namespace BVHTest::camera;
+using namespace BVHTest::Enum2Str;
 
 class TextInit final {
  public:
@@ -78,7 +80,6 @@ void Viewer::fromJSON(const json &_j) {
   vResX             = _j.value("resX", vResX);
   vResY             = _j.value("resY", vResY);
   vFaceCulling      = _j.value("faceCulling", vFaceCulling);
-  vWireframe        = _j.value("wireframe", vWireframe);
   vCamSpeed         = _j.value("camSpeed", vCamSpeed);
   vMouseSensitivity = _j.value("mouseSensitivity", vMouseSensitivity);
 
@@ -95,7 +96,6 @@ json Viewer::toJSON() const {
   return json{{"resX", vResX},
               {"resY", vResY},
               {"faceCulling", vFaceCulling},
-              {"wireframe", vWireframe},
               {"camSpeed", vCamSpeed},
               {"mouseSensitivity", vMouseSensitivity},
               {"clearColor", {{"r", vClearColor.r}, {"g", vClearColor.g}, {"b", vClearColor.b}, {"a", vClearColor.a}}}};
@@ -177,6 +177,10 @@ void Viewer::keyCallback(Window &_win, State &_state, Camera &_cam, int _key) {
     case GLFW_KEY_A:
     case GLFW_KEY_S:
     case GLFW_KEY_D: vRState.vCurrCam = UINT32_MAX; break;
+
+    case GLFW_KEY_F1: vRState.vRendererType = Renderer::MESH; break;
+    case GLFW_KEY_F2: vRState.vRendererType = Renderer::WIREFRAME; break;
+    case GLFW_KEY_F3: vRState.vRendererType = Renderer::BVH; break;
   }
 
   if (vRState.vSpeedLevel < 1) vRState.vSpeedLevel = 1;
@@ -207,7 +211,6 @@ void Viewer::oglSetup() {
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
   if (vFaceCulling) { glEnable(GL_CULL_FACE); }
-  if (vWireframe) { glPolygonMode(GL_FRONT_AND_BACK, GL_LINE); }
 
   gltInit();
   gltColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -236,8 +239,11 @@ ErrorCode Viewer::runImpl(State &_state) {
 
   oglSetup();
 
+  auto [lScreenWidth, lScreenHeight] = lWindow.getResolution();
+  gltViewport(lScreenWidth, lScreenHeight);
   lFPSText.setLine(0);
   lControl.setLine(1);
+  lUsage.setPos(0, static_cast<float>(lScreenHeight) - lUsage.lineHeight() * 7);
 
   lUsage.set(
       "Movemet:   WASD + Mouse + Scroll wheel    ###   Movement Speed: KP +/-"
@@ -245,10 +251,12 @@ ErrorCode Viewer::runImpl(State &_state) {
       "\n - Cycle: C"
       "\n - Add: ENTER"
       "\n - Delete: DELETE"
-      "\nToggle overlay: BACKSPACE");
+      "\nToggle overlay: BACKSPACE"
+      "\nSwitch modes: Function keys (F1, F2, etc.)");
 
   auto lCurr         = high_resolution_clock::now();
   auto lFPSTimeStamp = high_resolution_clock::now();
+  bool lWireframeOn  = false;
 
   // main loop
   while (lWindow.pollAndSwap()) {
@@ -258,11 +266,25 @@ ErrorCode Viewer::runImpl(State &_state) {
 
     processInput(lWindow, lCam, lFrameTime);
 
-    if (!vRenderer || vRState.vRendererType != vRenderer->getType()) {
+    if (vRenderer && vRenderer->getType() == Renderer::MESH && vRState.vRendererType == Renderer::WIREFRAME) {
+      if (!lWireframeOn) {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        lWireframeOn = true;
+      }
+    } else if (!vRenderer || vRState.vRendererType != vRenderer->getType()) {
       switch (vRState.vRendererType) {
+        case Renderer::WIREFRAME:
+          glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+          lWireframeOn = true;
+          [[fallthrough]];
         case Renderer::MESH: vRenderer = make_shared<MeshRenderer>(_state.mesh); break;
         case Renderer::BVH: vRenderer = make_shared<BVHRenderer>(_state.aabbs); break;
       }
+    }
+
+    if (lWireframeOn && vRState.vRendererType != Renderer::WIREFRAME) {
+      glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+      lWireframeOn = false;
     }
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -270,20 +292,18 @@ ErrorCode Viewer::runImpl(State &_state) {
     vRenderer->render();
 
     if (vRState.vOverlay) {
-      auto [width, height] = lWindow.getResolution();
       if (duration_cast<milliseconds>(high_resolution_clock::now() - lFPSTimeStamp) > milliseconds(500)) {
         lFPSTimeStamp = high_resolution_clock::now();
         lFPS          = (lFrames - lLastFPS - 1) * 2;
         lLastFPS      = lFrames;
       }
 
-      gltViewport(width, height);
       lFPSText.set(fmt::format("FPS: {}; Frametime: {}ms", lFPS, lFrameTime));
-      lControl.set(fmt::format("Speed level: {}\nSaved cameras: {}\nCurrent camera: {}",
+      lControl.set(fmt::format("Speed level: {}\nSaved cameras: {}\nCurrent camera: {}\nRender Mode: {}",
                                vRState.vSpeedLevel,
                                _state.cameras.size(),
-                               vRState.vCurrCam == UINT32_MAX ? "-" : to_string(vRState.vCurrCam)));
-      lUsage.setPos(0, static_cast<float>(height) - lUsage.lineHeight() * 6);
+                               vRState.vCurrCam == UINT32_MAX ? "-" : to_string(vRState.vCurrCam),
+                               toStr(vRState.vRendererType)));
       lFPSText.draw();
       lControl.draw();
       lUsage.draw();

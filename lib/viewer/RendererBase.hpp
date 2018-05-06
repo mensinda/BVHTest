@@ -21,7 +21,7 @@
 
 namespace BVHTest::view {
 
-enum class Renderer { MESH, BVH };
+enum class Renderer { MESH, WIREFRAME, BVH };
 
 class RendererBase {
  private:

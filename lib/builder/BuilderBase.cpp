@@ -26,25 +26,22 @@ BuilderBase::~BuilderBase() {}
 
 std::vector<AABB> BuilderBase::boundingVolumesFromMesh(Mesh const &_mesh) {
   std::vector<AABB> lRes;
-  lRes.reserve(_mesh.faces.size());
 
-  std::transform(_mesh.faces.begin(), _mesh.faces.end(), std::back_inserter(lRes), [=](Triangle const &_t) -> AABB {
-    vec3 const &v1 = _mesh.vert[_t.v1];
-    vec3 const &v2 = _mesh.vert[_t.v2];
-    vec3 const &v3 = _mesh.vert[_t.v3];
+  lRes.resize(_mesh.faces.size());
+  for (size_t i = 0; i < _mesh.faces.size(); ++i) {
+    vec3 const &v1 = _mesh.vert[_mesh.faces[i].v1];
+    vec3 const &v2 = _mesh.vert[_mesh.faces[i].v2];
+    vec3 const &v3 = _mesh.vert[_mesh.faces[i].v3];
 
-    AABB bb;
-    bb.min.x = std::min(std::min(v1.x, v2.x), v3.x);
-    bb.max.x = std::max(std::max(v1.x, v2.x), v3.x);
+    lRes[i].min.x = std::min(std::min(v1.x, v2.x), v3.x);
+    lRes[i].max.x = std::max(std::max(v1.x, v2.x), v3.x);
 
-    bb.min.y = std::min(std::min(v1.y, v2.y), v3.y);
-    bb.max.y = std::max(std::max(v1.y, v2.y), v3.y);
+    lRes[i].min.y = std::min(std::min(v1.y, v2.y), v3.y);
+    lRes[i].max.y = std::max(std::max(v1.y, v2.y), v3.y);
 
-    bb.min.z = std::min(std::min(v1.z, v2.z), v3.z);
-    bb.max.z = std::max(std::max(v1.z, v2.z), v3.z);
-
-    return bb;
-  });
+    lRes[i].min.z = std::min(std::min(v1.z, v2.z), v3.z);
+    lRes[i].max.z = std::max(std::max(v1.z, v2.z), v3.z);
+  }
 
   return lRes;
 }

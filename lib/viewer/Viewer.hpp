@@ -33,7 +33,6 @@ class Viewer final : public base::Command {
   double   vCamSpeed         = 0.00025;
   double   vMouseSensitivity = 0.025;
   bool     vFaceCulling      = false;
-  bool     vWireframe        = false;
 
   struct RenderState {
     double vYaw   = -90;

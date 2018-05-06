@@ -16,6 +16,8 @@
 
 #pragma once
 
+#define GLM_FORCE_NO_CTOR_INIT
+
 #include <glm/vec3.hpp>
 #include <vector>
 

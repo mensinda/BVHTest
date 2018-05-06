@@ -33,6 +33,11 @@ struct VBOData {
   vec3 color;
 };
 
+struct Line {
+  uint32_t start;
+  uint32_t end;
+};
+
 static const char *gVertexShader = R"__GLSL__(
 #version 330 core
 
@@ -60,25 +65,52 @@ void main() {
 }
 )__GLSL__";
 
-void addAABB(AABB const &_aabb, size_t _num, vec3 &_color, vector<VBOData> &_vert, vector<uint32_t> &_ind) {
-  size_t lVOffset = _num * 8;
-  size_t lIOffset = _num * 12 * 2;
+#define V0 lVOffset + 0
+#define V1 lVOffset + 1
+#define V2 lVOffset + 2
+#define V3 lVOffset + 3
+#define V4 lVOffset + 4
+#define V5 lVOffset + 5
+#define V6 lVOffset + 6
+#define V7 lVOffset + 7
+
+inline void addAABB(AABB const &_aabb, size_t _num, vec3 &_color, vector<VBOData> &_vert, std::vector<Line> &_ind) {
+  uint32_t lVOffset = _num * 8;
+  uint32_t lIOffset = _num * 12;
 
   vec3 const &min = _aabb.min;
   vec3 const &max = _aabb.max;
 
-  _vert[lVOffset + 0] = {{min.x, min.y, min.z}, _color};
-  _vert[lVOffset + 0] = {{max.x, max.y, max.z}, _color};
+  _vert[V0]           = {{min.x, min.y, min.z}, _color};
+  _vert[V1]           = {{max.x, min.y, min.z}, _color};
+  _vert[V2]           = {{min.x, max.y, min.z}, _color};
+  _vert[V3]           = {{min.x, min.y, max.z}, _color};
+  _vert[V4]           = {{max.x, max.y, min.z}, _color};
+  _vert[V5]           = {{min.x, max.y, max.z}, _color};
+  _vert[V6]           = {{max.x, min.y, max.z}, _color};
+  _vert[V7]           = {{max.x, max.y, max.z}, _color};
+  _ind[lIOffset + 0]  = {V0, V1};
+  _ind[lIOffset + 1]  = {V0, V2};
+  _ind[lIOffset + 2]  = {V0, V3};
+  _ind[lIOffset + 3]  = {V1, V4};
+  _ind[lIOffset + 4]  = {V1, V6};
+  _ind[lIOffset + 5]  = {V2, V4};
+  _ind[lIOffset + 6]  = {V2, V5};
+  _ind[lIOffset + 7]  = {V3, V5};
+  _ind[lIOffset + 8]  = {V3, V6};
+  _ind[lIOffset + 9]  = {V4, V7};
+  _ind[lIOffset + 10] = {V5, V7};
+  _ind[lIOffset + 11] = {V6, V7};
 }
 
 
 
 BVHRenderer::BVHRenderer(std::vector<AABB> const &_bboxes) {
   // Generate OpenGL VBO data
-  std::vector<VBOData>  lVert;
-  std::vector<uint32_t> lIndex;
+  std::vector<VBOData> lVert;
+  std::vector<Line>    lIndex;
   lVert.resize(_bboxes.size() * 8);
-  lIndex.resize(_bboxes.size() * 12 * 2);
+  lIndex.resize(_bboxes.size() * 12);
   vec3 lColor = {1, 0, 0};
   for (size_t i = 0; i < _bboxes.size(); ++i) {
     addAABB(_bboxes[i], i, lColor, lVert, lIndex);
@@ -89,7 +121,7 @@ BVHRenderer::BVHRenderer(std::vector<AABB> const &_bboxes) {
   glBufferData(GL_ARRAY_BUFFER, lVert.size() * sizeof(VBOData), lVert.data(), GL_STATIC_DRAW);
 
   bindEBO();
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, lIndex.size() * sizeof(uint32_t), lIndex.data(), GL_STATIC_DRAW);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, lIndex.size() * sizeof(Line), lIndex.data(), GL_STATIC_DRAW);
 
   glEnableVertexAttribArray(0);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(VBOData), (void *)0);
@@ -100,7 +132,7 @@ BVHRenderer::BVHRenderer(std::vector<AABB> const &_bboxes) {
 
   if (!compileShaders(gVertexShader, gFragmentShader)) { return; }
 
-  vNumIndex   = lIndex.size();
+  vNumIndex   = lIndex.size() * 2;
   vUniformLoc = getLocation("uMVP");
 }
 
