@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <glm/mat4x4.hpp>
+#include "base/CameraBase.hpp"
 #include "gl3w.h"
 
 namespace BVHTest::view {
@@ -48,9 +48,9 @@ class RendererBase {
   RendererBase();
   virtual ~RendererBase();
 
-  virtual void     render()               = 0;
-  virtual void     update(glm::mat4 _mvp) = 0;
-  virtual Renderer getType() const        = 0;
+  virtual void     render()                       = 0;
+  virtual void     update(base::CameraBase *_cam) = 0;
+  virtual Renderer getType() const                = 0;
 };
 
 } // namespace BVHTest::view

@@ -33,7 +33,7 @@ class MeshRenderer : public RendererBase {
   ~MeshRenderer();
 
   void     render() override;
-  void     update(glm::mat4 _mvp) override;
+  void     update(base::CameraBase *_cam) override;
   Renderer getType() const override { return Renderer::MESH; }
 };
 

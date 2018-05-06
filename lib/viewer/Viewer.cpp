@@ -19,10 +19,13 @@
 #include "BVHTestCfg.hpp"
 #include "Viewer.hpp"
 
+#include "camera/Camera.hpp"
 #include <glm/glm.hpp>
+#include "BVHRenderer.hpp"
 #include "MeshRenderer.hpp"
 #include <GLFW/glfw3.h>
 #include <chrono>
+
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
@@ -86,8 +89,6 @@ void Viewer::fromJSON(const json &_j) {
   vClearColor.g = tmp["clearColor"].value("g", vClearColor.g);
   vClearColor.b = tmp["clearColor"].value("b", vClearColor.b);
   vClearColor.a = tmp["clearColor"].value("a", vClearColor.a);
-
-  vRState.vYaw = 0;
 }
 
 json Viewer::toJSON() const {
@@ -257,11 +258,16 @@ ErrorCode Viewer::runImpl(State &_state) {
 
     processInput(lWindow, lCam, lFrameTime);
 
-    if (!vRState.vRenderer) {}
+    if (!vRenderer || vRState.vRendererType != vRenderer->getType()) {
+      switch (vRState.vRendererType) {
+        case Renderer::MESH: vRenderer = make_shared<MeshRenderer>(_state.mesh); break;
+        case Renderer::BVH: vRenderer = make_shared<BVHRenderer>(_state.aabbs); break;
+      }
+    }
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    vRState.vRenderer->update(lCam.getViewProjection());
-    vRState.vRenderer->render();
+    vRenderer->update(&lCam);
+    vRenderer->render();
 
     if (vRState.vOverlay) {
       auto [width, height] = lWindow.getResolution();
@@ -286,6 +292,7 @@ ErrorCode Viewer::runImpl(State &_state) {
     lFrames++;
   }
 
+  vRenderer = nullptr;
   gltTerminate();
   return ErrorCode::OK;
 }

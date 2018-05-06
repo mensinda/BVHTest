@@ -16,37 +16,35 @@
 
 #include "BVHTestCfg.hpp"
 #include "BVHRenderer.hpp"
+#include "camera/Camera.hpp"
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <string>
 
+using namespace glm;
 using namespace std;
 using namespace BVHTest;
 using namespace BVHTest::view;
 using namespace BVHTest::base;
-
-using namespace std;
-using namespace BVHTest;
-using namespace BVHTest::view;
-using namespace BVHTest::base;
+using namespace BVHTest::camera;
 
 struct VBOData {
-  glm::vec3 vert;
-  glm::vec3 norm;
+  vec3 pos;
+  vec3 color;
 };
 
 static const char *gVertexShader = R"__GLSL__(
 #version 330 core
 
 layout (location = 0) in vec3 iVert;
-layout (location = 1) in vec3 iNorm;
+layout (location = 1) in vec3 iColor;
 
 uniform mat4 uMVP;
 
-out vec4 vNorm;
+out vec3 vColor;
 
 void main() {
-  vNorm = vec4(iNorm.xyz, 1.0);
+  vColor = iColor;
   gl_Position = uMVP * vec4(iVert.xyz, 1.0);
 }
 )__GLSL__";
@@ -54,54 +52,71 @@ void main() {
 static const char *gFragmentShader = R"__GLSL__(
 #version 330 core
 
-in  vec4 vNorm;
+in  vec3 vColor;
 out vec4 oColor;
 
 void main() {
-  oColor = vec4(normalize(vNorm).xyz, 1.0);
+  oColor = vec4(vColor.xyz, 1.0);
 }
 )__GLSL__";
 
+void addAABB(AABB const &_aabb, size_t _num, vec3 &_color, vector<VBOData> &_vert, vector<uint32_t> &_ind) {
+  size_t lVOffset = _num * 8;
+  size_t lIOffset = _num * 12 * 2;
 
-BVHRenderer::BVHRenderer(const Mesh &_mesh) {
+  vec3 const &min = _aabb.min;
+  vec3 const &max = _aabb.max;
+
+  _vert[lVOffset + 0] = {{min.x, min.y, min.z}, _color};
+  _vert[lVOffset + 0] = {{max.x, max.y, max.z}, _color};
+}
+
+
+
+BVHRenderer::BVHRenderer(std::vector<AABB> const &_bboxes) {
   // Generate OpenGL VBO data
-  std::vector<VBOData> lOGLData;
-  lOGLData.resize(_mesh.vert.size());
-  for (size_t i = 0; i < _mesh.vert.size(); ++i) {
-    lOGLData[i].vert = _mesh.vert[i];
-    lOGLData[i].norm = _mesh.norm[i];
+  std::vector<VBOData>  lVert;
+  std::vector<uint32_t> lIndex;
+  lVert.resize(_bboxes.size() * 8);
+  lIndex.resize(_bboxes.size() * 12 * 2);
+  vec3 lColor = {1, 0, 0};
+  for (size_t i = 0; i < _bboxes.size(); ++i) {
+    addAABB(_bboxes[i], i, lColor, lVert, lIndex);
   }
 
   bindVAO();
   bindVBO();
-  glBufferData(GL_ARRAY_BUFFER, lOGLData.size() * sizeof(VBOData), lOGLData.data(), GL_STATIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, lVert.size() * sizeof(VBOData), lVert.data(), GL_STATIC_DRAW);
 
   bindEBO();
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, _mesh.faces.size() * sizeof(Triangle), _mesh.faces.data(), GL_STATIC_DRAW);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, lIndex.size() * sizeof(uint32_t), lIndex.data(), GL_STATIC_DRAW);
 
   glEnableVertexAttribArray(0);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(VBOData), (void *)0);
   glEnableVertexAttribArray(1);
-  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(VBOData), (void *)offsetof(VBOData, norm));
+  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(VBOData), (void *)offsetof(VBOData, color));
 
   unbindVAO();
 
   if (!compileShaders(gVertexShader, gFragmentShader)) { return; }
 
-  vNumIndex   = _mesh.faces.size() * 3;
+  vNumIndex   = lIndex.size();
   vUniformLoc = getLocation("uMVP");
 }
 
 BVHRenderer::~BVHRenderer() {}
 
-void BVHRenderer::update(glm::mat4 _mvp) {
+void BVHRenderer::update(CameraBase *_cam) {
+  Camera *lCam = dynamic_cast<Camera *>(_cam);
+  if (!lCam) { return; }
+
   useProg();
-  glUniformMatrix4fv(vUniformLoc, 1, GL_FALSE, glm::value_ptr(_mvp));
+  glUniformMatrix4fv(vUniformLoc, 1, GL_FALSE, glm::value_ptr(lCam->getViewProjection()));
 }
 
 void BVHRenderer::render() {
   useProg();
   bindVAO();
-  glDrawElements(GL_TRIANGLES, vNumIndex, GL_UNSIGNED_INT, 0);
+  glDrawElements(GL_LINES, vNumIndex, GL_UNSIGNED_INT, 0);
   unbindVAO();
 }

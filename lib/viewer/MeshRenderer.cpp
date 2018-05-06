@@ -15,6 +15,7 @@
  */
 
 #include "MeshRenderer.hpp"
+#include "camera/Camera.hpp"
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <string>
@@ -23,6 +24,7 @@ using namespace std;
 using namespace BVHTest;
 using namespace BVHTest::view;
 using namespace BVHTest::base;
+using namespace BVHTest::camera;
 
 struct VBOData {
   glm::vec3 vert;
@@ -88,9 +90,12 @@ MeshRenderer::MeshRenderer(const Mesh &_mesh) {
 
 MeshRenderer::~MeshRenderer() {}
 
-void MeshRenderer::update(glm::mat4 _mvp) {
+void MeshRenderer::update(CameraBase *_cam) {
+  Camera *lCam = dynamic_cast<Camera *>(_cam);
+  if (!lCam) { return; }
+
   useProg();
-  glUniformMatrix4fv(vUniformLoc, 1, GL_FALSE, glm::value_ptr(_mvp));
+  glUniformMatrix4fv(vUniformLoc, 1, GL_FALSE, glm::value_ptr(lCam->getViewProjection()));
 }
 
 void MeshRenderer::render() {

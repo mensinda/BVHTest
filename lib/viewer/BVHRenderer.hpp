@@ -22,17 +22,18 @@
 namespace BVHTest::view {
 
 class BVHRenderer : public RendererBase {
+ private:
   GLint vUniformLoc = 0;
 
   size_t vNumIndex = 0;
 
  public:
   BVHRenderer() = delete;
-  BVHRenderer(base::Mesh const &_mesh);
+  BVHRenderer(std::vector<AABB> const &_bboxes);
   ~BVHRenderer();
 
   void     render() override;
-  void     update(glm::mat4 _mvp) override;
+  void     update(base::CameraBase *_cam) override;
   Renderer getType() const override { return Renderer::BVH; }
 };
 
