@@ -22,6 +22,10 @@
 namespace BVHTest::builder {
 
 class BuilderBase : public base::Command {
+ private:
+  float vCostInner = 1.2f;
+  float vCostTri   = 1.0f;
+
  public:
   BuilderBase() = default;
   virtual ~BuilderBase();
@@ -29,7 +33,10 @@ class BuilderBase : public base::Command {
   inline base::CommandType getType() const override { return base::CommandType::BVH_BUILD; }
   inline uint64_t getRequiredCommands() const override { return static_cast<uint64_t>(base::CommandType::IMPORT); }
 
-  std::vector<base::AABB> boundingVolumesFromMesh(base::Mesh const &_mesh);
+  std::vector<base::TriWithBB> boundingVolumesFromMesh(base::Mesh const &_mesh);
+
+  inline float getCostInner() const noexcept { return vCostInner; }
+  inline float getCostTri() const noexcept { return vCostTri; }
 };
 
 } // namespace BVHTest::builder

@@ -22,6 +22,16 @@ namespace BVHTest::builder {
 
 class Wald07 final : public BuilderBase {
  public:
+  typedef std::vector<base::TriWithBB>::iterator ITER;
+  struct PartitonRes {
+    bool isLeaf = false;
+    ITER split;
+  };
+
+ private:
+  PartitonRes partitonSweep(ITER _begin, ITER _end);
+
+ public:
   Wald07() = default;
   virtual ~Wald07();
 

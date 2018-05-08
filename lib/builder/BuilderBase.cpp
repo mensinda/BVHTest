@@ -24,8 +24,8 @@ using namespace BVHTest::base;
 
 BuilderBase::~BuilderBase() {}
 
-std::vector<AABB> BuilderBase::boundingVolumesFromMesh(Mesh const &_mesh) {
-  std::vector<AABB> lRes;
+std::vector<TriWithBB> BuilderBase::boundingVolumesFromMesh(Mesh const &_mesh) {
+  std::vector<TriWithBB> lRes;
 
   lRes.resize(_mesh.faces.size());
   for (size_t i = 0; i < _mesh.faces.size(); ++i) {
@@ -33,14 +33,18 @@ std::vector<AABB> BuilderBase::boundingVolumesFromMesh(Mesh const &_mesh) {
     vec3 const &v2 = _mesh.vert[_mesh.faces[i].v2];
     vec3 const &v3 = _mesh.vert[_mesh.faces[i].v3];
 
-    lRes[i].min.x = std::min(std::min(v1.x, v2.x), v3.x);
-    lRes[i].max.x = std::max(std::max(v1.x, v2.x), v3.x);
+    lRes[i].tri = _mesh.faces[i];
 
-    lRes[i].min.y = std::min(std::min(v1.y, v2.y), v3.y);
-    lRes[i].max.y = std::max(std::max(v1.y, v2.y), v3.y);
+    lRes[i].bbox.min.x = std::min(std::min(v1.x, v2.x), v3.x);
+    lRes[i].bbox.max.x = std::max(std::max(v1.x, v2.x), v3.x);
 
-    lRes[i].min.z = std::min(std::min(v1.z, v2.z), v3.z);
-    lRes[i].max.z = std::max(std::max(v1.z, v2.z), v3.z);
+    lRes[i].bbox.min.y = std::min(std::min(v1.y, v2.y), v3.y);
+    lRes[i].bbox.max.y = std::max(std::max(v1.y, v2.y), v3.y);
+
+    lRes[i].bbox.min.z = std::min(std::min(v1.z, v2.z), v3.z);
+    lRes[i].bbox.max.z = std::max(std::max(v1.z, v2.z), v3.z);
+
+    lRes[i].centroid = (lRes[i].bbox.min + lRes[i].bbox.max) / 2.0f;
   }
 
   return lRes;

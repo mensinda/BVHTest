@@ -53,10 +53,10 @@ struct State final {
 
   std::vector<CMD> commands;
 
-  Mesh                 mesh;
-  BVH                  bvh;
-  std::vector<CAM_PTR> cameras;
-  std::vector<AABB>    aabbs;
+  Mesh                   mesh;
+  std::vector<CAM_PTR>   cameras;
+  std::vector<TriWithBB> aabbs;
+  std::vector<BVH>       bvh;
 };
 
 } // namespace BVHTest::base

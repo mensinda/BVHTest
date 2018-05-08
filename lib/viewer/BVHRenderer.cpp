@@ -105,7 +105,7 @@ inline void addAABB(AABB const &_aabb, size_t _num, vec3 &_color, vector<VBOData
 
 
 
-BVHRenderer::BVHRenderer(std::vector<AABB> const &_bboxes) {
+BVHRenderer::BVHRenderer(std::vector<TriWithBB> const &_bboxes) {
   // Generate OpenGL VBO data
   std::vector<VBOData> lVert;
   std::vector<Line>    lIndex;
@@ -113,7 +113,7 @@ BVHRenderer::BVHRenderer(std::vector<AABB> const &_bboxes) {
   lIndex.resize(_bboxes.size() * 12);
   vec3 lColor = {1, 0, 0};
   for (size_t i = 0; i < _bboxes.size(); ++i) {
-    addAABB(_bboxes[i], i, lColor, lVert, lIndex);
+    addAABB(_bboxes[i].bbox, i, lColor, lVert, lIndex);
   }
 
   bindVAO();

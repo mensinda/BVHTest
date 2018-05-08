@@ -145,7 +145,7 @@ bool run(string _file) {
         if (j->run(lState) != ErrorCode::OK) break;
     }
 
-  } catch (detail::exception e) {
+  } catch (detail::exception &e) {
     lLogger->error("JSON exception: {}", e.what());
     return false;
   }

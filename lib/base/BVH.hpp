@@ -38,13 +38,28 @@ struct Mesh final {
 struct AABB {
   glm::vec3 min;
   glm::vec3 max;
+
+  inline float surfaceArea() const noexcept {
+    glm::vec3 d = max - min;
+    return 2 * d.x * d.y + 2 * d.x * d.z + 2 * d.y * d.z;
+  }
 };
 
-struct BVH {
+struct TriWithBB {
+  Triangle  tri;
+  AABB      bbox;
+  glm::vec3 centroid;
+};
+
+struct alignas(16) BVH {
   AABB     bbox;
+  uint32_t parent;
+  uint32_t sibling;
+  uint32_t numFaces;
   uint32_t left;
   uint32_t right;
-};
 
+  inline bool isLeaf() const noexcept { return numFaces != 0; }
+};
 
 } // namespace BVHTest::base
