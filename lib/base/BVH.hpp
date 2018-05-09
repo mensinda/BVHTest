@@ -39,9 +39,20 @@ struct AABB {
   glm::vec3 min;
   glm::vec3 max;
 
-  inline float surfaceArea() const noexcept {
+#define DSIDE(X, Y) static_cast<double>(d.X) * static_cast<double>(d.Y)
+  inline double surfaceArea() const noexcept {
     glm::vec3 d = max - min;
-    return 2 * d.x * d.y + 2 * d.x * d.z + 2 * d.y * d.z;
+    return 2.0 * (DSIDE(x, y) + DSIDE(x, z) + DSIDE(y, z));
+  }
+#undef DSIDE
+
+  inline void mergeWith(AABB const &_bbox) {
+    min.x = std::min(min.x, _bbox.min.x);
+    min.y = std::min(min.y, _bbox.min.y);
+    min.z = std::min(min.z, _bbox.min.z);
+    max.x = std::max(max.x, _bbox.max.x);
+    max.y = std::max(max.y, _bbox.max.y);
+    max.z = std::max(max.z, _bbox.max.z);
   }
 };
 

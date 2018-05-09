@@ -22,9 +22,31 @@
 namespace BVHTest::builder {
 
 class BuilderBase : public base::Command {
+ public:
+  typedef base::TriWithBB             TYPE;
+  typedef TYPE const &                TCREF;
+  typedef std::vector<TYPE>::iterator ITER;
+
+  struct BuildRes {
+    uint32_t   vecPtr;
+    base::AABB bbox;
+  };
+
  private:
-  float vCostInner = 1.2f;
-  float vCostTri   = 1.0f;
+  double vCostInner = 1.2f;
+  double vCostTri   = 2.0f;
+
+  uint32_t vLevel = 0;
+
+ protected:
+  virtual ITER split(ITER _begin, ITER _end, uint32_t _level);
+
+  BuildRes build(ITER                         _begin,
+                 ITER                         _end,
+                 std::vector<base::BVH> &     _bvh,
+                 std::vector<base::Triangle> &_tris,
+                 uint32_t                     _parent  = 0,
+                 uint32_t                     _sibling = UINT32_MAX);
 
  public:
   BuilderBase() = default;
@@ -35,8 +57,8 @@ class BuilderBase : public base::Command {
 
   std::vector<base::TriWithBB> boundingVolumesFromMesh(base::Mesh const &_mesh);
 
-  inline float getCostInner() const noexcept { return vCostInner; }
-  inline float getCostTri() const noexcept { return vCostTri; }
+  inline double getCostInner() const noexcept { return vCostInner; }
+  inline double getCostTri() const noexcept { return vCostTri; }
 };
 
 } // namespace BVHTest::builder

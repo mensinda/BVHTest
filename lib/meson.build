@@ -26,12 +26,14 @@ baseInc = files([
 # Builder lib
 builderSrc = files([
   'builder/BuilderBase.cpp',
+  'builder/Median.cpp',
   'builder/Wald07.cpp'
 ])
 
 
 builderInc = files([
   'builder/BuilderBase.hpp',
+  'builder/Median.hpp',
   'builder/Wald07.hpp'
 ])
 

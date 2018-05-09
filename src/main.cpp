@@ -18,6 +18,7 @@
 #include "base/Config.hpp"
 #include "base/StatusDump.hpp"
 #include "base/StringHash.hpp"
+#include "builder/Median.hpp"
 #include "builder/Wald07.hpp"
 #include "io/ExportMesh.hpp"
 #include "io/ImportMesh.hpp"
@@ -36,7 +37,7 @@ using namespace fmt;
 using namespace Enum2Str;
 using namespace nlohmann;
 
-const vector<string> gCommandList = {"import", "load", "export", "wald07", "status", "viewer"};
+const vector<string> gCommandList = {"import", "load", "export", "median", "wald07", "status", "viewer"};
 
 // String command to object
 Config::CMD_PTR fromString(string _s) {
@@ -44,6 +45,7 @@ Config::CMD_PTR fromString(string _s) {
     case "import"_h: return make_shared<IO::ImportMesh>();
     case "load"_h: return make_shared<IO::Load>();
     case "export"_h: return make_shared<IO::ExportMesh>();
+    case "median"_h: return make_shared<builder::Median>();
     case "wald07"_h: return make_shared<builder::Wald07>();
     case "status"_h: return make_shared<base::StatusDump>();
     case "viewer"_h: return make_shared<view::Viewer>();
@@ -127,7 +129,7 @@ bool run(string _file) {
 
     // Start executing
     if (lCfg.getIsVerbose()) {
-      lLogger->set_level(spd::level::info);
+      lLogger->set_level(spd::level::debug);
     } else {
       lLogger->set_level(spd::level::warn);
     }

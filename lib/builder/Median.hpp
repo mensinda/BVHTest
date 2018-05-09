@@ -20,19 +20,16 @@
 
 namespace BVHTest::builder {
 
-class Wald07 final : public BuilderBase {
+class Median final : public BuilderBase {
  private:
-  uint32_t vMinParallelSortSize = 25;
-
- protected:
   ITER split(ITER _begin, ITER _end, uint32_t _level) override;
 
  public:
-  Wald07() = default;
-  virtual ~Wald07();
+  Median() = default;
+  virtual ~Median();
 
-  std::string getName() const override { return "wald07"; }
-  std::string getDesc() const override { return "Wald et al. 2007 sweep based BVH builder"; }
+  std::string getName() const override { return "median"; }
+  std::string getDesc() const override { return "Object median split BVH builder"; }
 
   base::ErrorCode runImpl(base::State &_state) override;
 
