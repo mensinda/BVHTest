@@ -19,6 +19,7 @@
 #define GLM_FORCE_NO_CTOR_INIT
 
 #include <glm/vec3.hpp>
+#include "Ray.hpp"
 #include <vector>
 
 namespace BVHTest::base {
@@ -54,6 +55,35 @@ struct AABB {
     max.y = std::max(max.y, _bbox.max.y);
     max.z = std::max(max.z, _bbox.max.z);
   }
+
+  // Source: http://www.cs.utah.edu/~awilliam/box/
+  inline bool intersect(Ray const &_r, float t0, float t1) const {
+    glm::vec3 const &lOrigin = _r.getOrigin();
+    glm::vec3 const &lInvDir = _r.getInverseDirection();
+    Ray::Sign const &lSign   = _r.getSign();
+
+    float tmin, tmax, tymin, tymax, tzmin, tzmax;
+
+    glm::vec3 bounds[2] = {min, max};
+
+    tmin  = (bounds[lSign.x].x - lOrigin.x) * lInvDir.x;
+    tmax  = (bounds[1 - lSign.x].x - lOrigin.x) * lInvDir.x;
+    tymin = (bounds[lSign.y].y - lOrigin.y) * lInvDir.y;
+    tymax = (bounds[1 - lSign.y].y - lOrigin.y) * lInvDir.y;
+
+    if ((tmin > tymax) || (tymin > tmax)) return false;
+    if (tymin > tmin) tmin = tymin;
+    if (tymax < tmax) tmax = tymax;
+
+    tzmin = (bounds[lSign.z].z - lOrigin.z) * lInvDir.z;
+    tzmax = (bounds[1 - lSign.z].z - lOrigin.z) * lInvDir.z;
+
+    if ((tmin > tzmax) || (tzmin > tmax)) return false;
+    if (tzmin > tmin) tmin = tzmin;
+    if (tzmax < tmax) tmax = tzmax;
+
+    return ((tmin < t1) && (tmax > t0));
+  }
 };
 
 struct TriWithBB {
@@ -66,11 +96,11 @@ struct alignas(16) BVH {
   AABB     bbox;
   uint32_t parent;
   uint32_t sibling;
-  uint32_t numFaces;
-  uint32_t left;
+  uint32_t numFaces; // Number of triangles (or UINT32_MAX for inner node)
+  uint32_t left;     // Left child or index of first triangle when leaf
   uint32_t right;
 
-  inline bool isLeaf() const noexcept { return numFaces != 0; }
+  inline bool isLeaf() const noexcept { return numFaces != UINT32_MAX; }
 };
 
 } // namespace BVHTest::base

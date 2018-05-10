@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "BVHTestCfg.hpp"
 #include "BVHRenderer.hpp"
 #include "camera/Camera.hpp"
 #include <glm/gtc/type_ptr.hpp>
@@ -74,7 +73,7 @@ void main() {
 #define V6 lVOffset + 6
 #define V7 lVOffset + 7
 
-inline void addAABB(AABB const &_aabb, size_t _num, vec3 &_color, vector<VBOData> &_vert, std::vector<Line> &_ind) {
+inline void addAABB(AABB const &_aabb, size_t _num, vec3 _color, vector<VBOData> &_vert, vector<Line> &_ind) {
   uint32_t lVOffset = _num * 8;
   uint32_t lIOffset = _num * 12;
 
@@ -103,18 +102,74 @@ inline void addAABB(AABB const &_aabb, size_t _num, vec3 &_color, vector<VBOData
   _ind[lIOffset + 11] = {V6, V7};
 }
 
+const vec3 gColRoot = {1.0f, 0.0f, 0.0f};
+const vec3 gColEnd  = {0.0f, 1.0f, 0.0f};
+
+// Color gradiant from https://stackoverflow.com/questions/22607043/color-gradient-algorithm
+vec3 InverseSrgbCompanding(vec3 c) {
+  // Inverse Red, Green, and Blue
+  // clang-format off
+  if (c.r > 0.04045) { c.r = pow((c.r + 0.055) / 1.055, 2.4); } else { c.r /= 12.92; }
+  if (c.g > 0.04045) { c.g = pow((c.g + 0.055) / 1.055, 2.4); } else { c.g /= 12.92; }
+  if (c.b > 0.04045) { c.b = pow((c.b + 0.055) / 1.055, 2.4); } else { c.b /= 12.92; }
+  // clang-format on
+
+  return c;
+}
+
+vec3 SrgbCompanding(vec3 c) {
+  // Apply companding to Red, Green, and Blue
+  // clang-format off
+  if (c.r > 0.0031308) { c.r = 1.055 * pow(c.r, 1 / 2.4) - 0.055; } else { c.r *= 12.92; }
+  if (c.g > 0.0031308) { c.g = 1.055 * pow(c.g, 1 / 2.4) - 0.055; } else { c.g *= 12.92; }
+  if (c.b > 0.0031308) { c.b = 1.055 * pow(c.b, 1 / 2.4) - 0.055; } else { c.b *= 12.92; }
+  // clang-format on
+
+  return c;
+}
 
 
-BVHRenderer::BVHRenderer(std::vector<TriWithBB> const &_bboxes) {
+vec3 genColor(uint32_t _level, uint32_t _max) {
+  float frac = static_cast<float>(_level) / static_cast<float>(_max);
+
+  vec3 c1 = InverseSrgbCompanding(gColRoot);
+  vec3 c2 = InverseSrgbCompanding(gColEnd);
+
+  vec3 lRes = c1 * (1 - frac) + c2 * frac;
+  lRes      = SrgbCompanding(lRes);
+  return lRes;
+}
+
+uint32_t processNode(vector<BVH> const &_bvh,
+                     uint32_t           _node,
+                     uint32_t           _level,
+                     uint32_t           _next,
+                     vector<VBOData> &  _vert,
+                     vector<Line> &     _ind,
+                     uint32_t           _maxLevel) {
+  BVH const &lNode = _bvh[_node];
+
+  addAABB(lNode.bbox, _next++, genColor(_level, _maxLevel), _vert, _ind);
+
+  if (lNode.isLeaf()) { return _next; }
+
+  if (lNode.left != UINT32_MAX) { _next = processNode(_bvh, lNode.left, _level + 1, _next, _vert, _ind, _maxLevel); }
+  if (lNode.right != UINT32_MAX) { _next = processNode(_bvh, lNode.right, _level + 1, _next, _vert, _ind, _maxLevel); }
+
+  return _next;
+}
+
+BVHRenderer::BVHRenderer(vector<BVH> const &_bvh, uint32_t _maxLevel) {
   // Generate OpenGL VBO data
   std::vector<VBOData> lVert;
   std::vector<Line>    lIndex;
-  lVert.resize(_bboxes.size() * 8);
-  lIndex.resize(_bboxes.size() * 12);
-  vec3 lColor = {1, 0, 0};
-  for (size_t i = 0; i < _bboxes.size(); ++i) {
-    addAABB(_bboxes[i].bbox, i, lColor, lVert, lIndex);
-  }
+  lVert.resize(_bvh.size() * 8);
+  lIndex.resize(_bvh.size() * 12);
+
+  uint32_t lNumGenerated = processNode(_bvh, 0, 0, 0, lVert, lIndex, _maxLevel);
+
+  lVert.resize(lNumGenerated * 8);
+  lIndex.resize(lNumGenerated * 12);
 
   bindVAO();
   bindVBO();

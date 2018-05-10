@@ -109,9 +109,8 @@ void Viewer::processInput(Window &_win, Camera &_cam, uint32_t _time) {
   if (vRState.vCurrCam != UINT32_MAX) { return; }
 
   // Get current stats
-  auto [lPos, lLookAt, lUp] = _cam.getCamera();
-  float lDelta              = _time * vCamSpeed * (static_cast<float>(vRState.vSpeedLevel) / 10.0f);
-  float lFOV                = _cam.getFOV();
+  auto [lPos, lLookAt, lUp, lFOV] = _cam.getCamera();
+  float lDelta                    = _time * vCamSpeed * (static_cast<float>(vRState.vSpeedLevel) / 10.0f);
 
   // Scrolling
   lFOV += static_cast<float>(lScroll);
@@ -278,7 +277,7 @@ ErrorCode Viewer::runImpl(State &_state) {
           lWireframeOn = true;
           [[fallthrough]];
         case Renderer::MESH: vRenderer = make_shared<MeshRenderer>(_state.mesh); break;
-        case Renderer::BVH: vRenderer = make_shared<BVHRenderer>(_state.aabbs); break;
+        case Renderer::BVH: vRenderer = make_shared<BVHRenderer>(_state.bvh, _state.bvhMaxLevel); break;
       }
     }
 

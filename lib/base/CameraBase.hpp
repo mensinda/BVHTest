@@ -17,6 +17,7 @@
 #pragma once
 
 #include "Configurable.hpp"
+#include "Ray.hpp"
 
 namespace BVHTest::base {
 
@@ -27,7 +28,8 @@ class CameraBase : public Configurable {
   CameraBase() = default;
   virtual ~CameraBase();
 
-  virtual CameraType getType() const = 0;
+  virtual CameraType       getType() const = 0;
+  virtual std::vector<Ray> genRays()       = 0;
 };
 
 } // namespace BVHTest::base

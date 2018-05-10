@@ -64,6 +64,7 @@ BuilderBase::BuildRes BuilderBase::build(BuilderBase::ITER _begin,
   AABB     lNodeBBox;
 
   vLevel++;
+  vMaxLevel = vLevel > vMaxLevel ? vLevel : vMaxLevel;
 
   if (lSize == 0) { throw runtime_error("BuilderBase: WTF! Fix this " + to_string(__LINE__)); }
 
@@ -124,9 +125,10 @@ BuilderBase::BuildRes BuilderBase::build(BuilderBase::ITER _begin,
 
     _bvh[lID1].sibling = lID2; // Fix sibling
 
-    lBBOX1.mergeWith(lBBOX2);
+    lNodeBBox = lBBOX1;
+    lNodeBBox.mergeWith(lBBOX2);
     lNode = {
-        lBBOX1,
+        lNodeBBox,
         _parent,
         _sibling,
         UINT32_MAX, // numFaces (inner node --> UINT32_MAX)
@@ -137,4 +139,13 @@ BuilderBase::BuildRes BuilderBase::build(BuilderBase::ITER _begin,
 
   vLevel--;
   return {lNewNode, lNodeBBox};
+}
+
+uint32_t BuilderBase::buildBVH(ITER _begin, ITER _end, vector<BVH> &_bvh, vector<Triangle> &_tris) {
+  vLevel    = 0;
+  vMaxLevel = 0;
+
+  build(_begin, _end, _bvh, _tris, 0, UINT32_MAX);
+
+  return vMaxLevel;
 }

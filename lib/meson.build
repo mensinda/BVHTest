@@ -8,6 +8,7 @@ baseSrc = files([
   'base/Configurable.cpp',
   'base/Config.cpp',
   'base/Command.cpp',
+  'base/Ray.cpp',
   'base/StatusDump.cpp'
 ])
 
@@ -17,6 +18,7 @@ baseInc = files([
   'base/Configurable.hpp',
   'base/Config.hpp',
   'base/Command.hpp',
+  'base/Ray.hpp',
   'base/State.hpp',
   'base/StatusDump.hpp',
   'base/StringHash.hpp'
@@ -59,6 +61,18 @@ ioInc = files([
   'io/ExportMesh.hpp',
   'io/ImportMesh.hpp',
   'io/Load.hpp'
+])
+
+
+# Tracer lib
+tracerSrc = files([
+  'tracer/CPUTracer.cpp',
+  'tracer/TracerBase.cpp'
+])
+
+tracerInc = files([
+  'tracer/CPUTracer.hpp',
+  'tracer/TracerBase.hpp'
 ])
 
 
@@ -130,6 +144,13 @@ cameraLib = library('camera', cameraSrc,
   dependencies: baseDeps,
 )
 
+tracerLib = library('tracer', tracerSrc,
+  include_directories: incDirs,
+  install: true,
+  link_with: [baseLib, cameraLib, enum2StrLib],
+  dependencies: baseDeps,
+)
+
 ioLib = library('io', ioSrc,
   include_directories: incDirs,
   install: true,
@@ -140,6 +161,6 @@ ioLib = library('io', ioSrc,
 viewerLib = library('viewer', viewerSrc,
   include_directories: incDirs,
   install: true,
-  link_with: [baseLib, cameraLib, enum2StrLib],
+  link_with: [baseLib, cameraLib, tracerLib, enum2StrLib],
   dependencies: baseDeps + [GL, glfw, dl, glm],
 )

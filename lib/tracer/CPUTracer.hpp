@@ -16,25 +16,31 @@
 
 #pragma once
 
-#include "BuilderBase.hpp"
+#include "TracerBase.hpp"
 
-namespace BVHTest::builder {
+namespace BVHTest::tracer {
 
-class Wald07 final : public BuilderBase {
- protected:
-  ITER split(ITER _begin, ITER _end, uint32_t _level) override;
+class CPUTracer final : public TracerBase {
+ public:
+  struct Pixel {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+  };
+
+ private:
+  Pixel trace(base::Ray &_ray, base::Mesh const &_mesh, std::vector<base::BVH> const &_bvh);
 
  public:
-  Wald07() = default;
-  virtual ~Wald07();
+  CPUTracer() = default;
+  virtual ~CPUTracer();
 
-  std::string getName() const override { return "wald07"; }
-  std::string getDesc() const override { return "Wald et al. 2007 sweep based BVH builder"; }
-
-  base::ErrorCode runImpl(base::State &_state) override;
+  inline std::string getName() const override { return "CPUTracer"; }
+  inline std::string getDesc() const override { return "single core CPU Ray tracer"; }
+  base::ErrorCode    runImpl(base::State &_state) override;
 
   void fromJSON(const json &_j) override;
   json toJSON() const override;
 };
 
-} // namespace BVHTest::builder
+} // namespace BVHTest::tracer

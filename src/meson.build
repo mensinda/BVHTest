@@ -5,7 +5,7 @@ cmdSrc = files([
 executable('bvhTest', cmdSrc,
   include_directories: incDirs,
   install: true,
-  link_with: [enum2StrLib, baseLib, builderLib, ioLib, viewerLib, cameraLib],
+  link_with: [enum2StrLib, baseLib, builderLib, ioLib, tracerLib, viewerLib, cameraLib],
   dependencies: [threads],
   install_rpath: fullLibDirPath
 )

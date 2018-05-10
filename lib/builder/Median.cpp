@@ -26,9 +26,8 @@ Median::~Median() {}
 void Median::fromJSON(const json &) {}
 json Median::toJSON() const { return json::object(); }
 
-Median::ITER Median::split(Median::ITER _begin, Median::ITER _end, uint32_t _level) {
-  return _begin + ((_end - _begin) / 2);
-}
+//! \todo Complete this!
+Median::ITER Median::split(Median::ITER _begin, Median::ITER _end, uint32_t) { return _begin + ((_end - _begin) / 2); }
 
 
 ErrorCode Median::runImpl(State &_state) {
@@ -36,8 +35,8 @@ ErrorCode Median::runImpl(State &_state) {
   lResVec.reserve(_state.mesh.faces.size());
   _state.bvh.reserve(_state.mesh.faces.size() * 2); // Assuming perfect binary tree
 
-  _state.aabbs = boundingVolumesFromMesh(_state.mesh);
-  build(begin(_state.aabbs), end(_state.aabbs), _state.bvh, lResVec);
+  auto lAABBs        = boundingVolumesFromMesh(_state.mesh);
+  _state.bvhMaxLevel = buildBVH(begin(lAABBs), end(lAABBs), _state.bvh, lResVec);
 
   swap(lResVec, _state.mesh.faces); // Copy the result triangles
   return ErrorCode::OK;

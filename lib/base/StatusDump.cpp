@@ -32,7 +32,9 @@ ErrorCode StatusDump::runImpl(State &_state) {
   auto lLogger = getLogger();
 
   lLogger->info("Status:");
-  lLogger->info("  -- BVH Nodes: {}", _state.bvh.size());
+  lLogger->info("  -- BVH:");
+  lLogger->info("    - Nodes:       {}", _state.bvh.size());
+  lLogger->info("    - Tree height: {}", _state.bvhMaxLevel);
   lLogger->info("  -- Mesh info:");
   lLogger->info("    - Vertices: {}", _state.mesh.vert.size());
   lLogger->info("    - Faces:    {}", _state.mesh.faces.size());

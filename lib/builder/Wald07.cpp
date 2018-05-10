@@ -66,27 +66,9 @@ BuilderBase::ITER Wald07::split(ITER _begin, ITER _end, uint32_t) {
   }
   lArea = lTemp.surfaceArea();
 
-  //   auto lFX = [&]() { sort(begin(lXSort), end(lXSort), [](TCREF a, TCREF b) { return a.centroid.x > b.centroid.x; }); };
-  //   auto lFY = [&]() { sort(begin(lYSort), end(lYSort), [](TCREF a, TCREF b) { return a.centroid.y > b.centroid.y; }); };
-  //   auto lFZ = [&]() { sort(begin(lZSort), end(lZSort), [](TCREF a, TCREF b) { return a.centroid.z > b.centroid.z; }); };
-
   sort(begin(lXSort), end(lXSort), [](TCREF a, TCREF b) { return a.centroid.x > b.centroid.x; });
   sort(begin(lYSort), end(lYSort), [](TCREF a, TCREF b) { return a.centroid.y > b.centroid.y; });
   sort(begin(lZSort), end(lZSort), [](TCREF a, TCREF b) { return a.centroid.z > b.centroid.z; });
-
-  //   if (lSize > vMinParallelSortSize) {
-  //     thread tX(lFX);
-  //     thread tY(lFY);
-  //     thread tZ(lFZ);
-  //
-  //     tX.join();
-  //     tY.join();
-  //     tZ.join();
-  //   } else {
-  //     lFX();
-  //     lFY();
-  //     lFZ();
-  //   }
 
   for (Axis i : {Axis::X, Axis::Y, Axis::Z}) {
     vector<TYPE> &lRef = [&]() -> vector<TYPE> & {
@@ -147,8 +129,8 @@ ErrorCode Wald07::runImpl(State &_state) {
   lResVec.reserve(_state.mesh.faces.size());
   _state.bvh.reserve(_state.mesh.faces.size() * 2); // Assuming perfect binary tree
 
-  _state.aabbs = boundingVolumesFromMesh(_state.mesh);
-  build(begin(_state.aabbs), end(_state.aabbs), _state.bvh, lResVec);
+  auto lAABBs        = boundingVolumesFromMesh(_state.mesh);
+  _state.bvhMaxLevel = buildBVH(begin(lAABBs), end(lAABBs), _state.bvh, lResVec);
 
   swap(lResVec, _state.mesh.faces); // Copy the result triangles
   return ErrorCode::OK;

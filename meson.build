@@ -14,7 +14,8 @@ incDirs = include_directories('external', 'external/spdlog/include', 'lib', '.',
 assimp  = dependency('assimp',  required: true, version: '>=4.1.0')
 glfw    = dependency('glfw3',   required: true, version: '>=3.1.0')
 GL      = dependency('GL',      required: true, version: '>=3.3')
-glm     = dependency('glm',     required: true)
+glm     = dependency('glm',     required: true, version: '=0.9.8')
+OpenMP  = dependency('openmp',  required: true)
 dl      = meson.get_compiler('c').find_library('dl', required : true)
 threads = dependency('threads', required: true)
 
@@ -28,7 +29,7 @@ cfgData  = configuration_data()
 cfgData.set_quoted('BVHTEST_VERSION', meson.project_version())
 cfgData.set_quoted('LOGGER_NAME',     meson.project_name())
 
-baseDeps = [threads, compiler.find_library('stdc++fs', required: true)]
+baseDeps = [threads, OpenMP, compiler.find_library('stdc++fs', required: true)]
 
 if not compiler.has_header('filesystem') and not compiler.has_header('experimental/filesystem')
   error('Unable to find C++17 filesystem')

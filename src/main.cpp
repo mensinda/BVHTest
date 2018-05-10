@@ -23,6 +23,7 @@
 #include "io/ExportMesh.hpp"
 #include "io/ImportMesh.hpp"
 #include "io/Load.hpp"
+#include "tracer/CPUTracer.hpp"
 #include "viewer/Viewer.hpp"
 #include "Enum2Str.hpp"
 #include <fstream>
@@ -37,7 +38,7 @@ using namespace fmt;
 using namespace Enum2Str;
 using namespace nlohmann;
 
-const vector<string> gCommandList = {"import", "load", "export", "median", "wald07", "status", "viewer"};
+const vector<string> gCommandList = {"import", "load", "export", "median", "wald07", "CPUTracer", "status", "viewer"};
 
 // String command to object
 Config::CMD_PTR fromString(string _s) {
@@ -47,6 +48,7 @@ Config::CMD_PTR fromString(string _s) {
     case "export"_h: return make_shared<IO::ExportMesh>();
     case "median"_h: return make_shared<builder::Median>();
     case "wald07"_h: return make_shared<builder::Wald07>();
+    case "CPUTracer"_h: return make_shared<tracer::CPUTracer>();
     case "status"_h: return make_shared<base::StatusDump>();
     case "viewer"_h: return make_shared<view::Viewer>();
   }

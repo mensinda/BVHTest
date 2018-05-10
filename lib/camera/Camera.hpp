@@ -25,46 +25,43 @@ namespace BVHTest::camera {
 class Camera : public base::CameraBase {
  public:
   struct RES {
-    uint32_t width;
-    uint32_t height;
+    uint32_t width  = 2560;
+    uint32_t height = 1440;
   };
 
   struct CAMERA {
-    glm::vec3 pos;
-    glm::vec3 lookAt;
-    glm::vec3 up;
+    glm::vec3 pos    = glm::vec3(0.0f, 0.0f, 2.0f);
+    glm::vec3 lookAt = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 up     = glm::vec3(0.0f, 1.0f, 0.0f);
+    float     fov    = 45.0f;
   };
 
  private:
-  glm::vec3 vPos    = glm::vec3(0.0f, 0.0f, 2.0f);
-  glm::vec3 vLookAt = glm::vec3(0.0f, 0.0f, 0.0f);
-  glm::vec3 vUp     = glm::vec3(0.0f, 1.0f, 0.0f);
-
-  float    vFOV    = 45.0f;
-  uint32_t vWidth  = 1920;
-  uint32_t vHeight = 1080;
+  CAMERA vCam;
+  RES    vRes;
 
  public:
   Camera() = default;
   virtual ~Camera();
 
-  inline void setFOV(float _fov) { vFOV = _fov; }
+  inline void setFOV(float _fov) { vCam.fov = _fov; }
   inline void setResolution(uint32_t _width, uint32_t _height) {
-    vWidth  = _width;
-    vHeight = _height;
+    vRes.width  = _width;
+    vRes.height = _height;
   }
 
   inline void setCamera(glm::vec3 _pos, glm::vec3 _lookAt, glm::vec3 _up) {
-    vPos    = _pos;
-    vLookAt = _lookAt;
-    vUp     = _up;
+    vCam.pos    = _pos;
+    vCam.lookAt = _lookAt;
+    vCam.up     = _up;
   }
 
-  inline float  getFOV() const { return vFOV; }
-  inline RES    getResolution() const { return {vWidth, vHeight}; }
-  inline CAMERA getCamera() const { return {vPos, vLookAt, vUp}; }
+  inline RES    getResolution() const { return vRes; }
+  inline CAMERA getCamera() const { return vCam; }
 
   inline base::CameraType getType() const override { return base::CameraType::PERSPECTIVE; }
+
+  std::vector<base::Ray> genRays() override;
 
   glm::mat4 getViewProjection();
 
