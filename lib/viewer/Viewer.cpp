@@ -276,8 +276,14 @@ ErrorCode Viewer::runImpl(State &_state) {
           glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
           lWireframeOn = true;
           [[fallthrough]];
-        case Renderer::MESH: vRenderer = make_shared<MeshRenderer>(_state.mesh); break;
-        case Renderer::BVH: vRenderer = make_shared<BVHRenderer>(_state.bvh, _state.bvhMaxLevel); break;
+        case Renderer::MESH:
+          vRenderer.reset();
+          vRenderer = make_shared<MeshRenderer>(_state.mesh);
+          break;
+        case Renderer::BVH:
+          vRenderer.reset();
+          vRenderer = make_shared<BVHRenderer>(_state.bvh, _state.bvhMaxLevel);
+          break;
       }
     }
 

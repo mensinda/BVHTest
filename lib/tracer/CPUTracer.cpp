@@ -117,10 +117,11 @@ ErrorCode CPUTracer::runImpl(State &_state) {
   auto [lWidth, lHeight] = lCam.getResolution();
   vector<Ray>   lRays    = lCam.genRays();
   vector<Pixel> lIMG;
-  lIMG.reserve(lWidth * lHeight);
+  lIMG.resize(lRays.size());
 
-  for (auto &i : lRays) {
-    lIMG.push_back(trace(i, _state.mesh, _state.bvh));
+#pragma omp parallel for
+  for (size_t i = 0; i < lRays.size(); ++i) {
+    lIMG[i] = trace(lRays[i], _state.mesh, _state.bvh);
   };
 
   string lFileName = _state.input + ".ppm";
