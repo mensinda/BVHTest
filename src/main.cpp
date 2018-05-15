@@ -20,6 +20,10 @@
 #include "base/StringHash.hpp"
 #include "builder/Median.hpp"
 #include "builder/Wald07.hpp"
+#include "io/BVHExport.hpp"
+#include "io/BVHImport.hpp"
+#include "io/CameraExport.hpp"
+#include "io/CameraImport.hpp"
 #include "io/ExportMesh.hpp"
 #include "io/ImportMesh.hpp"
 #include "io/Load.hpp"
@@ -38,7 +42,18 @@ using namespace fmt;
 using namespace Enum2Str;
 using namespace nlohmann;
 
-const vector<string> gCommandList = {"import", "load", "export", "median", "wald07", "CPUTracer", "status", "viewer"};
+const vector<string> gCommandList = {"import",
+                                     "load",
+                                     "export",
+                                     "BVHExport",
+                                     "BVHImport",
+                                     "camExport",
+                                     "camImport",
+                                     "median",
+                                     "wald07",
+                                     "CPUTracer",
+                                     "status",
+                                     "viewer"};
 
 // String command to object
 Config::CMD_PTR fromString(string _s) {
@@ -46,6 +61,10 @@ Config::CMD_PTR fromString(string _s) {
     case "import"_h: return make_shared<IO::ImportMesh>();
     case "load"_h: return make_shared<IO::Load>();
     case "export"_h: return make_shared<IO::ExportMesh>();
+    case "BVHExport"_h: return make_shared<IO::BVHExport>();
+    case "BVHImport"_h: return make_shared<IO::BVHImport>();
+    case "camExport"_h: return make_shared<IO::CameraExport>();
+    case "camImport"_h: return make_shared<IO::CameraImport>();
     case "median"_h: return make_shared<builder::Median>();
     case "wald07"_h: return make_shared<builder::Wald07>();
     case "CPUTracer"_h: return make_shared<tracer::CPUTracer>();

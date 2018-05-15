@@ -38,6 +38,7 @@ ErrorCode StatusDump::runImpl(State &_state) {
   lLogger->info("  -- Mesh info:");
   lLogger->info("    - Vertices: {}", _state.mesh.vert.size());
   lLogger->info("    - Faces:    {}", _state.mesh.faces.size());
+  lLogger->info("  -- Num Cameras: {}", _state.cameras.size());
   lLogger->info("  -- Command times:");
   for (auto const &i : _state.commands) {
     seconds lSec = duration_cast<seconds>(i.duration);

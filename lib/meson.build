@@ -52,12 +52,20 @@ cameraInc = files([
 
 # IO lib
 ioSrc = files([
+  'io/BVHExport.cpp',
+  'io/BVHImport.cpp',
+  'io/CameraExport.cpp',
+  'io/CameraImport.cpp',
   'io/ExportMesh.cpp',
   'io/ImportMesh.cpp',
   'io/Load.cpp'
 ])
 
 ioInc = files([
+  'io/BVHExport.hpp',
+  'io/BVHImport.hpp',
+  'io/CameraExport.hpp',
+  'io/CameraImport.hpp',
   'io/ExportMesh.hpp',
   'io/ImportMesh.hpp',
   'io/Load.hpp'
@@ -102,8 +110,8 @@ viewerInc = files([
 allInc = baseInc + builderInc + cameraInc + ioInc + viewerInc
 enumData = []
 
-#foreach i : allInc
-foreach i : files(['base/BVH.hpp', 'base/Command.hpp', 'base/CameraBase.hpp', 'base/State.hpp', 'viewer/RendererBase.hpp'])
+foreach i : allInc
+#foreach i : files(['base/BVH.hpp', 'base/Command.hpp', 'base/CameraBase.hpp', 'base/State.hpp', 'viewer/RendererBase.hpp'])
   enumData += enumParser.process(i)
 endforeach
 
@@ -154,7 +162,7 @@ tracerLib = library('tracer', tracerSrc,
 ioLib = library('io', ioSrc,
   include_directories: incDirs,
   install: true,
-  link_with: [baseLib, enum2StrLib],
+  link_with: [baseLib, cameraLib, enum2StrLib],
   dependencies: baseDeps + [assimp],
 )
 

@@ -27,8 +27,8 @@ Camera::~Camera() {}
 
 vec3 vec3FromJson(const json &_j, vec3 _default) {
   _default.x = _j.value("x", _default.x);
-  _default.y = _j.value("x", _default.y);
-  _default.z = _j.value("x", _default.z);
+  _default.y = _j.value("y", _default.y);
+  _default.z = _j.value("z", _default.z);
   return _default;
 }
 
