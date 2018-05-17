@@ -40,12 +40,12 @@ struct AABB {
   glm::vec3 min;
   glm::vec3 max;
 
-#define DSIDE(X, Y) static_cast<double>(d.X) * static_cast<double>(d.Y)
-  inline double surfaceArea() const noexcept {
+#define SIDE(X, Y) d.X *d.Y
+  inline float          surfaceArea() const noexcept {
     glm::vec3 d = max - min;
-    return 2.0 * (DSIDE(x, y) + DSIDE(x, z) + DSIDE(y, z));
+    return 2.0f * (SIDE(x, y) + SIDE(x, z) + SIDE(y, z));
   }
-#undef DSIDE
+#undef SIDE
 
   inline void mergeWith(AABB const &_bbox) {
     min.x = std::min(min.x, _bbox.min.x);
@@ -102,5 +102,26 @@ struct alignas(16) BVH {
 
   inline bool isLeaf() const noexcept { return numFaces != UINT32_MAX; }
 };
+
+inline float calcSAH(std::vector<BVH> const &_bvh, float _cInner = 1.2f, float _cLeaf = 1.0f) {
+  if (_bvh.empty()) { return 0.0f; }
+
+  float      lSAH  = 0.0f;
+  BVH const &lRoot = _bvh[0];
+
+#pragma omp parallel for reduction(+ : lSAH)
+  for (size_t i = 1; i < _bvh.size(); ++i) {
+    float lCost = _bvh[i].bbox.surfaceArea();
+    if (_bvh[i].isLeaf()) {
+      lCost *= _cLeaf;
+    } else {
+      lCost *= _cInner;
+    }
+
+    lSAH = lSAH + lCost;
+  }
+
+  return (1 / lRoot.bbox.surfaceArea()) * lSAH;
+}
 
 } // namespace BVHTest::base

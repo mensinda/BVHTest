@@ -16,22 +16,27 @@
 
 #pragma once
 
-#include "BuilderBase.hpp"
+#include "base/BVH.hpp"
+#include "base/Command.hpp"
 
 namespace BVHTest::builder {
 
-class Wald07 final : public BuilderBase {
- protected:
-  ITER split(ITER _begin, ITER _end, uint32_t _level) override;
+class OptimizerBase : public base::Command {
+  double vCostInner = 1.2f;
+  double vCostTri   = 1.0f;
 
  public:
-  Wald07() = default;
-  virtual ~Wald07();
+  OptimizerBase() = default;
+  virtual ~OptimizerBase();
 
-  std::string getName() const override { return "wald07"; }
-  std::string getDesc() const override { return "Wald et al. 2007 sweep based BVH builder"; }
+  inline base::CommandType getType() const override { return base::CommandType::BVH_OPT1; }
+  inline uint64_t getRequiredCommands() const override { return static_cast<uint64_t>(base::CommandType::BVH_BUILD); }
 
-  base::ErrorCode runImpl(base::State &_state) override;
+  void fromJSON(const json &_j) override;
+  json toJSON() const override;
+
+  inline double getCostInner() const noexcept { return vCostInner; }
+  inline double getCostTri() const noexcept { return vCostTri; }
 };
 
 } // namespace BVHTest::builder

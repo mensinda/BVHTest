@@ -25,9 +25,6 @@ using namespace BVHTest::base;
 
 Wald07::~Wald07() {}
 
-void Wald07::fromJSON(const json &) {}
-json Wald07::toJSON() const { return json::object(); }
-
 enum class Axis { NONE = -1, X = 0, Y = 1, Z = 2 };
 
 /*!
@@ -39,13 +36,13 @@ BuilderBase::ITER Wald07::split(ITER _begin, ITER _end, uint32_t) {
   size_t lSize = _end - _begin;
   if (lSize <= 2) { throw runtime_error("WALD07: Should not happen! " + to_string(__LINE__)); }
 
-  double   lBestCost = numeric_limits<double>::infinity(); // getCostTri() * lSize;
-  double   lThisCost = 0;
-  double   lArea     = 0;
+  float    lBestCost = numeric_limits<float>::infinity(); // getCostTri() * lSize;
+  float    lThisCost = 0;
+  float    lArea     = 0;
   Axis     lBestAxis = Axis::NONE;
   uint32_t lBestEven = 0;
 
-  vector<double> lLeftArea;
+  vector<float> lLeftArea;
 
   vector<TYPE> lXSort;
   vector<TYPE> lYSort;

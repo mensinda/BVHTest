@@ -34,7 +34,7 @@ class BuilderBase : public base::Command {
 
  private:
   double vCostInner = 1.2f;
-  double vCostTri   = 2.0f;
+  double vCostTri   = 1.0f;
 
   uint32_t vLevel    = 0;
   uint32_t vMaxLevel = 0;
@@ -59,6 +59,9 @@ class BuilderBase : public base::Command {
   inline uint64_t getRequiredCommands() const override { return static_cast<uint64_t>(base::CommandType::IMPORT); }
 
   std::vector<base::TriWithBB> boundingVolumesFromMesh(base::Mesh const &_mesh);
+
+  void fromJSON(const json &_j) override;
+  json toJSON() const override;
 
   inline double getCostInner() const noexcept { return vCostInner; }
   inline double getCostTri() const noexcept { return vCostTri; }

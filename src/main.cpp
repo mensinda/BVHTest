@@ -18,6 +18,7 @@
 #include "base/Config.hpp"
 #include "base/StatusDump.hpp"
 #include "base/StringHash.hpp"
+#include "builder/Bittner13.hpp"
 #include "builder/Median.hpp"
 #include "builder/Wald07.hpp"
 #include "io/BVHExport.hpp"
@@ -51,6 +52,7 @@ const vector<string> gCommandList = {"import",
                                      "camImport",
                                      "median",
                                      "wald07",
+                                     "bittner13",
                                      "CPUTracer",
                                      "status",
                                      "viewer"};
@@ -67,6 +69,7 @@ Config::CMD_PTR fromString(string _s) {
     case "camImport"_h: return make_shared<IO::CameraImport>();
     case "median"_h: return make_shared<builder::Median>();
     case "wald07"_h: return make_shared<builder::Wald07>();
+    case "bittner13"_h: return make_shared<builder::Bittner13>();
     case "CPUTracer"_h: return make_shared<tracer::CPUTracer>();
     case "status"_h: return make_shared<base::StatusDump>();
     case "viewer"_h: return make_shared<view::Viewer>();

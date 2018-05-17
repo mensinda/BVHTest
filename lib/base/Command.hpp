@@ -25,6 +25,7 @@ enum class ErrorCode {
   OK,           // Everything went fine
   IO_ERROR,     // Failed to read / write a file
   PARSE_ERROR,  // Paring a file failed
+  BVH_ERROR,    // Something is wrong with the BVH
   GL_ERROR,     // OpenGL error
   GENERIC_ERROR // Something went wrong
 };

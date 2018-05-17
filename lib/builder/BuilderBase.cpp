@@ -24,6 +24,13 @@ using namespace BVHTest::builder;
 using namespace BVHTest::base;
 
 BuilderBase::~BuilderBase() {}
+void BuilderBase::fromJSON(const json &_j) {
+  vCostInner = _j.value("costInner", vCostInner);
+  vCostTri   = _j.value("costLeaf", vCostTri);
+}
+
+json BuilderBase::toJSON() const { return json{{"costInner", vCostInner}, {"costLeaf", vCostTri}}; }
+
 
 BuilderBase::ITER BuilderBase::split(ITER _begin, ITER _end, uint32_t) { return _begin + ((_end - _begin) / 2); }
 
@@ -31,6 +38,8 @@ std::vector<TriWithBB> BuilderBase::boundingVolumesFromMesh(Mesh const &_mesh) {
   std::vector<TriWithBB> lRes;
 
   lRes.resize(_mesh.faces.size());
+
+#pragma omp parallel for
   for (size_t i = 0; i < _mesh.faces.size(); ++i) {
     vec3 const &v1 = _mesh.vert[_mesh.faces[i].v1];
     vec3 const &v2 = _mesh.vert[_mesh.faces[i].v2];
