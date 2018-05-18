@@ -25,11 +25,17 @@ enum class CameraType { PERSPECTIVE, RANDOM };
 
 class CameraBase : public Configurable {
  public:
+  struct RES {
+    uint32_t width  = 2560;
+    uint32_t height = 1440;
+  };
+
   CameraBase() = default;
   virtual ~CameraBase();
 
-  virtual CameraType       getType() const = 0;
-  virtual std::vector<Ray> genRays()       = 0;
+  virtual CameraType       getType() const       = 0;
+  virtual std::vector<Ray> genRays()             = 0;
+  virtual RES              getResolution() const = 0;
 };
 
 } // namespace BVHTest::base

@@ -24,11 +24,6 @@ namespace BVHTest::camera {
 
 class Camera : public base::CameraBase {
  public:
-  struct RES {
-    uint32_t width  = 2560;
-    uint32_t height = 1440;
-  };
-
   struct CAMERA {
     glm::vec3 pos    = glm::vec3(0.0f, 0.0f, 2.0f);
     glm::vec3 lookAt = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -56,7 +51,7 @@ class Camera : public base::CameraBase {
     vCam.up     = _up;
   }
 
-  inline RES    getResolution() const { return vRes; }
+  inline RES    getResolution() const override { return vRes; }
   inline CAMERA getCamera() const { return vCam; }
 
   inline base::CameraType getType() const override { return base::CameraType::PERSPECTIVE; }

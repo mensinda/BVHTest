@@ -166,6 +166,7 @@ bool run(string _file) {
       State lState;
       lState.input    = i;
       lState.basePath = lCfg.getBasePath();
+      lState.name     = lCfg.getName();
 
       for (auto &j : lCommands)
         if (j->run(lState) != ErrorCode::OK) break;

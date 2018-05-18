@@ -102,11 +102,8 @@ inline void addAABB(AABB const &_aabb, size_t _num, vec3 _color, vector<VBOData>
   _ind[lIOffset + 11] = {V6, V7};
 }
 
-const vec3 gColRoot = {1.0f, 0.0f, 0.0f};
-const vec3 gColEnd  = {0.0f, 1.0f, 0.0f};
-
 // Color gradiant from https://stackoverflow.com/questions/22607043/color-gradient-algorithm
-vec3 InverseSrgbCompanding(vec3 c) {
+constexpr vec3 InverseSrgbCompanding(vec3 c) {
   // Inverse Red, Green, and Blue
   // clang-format off
   if (c.r > 0.04045) { c.r = pow((c.r + 0.055) / 1.055, 2.4); } else { c.r /= 12.92; }
@@ -117,7 +114,7 @@ vec3 InverseSrgbCompanding(vec3 c) {
   return c;
 }
 
-vec3 SrgbCompanding(vec3 c) {
+constexpr vec3 SrgbCompanding(vec3 c) {
   // Apply companding to Red, Green, and Blue
   // clang-format off
   if (c.r > 0.0031308) { c.r = 1.055 * pow(c.r, 1 / 2.4) - 0.055; } else { c.r *= 12.92; }
@@ -128,16 +125,34 @@ vec3 SrgbCompanding(vec3 c) {
   return c;
 }
 
+const vec3 gBlue   = InverseSrgbCompanding({0.0f, 0.0f, 1.0f});
+const vec3 gCyan   = InverseSrgbCompanding({0.0f, 1.0f, 1.0f});
+const vec3 gGreen  = InverseSrgbCompanding({0.0f, 1.0f, 0.0f});
+const vec3 gYellow = InverseSrgbCompanding({1.0f, 1.0f, 0.0f});
+const vec3 gRed    = InverseSrgbCompanding({1.0f, 0.0f, 0.0f});
 
-vec3 genColor(uint32_t _level, uint32_t _max) {
-  float frac = static_cast<float>(_level) / static_cast<float>(_max);
+const uint32_t gNumColors = 5;
+const vec3     gColors[5] = {gBlue, gCyan, gGreen, gYellow, gRed};
 
-  vec3 c1 = InverseSrgbCompanding(gColRoot);
-  vec3 c2 = InverseSrgbCompanding(gColEnd);
+vec3 genColor(uint32_t _level, uint32_t _maxLevel) {
+  float    lValue = static_cast<float>(_level) / static_cast<float>(_maxLevel);
+  uint32_t lInd1  = 0;
+  uint32_t lInd2  = 0;
+  float    lFrac  = 0.0f;
 
-  vec3 lRes = c1 * (1 - frac) + c2 * frac;
-  lRes      = SrgbCompanding(lRes);
-  return lRes;
+  if (lValue >= 1.0f) {
+    lInd1 = lInd2 = gNumColors - 1;
+  } else if (lValue <= 0.0f) {
+    lInd1 = lInd2 = 0;
+  } else {
+    lValue *= gNumColors - 1;
+    lInd1 = floor(lValue);
+    lInd2 = lInd1 + 1;
+    lFrac = lValue - static_cast<float>(lInd1);
+  }
+
+  vec3 lRes = gColors[lInd1] * (1 - lFrac) + gColors[lInd2] * lFrac;
+  return SrgbCompanding(lRes);
 }
 
 uint32_t processNode(vector<BVH> const &_bvh,

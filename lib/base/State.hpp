@@ -45,6 +45,7 @@ struct State final {
   uint64_t    commandsRun = 0;
   std::string basePath    = "";
   std::string input       = "";
+  std::string name        = "";
 
   struct CMD final {
     std::string  name;
