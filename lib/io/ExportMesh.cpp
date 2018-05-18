@@ -48,7 +48,6 @@ bool checkDir(fs::path _p) {
 }
 
 ErrorCode ExportMesh::runImpl(State &_state) {
-  (void)_state;
   auto     lLogger = getLogger();
   fs::path outDir  = fs::absolute(vOutDir);
   fs::path dataDir = outDir / fs::absolute(_state.input).filename().replace_extension("");

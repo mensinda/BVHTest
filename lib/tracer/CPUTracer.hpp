@@ -21,13 +21,6 @@
 namespace BVHTest::tracer {
 
 class CPUTracer final : public TracerBase {
- public:
-  struct Pixel {
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
-  };
-
  private:
   Pixel trace(base::Ray &_ray, base::Mesh const &_mesh, std::vector<base::BVH> const &_bvh);
 
@@ -38,9 +31,6 @@ class CPUTracer final : public TracerBase {
   inline std::string getName() const override { return "CPUTracer"; }
   inline std::string getDesc() const override { return "single core CPU Ray tracer"; }
   base::ErrorCode    runImpl(base::State &_state) override;
-
-  void fromJSON(const json &_j) override;
-  json toJSON() const override;
 };
 
 } // namespace BVHTest::tracer

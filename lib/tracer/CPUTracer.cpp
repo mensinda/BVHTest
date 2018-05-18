@@ -28,11 +28,8 @@ using namespace BVHTest::camera;
 
 CPUTracer::~CPUTracer() {}
 
-void CPUTracer::fromJSON(const json &) {}
-json CPUTracer::toJSON() const { return json::object(); }
-
-CPUTracer::Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, vector<BVH> const &_bvh) {
-  Pixel lRes = {121, 167, 229};
+Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, vector<BVH> const &_bvh) {
+  Pixel lRes = {121, 167, 229, 0};
 
   /*
    * Algorithm from:
@@ -52,6 +49,7 @@ CPUTracer::Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, vector<BVH> cons
 
   while (true) {
     if (!lNode->isLeaf()) {
+      lRes.intCount++;
       BVH const *lLeft     = &_bvh[lNode->left];
       BVH const *lRight    = &_bvh[lNode->right];
       bool       lLeftHit  = lLeft->bbox.intersect(_ray, 0.01f, 1000.0f);
@@ -124,14 +122,5 @@ ErrorCode CPUTracer::runImpl(State &_state) {
     lIMG[i] = trace(lRays[i], _state.mesh, _state.bvh);
   };
 
-  string lFileName = _state.input + ".ppm";
-
-  fstream lFile(lFileName, lFile.out | lFile.binary);
-  lFile << "P6" << endl << lWidth << " " << lHeight << endl << 255 << endl;
-
-  for (auto const &i : lIMG) {
-    lFile << i.r << i.g << i.b;
-  }
-
-  return ErrorCode::OK;
+  return writeImage(lIMG, lWidth, lHeight, "p1", _state);
 }
