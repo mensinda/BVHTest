@@ -47,6 +47,7 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, vector<BVH> const &_bvh) {
   Triangle lClosest        = {0, 0, 0};
   float    lNearest        = numeric_limits<float>::infinity();
   vec3     lBarycentricPos = {0.0f, 0.0f, 0.0f};
+  vec3     lBarycentricTemp;
 
   while (true) {
     if (!lNode->isLeaf()) {
@@ -79,10 +80,11 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, vector<BVH> const &_bvh) {
                                          _mesh.vert[lTri.v1],
                                          _mesh.vert[lTri.v2],
                                          _mesh.vert[lTri.v3],
-                                         lBarycentricPos);
+                                         lBarycentricTemp);
 
         // See https://github.com/g-truc/glm/issues/6#issuecomment-23149870 for lBaryPos.z usage
-        if (lHit && lBarycentricPos.z < lNearest) {
+        if (lHit && lBarycentricTemp.z < lNearest) {
+          lBarycentricPos   = lBarycentricTemp;
           lNearest          = lBarycentricPos.z;
           lBarycentricPos.z = 1.0f - lBarycentricPos.x - lBarycentricPos.y;
           lClosest          = lTri;
@@ -112,9 +114,9 @@ LABEL_END:
     vec3  lLightDir = normalize(getLightLocation() - lHitPos);
     float lDiffuse  = std::max(1.0f + dot(lNorm, lLightDir), 0.0f);
 
-    lRes.r = static_cast<uint32_t>(lDiffuse * 127.0f);
-    lRes.g = static_cast<uint32_t>(lDiffuse * 127.0f);
-    lRes.b = static_cast<uint32_t>(lDiffuse * 127.0f);
+    lRes.r = static_cast<uint8_t>(lDiffuse * 127.0f);
+    lRes.g = static_cast<uint8_t>(lDiffuse * 127.0f);
+    lRes.b = static_cast<uint8_t>(lDiffuse * 127.0f);
   }
 
   return lRes;
