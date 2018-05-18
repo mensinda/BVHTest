@@ -24,7 +24,7 @@ class BVHExport final : public base::Command {
  private:
   std::string vExportName = "genericBVH";
 
-  const uint32_t vFormatVers = 2;
+  const uint32_t vFormatVers = 3;
 
  public:
   BVHExport() = default;

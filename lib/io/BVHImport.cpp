@@ -81,7 +81,8 @@ ErrorCode BVHImport::runImpl(State &_state) {
   }
 
   fs::path lBinaryPath = lDataDir / lControlData.at("bin").get<string>();
-  uint32_t lSize       = lControlData.at("size").get<uint32_t>();
+  uint32_t lSize       = lControlData.at("BVHSize").get<uint32_t>();
+  uint32_t lNumTris    = lControlData.at("numTris").get<uint32_t>();
   _state.bvhMaxLevel   = lControlData.at("treeHeight").get<uint32_t>();
 
   if (!fs::exists(lBinaryPath) || !fs::is_regular_file(lBinaryPath)) {
@@ -96,7 +97,9 @@ ErrorCode BVHImport::runImpl(State &_state) {
   }
 
   _state.bvh.resize(lSize);
+  _state.mesh.faces.resize(lNumTris);
   lBinaryFile.read(reinterpret_cast<char *>(_state.bvh.data()), lSize * sizeof(BVH));
+  lBinaryFile.read(reinterpret_cast<char *>(_state.mesh.faces.data()), lNumTris * sizeof(Triangle));
   lBinaryFile.close();
 
   return ErrorCode::OK;

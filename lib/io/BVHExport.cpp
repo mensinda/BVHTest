@@ -62,7 +62,8 @@ ErrorCode BVHExport::runImpl(State &_state) {
 
   json lControlData = {{"version", vFormatVers},
                        {"bin", (vExportName + "_bvh.bin")},
-                       {"size", _state.bvh.size()},
+                       {"BVHSize", _state.bvh.size()},
+                       {"numTris", _state.mesh.faces.size()},
                        {"treeHeight", _state.bvhMaxLevel}};
 
   fstream lControlFile(lControlPath.string(), lControlFile.out | lControlFile.trunc);
@@ -82,6 +83,7 @@ ErrorCode BVHExport::runImpl(State &_state) {
   lControlFile.close();
 
   lBinaryFile.write(reinterpret_cast<char *>(_state.bvh.data()), _state.bvh.size() * sizeof(BVH));
+  lBinaryFile.write(reinterpret_cast<char *>(_state.mesh.faces.data()), _state.mesh.faces.size() * sizeof(Triangle));
   lBinaryFile.close();
 
   return ErrorCode::OK;
