@@ -49,24 +49,26 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, vector<BVH> const &_bvh) {
   vec3     lBarycentricPos = {0.0f, 0.0f, 0.0f};
   vec3     lBarycentricTemp;
 
+  float lMinLeft;
+  float lMinRight;
+  float lTemp;
+
   while (true) {
     if (!lNode->isLeaf()) {
       lRes.intCount++;
       BVH const *lLeft     = &_bvh[lNode->left];
       BVH const *lRight    = &_bvh[lNode->right];
-      bool       lLeftHit  = lLeft->bbox.intersect(_ray, 0.01f, 1000.0f);
-      bool       lRightHit = lRight->bbox.intersect(_ray, 0.01f, 1000.0f);
+      bool       lLeftHit  = lLeft->bbox.intersect(_ray, 0.01f, lNearest + 0.01f, lMinLeft, lTemp);
+      bool       lRightHit = lRight->bbox.intersect(_ray, 0.01f, lNearest + 0.01f, lMinRight, lTemp);
 
       if (lLeftHit || lRightHit) {
         lBitStack <<= 1;
 
         if (lLeftHit && lRightHit) {
           lBitStack |= 1;
-          lNode = lLeft;
-        } else if (lLeftHit) {
-          lNode = lLeft;
-        } else if (lRightHit) {
-          lNode = lRight;
+          lNode = lMinLeft < lMinRight ? lLeft : lRight;
+        } else {
+          lNode = lLeftHit ? lLeft : lRight;
         }
 
         continue;

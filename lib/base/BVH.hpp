@@ -57,12 +57,12 @@ struct AABB {
   }
 
   // Source: http://www.cs.utah.edu/~awilliam/box/
-  inline bool intersect(Ray const &_r, float t0, float t1) const {
+  inline bool intersect(Ray const &_r, float t0, float t1, float &tmin, float &tmax) const {
     glm::vec3 const &lOrigin = _r.getOrigin();
     glm::vec3 const &lInvDir = _r.getInverseDirection();
     Ray::Sign const &lSign   = _r.getSign();
 
-    float tmin, tmax, tymin, tymax, tzmin, tzmax;
+    float tymin, tymax, tzmin, tzmax;
 
     glm::vec3 bounds[2] = {min, max};
 
