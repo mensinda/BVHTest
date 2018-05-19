@@ -56,8 +56,7 @@ struct State final {
 
   Mesh                 mesh;
   std::vector<CAM_PTR> cameras;
-  std::vector<BVH>     bvh;
-  uint32_t             bvhMaxLevel;
+  BVH                  bvh;
 };
 
 } // namespace BVHTest::base

@@ -126,8 +126,8 @@ ErrorCode Wald07::runImpl(State &_state) {
   lResVec.reserve(_state.mesh.faces.size());
   _state.bvh.reserve(_state.mesh.faces.size() * 2); // Assuming perfect binary tree
 
-  auto lAABBs        = boundingVolumesFromMesh(_state.mesh);
-  _state.bvhMaxLevel = buildBVH(begin(lAABBs), end(lAABBs), _state.bvh, lResVec);
+  auto lAABBs = boundingVolumesFromMesh(_state.mesh);
+  build(begin(lAABBs), end(lAABBs), _state.bvh, lResVec);
 
   swap(lResVec, _state.mesh.faces); // Copy the result triangles
   return ErrorCode::OK;

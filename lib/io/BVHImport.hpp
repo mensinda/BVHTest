@@ -24,7 +24,7 @@ class BVHImport final : public base::Command {
  private:
   std::string vExportName = "genericBVH";
 
-  const uint32_t vFormatVers = 3;
+  const uint32_t vFormatVers = 4;
 
  public:
   BVHImport() = default;

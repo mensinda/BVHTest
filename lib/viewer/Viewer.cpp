@@ -282,7 +282,7 @@ ErrorCode Viewer::runImpl(State &_state) {
           break;
         case Renderer::BVH:
           vRenderer.reset();
-          vRenderer = make_shared<BVHRenderer>(_state.bvh, _state.bvhMaxLevel);
+          vRenderer = make_shared<BVHRenderer>(_state.bvh);
           break;
       }
     }

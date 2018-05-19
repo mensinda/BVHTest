@@ -36,20 +36,16 @@ class BuilderBase : public base::Command {
   double vCostInner = 1.2f;
   double vCostTri   = 1.0f;
 
-  uint32_t vLevel    = 0;
-  uint32_t vMaxLevel = 0;
-
-  BuildRes build(ITER                         _begin,
-                 ITER                         _end,
-                 std::vector<base::BVH> &     _bvh,
-                 std::vector<base::Triangle> &_tris,
-                 uint32_t                     _parent,
-                 uint32_t                     _sibling);
-
  protected:
   virtual ITER split(ITER _begin, ITER _end, uint32_t _level);
 
-  uint32_t buildBVH(ITER _begin, ITER _end, std::vector<base::BVH> &_bvh, std::vector<base::Triangle> &_tris);
+  BuildRes build(ITER                         _begin,
+                 ITER                         _end,
+                 BVHTest::base::BVH &         _bvh,
+                 std::vector<base::Triangle> &_tris,
+                 uint32_t                     _parent      = 0,
+                 bool                         _isLeftChild = 0,
+                 uint32_t                     _level       = 0);
 
  public:
   BuilderBase() = default;

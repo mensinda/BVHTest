@@ -155,33 +155,27 @@ vec3 genColor(uint32_t _level, uint32_t _maxLevel) {
   return SrgbCompanding(lRes);
 }
 
-uint32_t processNode(vector<BVH> const &_bvh,
-                     uint32_t           _node,
-                     uint32_t           _level,
-                     uint32_t           _next,
-                     vector<VBOData> &  _vert,
-                     vector<Line> &     _ind,
-                     uint32_t           _maxLevel) {
-  BVH const &lNode = _bvh[_node];
+uint32_t processNode(BVH &_bvh, uint32_t _node, uint32_t _next, vector<VBOData> &_vert, vector<Line> &_ind) {
+  BVHNode const &lNode = _bvh[_node];
 
-  addAABB(lNode.bbox, _next++, genColor(_level, _maxLevel), _vert, _ind);
+  addAABB(lNode.bbox, _next++, genColor(lNode.level, _bvh.maxLevel()), _vert, _ind);
 
   if (lNode.isLeaf()) { return _next; }
 
-  if (lNode.left != UINT32_MAX) { _next = processNode(_bvh, lNode.left, _level + 1, _next, _vert, _ind, _maxLevel); }
-  if (lNode.right != UINT32_MAX) { _next = processNode(_bvh, lNode.right, _level + 1, _next, _vert, _ind, _maxLevel); }
+  if (lNode.left != UINT32_MAX) { _next = processNode(_bvh, lNode.left, _next, _vert, _ind); }
+  if (lNode.right != UINT32_MAX) { _next = processNode(_bvh, lNode.right, _next, _vert, _ind); }
 
   return _next;
 }
 
-BVHRenderer::BVHRenderer(vector<BVH> const &_bvh, uint32_t _maxLevel) {
+BVHRenderer::BVHRenderer(BVH &_bvh) {
   // Generate OpenGL VBO data
   std::vector<VBOData> lVert;
   std::vector<Line>    lIndex;
   lVert.resize(_bvh.size() * 8);
   lIndex.resize(_bvh.size() * 12);
 
-  uint32_t lNumGenerated = processNode(_bvh, 0, 0, 0, lVert, lIndex, _maxLevel);
+  uint32_t lNumGenerated = processNode(_bvh, 0, 0, lVert, lIndex);
 
   lVert.resize(lNumGenerated * 8);
   lIndex.resize(lNumGenerated * 12);

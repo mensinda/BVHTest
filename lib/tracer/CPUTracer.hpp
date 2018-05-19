@@ -22,7 +22,7 @@ namespace BVHTest::tracer {
 
 class CPUTracer final : public TracerBase {
  private:
-  Pixel trace(base::Ray &_ray, base::Mesh const &_mesh, std::vector<base::BVH> const &_bvh);
+  Pixel trace(base::Ray &_ray, base::Mesh const &_mesh, base::BVH &_bvh);
 
  public:
   CPUTracer() = default;

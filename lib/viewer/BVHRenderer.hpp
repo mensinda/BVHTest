@@ -29,7 +29,7 @@ class BVHRenderer : public RendererBase {
 
  public:
   BVHRenderer() = delete;
-  BVHRenderer(std::vector<base::BVH> const &_bvh, uint32_t _maxLevel);
+  BVHRenderer(base::BVH &_bvh);
   ~BVHRenderer();
 
   void     render() override;

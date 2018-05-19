@@ -64,7 +64,7 @@ ErrorCode BVHExport::runImpl(State &_state) {
                        {"bin", (vExportName + "_bvh.bin")},
                        {"BVHSize", _state.bvh.size()},
                        {"numTris", _state.mesh.faces.size()},
-                       {"treeHeight", _state.bvhMaxLevel}};
+                       {"treeHeight", _state.bvh.maxLevel()}};
 
   fstream lControlFile(lControlPath.string(), lControlFile.out | lControlFile.trunc);
   fstream lBinaryFile(lBinaryPath.string(), lControlFile.out | lControlFile.trunc);
@@ -82,7 +82,7 @@ ErrorCode BVHExport::runImpl(State &_state) {
   lControlFile << lControlData.dump(2);
   lControlFile.close();
 
-  lBinaryFile.write(reinterpret_cast<char *>(_state.bvh.data()), _state.bvh.size() * sizeof(BVH));
+  lBinaryFile.write(reinterpret_cast<char *>(_state.bvh.data()), _state.bvh.size() * sizeof(BVHNode));
   lBinaryFile.write(reinterpret_cast<char *>(_state.mesh.faces.data()), _state.mesh.faces.size() * sizeof(Triangle));
   lBinaryFile.close();
 

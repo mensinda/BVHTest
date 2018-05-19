@@ -40,12 +40,10 @@ struct AABB {
   glm::vec3 min;
   glm::vec3 max;
 
-#define SIDE(X, Y) d.X *d.Y
-  inline float          surfaceArea() const noexcept {
+  inline float surfaceArea() const noexcept {
     glm::vec3 d = max - min;
-    return 2.0f * (SIDE(x, y) + SIDE(x, z) + SIDE(y, z));
+    return 2.0f * (d.x * d.y + d.x * d.z + d.y * d.z);
   }
-#undef SIDE
 
   inline void mergeWith(AABB const &_bbox) {
     min.x = std::min(min.x, _bbox.min.x);
@@ -92,36 +90,105 @@ struct TriWithBB {
   glm::vec3 centroid;
 };
 
-struct alignas(16) BVH {
-  AABB     bbox;
-  uint32_t parent;
-  uint32_t sibling;
-  uint32_t numFaces; // Number of triangles (or UINT32_MAX for inner node)
-  uint32_t left;     // Left child or index of first triangle when leaf
-  uint32_t right;
+static const uint8_t TRUE  = 1;
+static const uint8_t FALSE = 0;
 
-  inline bool isLeaf() const noexcept { return numFaces != UINT32_MAX; }
+struct alignas(16) BVHNode {
+  AABB     bbox;
+  uint32_t parent;      // Index of the parent
+  uint32_t numChildren; // Total number of children of the node (0 == leaf)
+  uint32_t left;        // Left child or index of first triangle when leaf
+  uint32_t right;       // Right child or number of faces when leaf
+
+  uint32_t isLeft : 1;          // 1 if the Node is the left child of the parent -- 0 otherwise (right child)
+  uint32_t : 7;                 // Force alignment
+  uint32_t unused16BitInt : 16; // Find some use for this
+  uint32_t level : 8;           // Tree height of the current node
+
+  float unusedFloat;
+
+  inline bool     isLeaf() const noexcept { return numChildren == 0; }
+  inline uint32_t beginFaces() const noexcept { return left; }
+  inline uint32_t numFaces() const noexcept { return right; }
+  inline bool     isLeftChild() const noexcept { return isLeft != 0; }
+  inline bool     isRightChild() const noexcept { return isLeft == 0; }
 };
 
-inline float calcSAH(std::vector<BVH> const &_bvh, float _cInner = 1.2f, float _cLeaf = 1.0f) {
-  if (_bvh.empty()) { return 0.0f; }
+class BVH {
+ private:
+  std::vector<BVHNode> bvh;
+  uint16_t             vMaxLevel = 0;
 
-  float      lSAH  = 0.0f;
-  BVH const &lRoot = _bvh[0];
-
-#pragma omp parallel for reduction(+ : lSAH)
-  for (size_t i = 1; i < _bvh.size(); ++i) {
-    float lCost = _bvh[i].bbox.surfaceArea();
-    if (_bvh[i].isLeaf()) {
-      lCost *= _cLeaf;
-    } else {
-      lCost *= _cInner;
-    }
-
-    lSAH = lSAH + lCost;
+ public:
+  inline uint32_t sibling(uint32_t _node) const {
+    return bvh[_node].isRightChild() ? bvh[bvh[_node].parent].left : bvh[bvh[_node].parent].right;
   }
 
-  return (1 / lRoot.bbox.surfaceArea()) * lSAH;
-}
+  inline uint32_t sibling(BVHNode const &_node) const {
+    return _node.isRightChild() ? bvh[_node.parent].left : bvh[_node.parent].right;
+  }
+
+  inline BVHNode &siblingNode(uint32_t _node) { return bvh[sibling(_node)]; }
+  inline BVHNode &siblingNode(BVHNode const &_node) { return bvh[sibling(_node)]; }
+
+  inline size_t   size() const noexcept { return bvh.size(); }
+  inline void     resize(size_t _size) { bvh.resize(_size); }
+  inline void     reserve(size_t _size) { bvh.reserve(_size); }
+  inline BVHNode *data() { return bvh.data(); }
+  inline char *   dataBin() { return reinterpret_cast<char *>(bvh.data()); }
+  inline BVHNode &at(uint32_t _node) { return bvh.at(_node); }
+  inline BVHNode &operator[](uint32_t _node) { return bvh[_node]; }
+  inline uint32_t nextNodeIndex() const noexcept { return static_cast<uint32_t>(bvh.size()); }
+  inline uint16_t maxLevel() const noexcept { return vMaxLevel; }
+  inline void     setMaxLevel(uint16_t _level) { vMaxLevel = _level; }
+
+  inline uint32_t addLeaf(AABB const &_bbox, uint32_t _parent, uint32_t _firstFace, uint32_t _numFaces, bool _isLeft) {
+    uint16_t lLevel = bvh.empty() ? 0 : bvh[_parent].level + 1;
+    vMaxLevel       = std::max(vMaxLevel, lLevel);
+    bvh.push_back({
+        _bbox,                  // bbox
+        _parent,                // parent
+        0,                      // numChildren
+        _firstFace,             // left
+        _numFaces,              // right
+        _isLeft ? TRUE : FALSE, // isLeft
+        0,                      // unused16BitInt
+        lLevel,                 // treeHeight
+        0.0f                    // unusedFloat
+    });
+    return bvh.size() - 1;
+  }
+
+  inline uint32_t addInner(
+      AABB const &_bbox, uint32_t _parent, uint32_t _numChildren, uint32_t _left, uint32_t _right, bool _isLeft) {
+    uint16_t lLevel = bvh.empty() ? 0 : bvh[_parent].level + 1;
+    vMaxLevel       = std::max(vMaxLevel, lLevel);
+    bvh.push_back({
+        _bbox,                  // bbox
+        _parent,                // parent
+        _numChildren,           // numChildren
+        _left,                  // left
+        _right,                 // right
+        _isLeft ? TRUE : FALSE, // isLeft
+        0,                      // unused16BitInt
+        lLevel,                 // treeHeight
+        0.0f                    // unusedFloat
+    });
+    return bvh.size() - 1;
+  }
+
+
+  inline float calcSAH(float _cInner = 1.2f, float _cLeaf = 1.0f) {
+    if (bvh.empty()) { return 0.0f; }
+    float lSAH = 0.0f;
+
+#pragma omp parallel for reduction(+ : lSAH)
+    for (size_t i = 1; i < bvh.size(); ++i) {
+      lSAH = lSAH + (bvh[i].bbox.surfaceArea() * (bvh[i].isLeaf() ? _cLeaf : _cInner));
+    }
+
+    return (1.0f / bvh[0].bbox.surfaceArea()) * lSAH;
+  }
+};
 
 } // namespace BVHTest::base

@@ -64,28 +64,20 @@ std::vector<TriWithBB> BuilderBase::boundingVolumesFromMesh(Mesh const &_mesh) {
 
 BuilderBase::BuildRes BuilderBase::build(BuilderBase::ITER _begin,
                                          BuilderBase::ITER _end,
-                                         vector<BVH> &     _bvh,
+                                         BVH &             _bvh,
                                          vector<Triangle> &_tris,
                                          uint32_t          _parent,
-                                         uint32_t          _sibling) {
+                                         bool              _isLeftChild,
+                                         uint32_t          _level) {
   size_t   lSize    = _end - _begin;
-  uint32_t lNewNode = static_cast<uint32_t>(_bvh.size());
+  uint32_t lNewNode = _bvh.nextNodeIndex();
   AABB     lNodeBBox;
-
-  vLevel++;
-  vMaxLevel = vLevel > vMaxLevel ? vLevel : vMaxLevel;
 
   if (lSize == 0) { throw runtime_error("BuilderBase: WTF! Fix this " + to_string(__LINE__)); }
 
   if (lSize == 1) {
     lNodeBBox = _begin[0].bbox;
-    _bvh.push_back({lNodeBBox,
-                    _parent,
-                    UINT32_MAX,                          // sibling (single leave --> no sibling)
-                    1,                                   // numFaces
-                    static_cast<uint32_t>(_tris.size()), // left (leave ==> pointer to begin of faces)
-                    UINT32_MAX});
-
+    _bvh.addLeaf(lNodeBBox, _parent, static_cast<uint32_t>(_tris.size()), 1, _isLeftChild);
     _tris.emplace_back(_begin[0].tri);
   } else if (lSize == 2) {
     lNodeBBox = _begin[0].bbox;
@@ -96,65 +88,33 @@ BuilderBase::BuildRes BuilderBase::build(BuilderBase::ITER _begin,
 
     uint32_t lNewTrisSize = static_cast<uint32_t>(_tris.size());
 
-    _bvh.push_back({
-        lNodeBBox,
-        _parent,
-        _sibling,
-        UINT32_MAX,   // numFaces (inner node --> UINT32_MAX)
-        lNewNode + 1, // left
-        lNewNode + 2  // right
-    });
+    _bvh.addInner(lNodeBBox,    // AABB
+                  _parent,      // parent
+                  2,            // num children
+                  lNewNode + 1, // left
+                  lNewNode + 2, // right
+                  _isLeftChild  // is current node a left child?
+    );
 
-    // Left child
-    _bvh.push_back({
-        _begin[0].bbox,
-        lNewNode,
-        lNewNode + 2,     // sibling (Right child)
-        1,                // numFaces (inner node --> UINT32_MAX)
-        lNewTrisSize - 2, // left (leave ==> pointer to begin of faces)
-        UINT32_MAX        // right
-    });
-
-    // Right child
-    _bvh.push_back({
-        _begin[1].bbox,
-        lNewNode,
-        lNewNode + 1,     // sibling (Left child)
-        1,                // numFaces (inner node --> UINT32_MAX)
-        lNewTrisSize - 1, // left (leave ==> pointer to begin of faces)
-        UINT32_MAX        // right
-    });
+    _bvh.addLeaf(_begin[0].bbox, lNewNode, lNewTrisSize - 2, 1, true);  // Left child
+    _bvh.addLeaf(_begin[1].bbox, lNewNode, lNewTrisSize - 1, 1, false); // Right child
   } else {
-    ITER lSplitAt = split(_begin, _end, vLevel);
+    ITER lSplitAt = split(_begin, _end, _level);
 
-    auto &lNode = _bvh.emplace_back(); // Reserve node -- fill content later
+    // Reserve node -- fill content later
+    _bvh.addInner({}, _parent, UINT32_MAX, UINT32_MAX, UINT32_MAX, _isLeftChild);
+    auto &lNode = _bvh[lNewNode];
 
-    auto [lID1, lBBOX1] = build(_begin, lSplitAt, _bvh, _tris, lNewNode, UINT32_MAX); // Set sibling later
-    auto [lID2, lBBOX2] = build(lSplitAt, _end, _bvh, _tris, lNewNode, lID1);
-
-    _bvh[lID1].sibling = lID2; // Fix sibling
+    auto [lID1, lBBOX1] = build(_begin, lSplitAt, _bvh, _tris, lNewNode, true, _level + 1); // Left
+    auto [lID2, lBBOX2] = build(lSplitAt, _end, _bvh, _tris, lNewNode, false, _level + 1);  // Right
 
     lNodeBBox = lBBOX1;
     lNodeBBox.mergeWith(lBBOX2);
-    lNode = {
-        lNodeBBox,
-        _parent,
-        _sibling,
-        UINT32_MAX, // numFaces (inner node --> UINT32_MAX)
-        lID1,       // left
-        lID2        // right
-    };
+    lNode.bbox        = lNodeBBox;
+    lNode.numChildren = 2 + _bvh[lID1].numChildren + _bvh[lID2].numChildren;
+    lNode.left        = lID1;
+    lNode.right       = lID2;
   }
 
-  vLevel--;
   return {lNewNode, lNodeBBox};
-}
-
-uint32_t BuilderBase::buildBVH(ITER _begin, ITER _end, vector<BVH> &_bvh, vector<Triangle> &_tris) {
-  vLevel    = 0;
-  vMaxLevel = 0;
-
-  build(_begin, _end, _bvh, _tris, 0, UINT32_MAX);
-
-  return vMaxLevel;
 }

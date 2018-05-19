@@ -34,8 +34,8 @@ ErrorCode StatusDump::runImpl(State &_state) {
   lLogger->info("Status:");
   lLogger->info("  -- BVH:");
   lLogger->info("    - Nodes:       {}", _state.bvh.size());
-  lLogger->info("    - Tree height: {}", _state.bvhMaxLevel);
-  lLogger->info("    - SAH:         {}", calcSAH(_state.bvh));
+  lLogger->info("    - Tree height: {}", _state.bvh.maxLevel());
+  lLogger->info("    - SAH:         {}", _state.bvh.calcSAH());
   lLogger->info("  -- Mesh info:");
   lLogger->info("    - Vertices: {}", _state.mesh.vert.size());
   lLogger->info("    - Faces:    {}", _state.mesh.faces.size());

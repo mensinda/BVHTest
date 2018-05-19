@@ -25,16 +25,16 @@ class Bittner13 final : public OptimizerBase {
   uint32_t vMaxNumStepps = 500;
   float    vBatchPercent = 1.0f;
 
-  inline float directCost(base::BVH const &_l, base::BVH const &_x) {
+  inline float directCost(base::BVHNode const &_l, base::BVHNode const &_x) {
     base::AABB lMerge = _l.bbox;
     lMerge.mergeWith(_x.bbox);
     return lMerge.surfaceArea();
   }
 
-  uint32_t findNodeForReinsertion(uint32_t _n, std::vector<base::BVH> &_bvh);
-  void     reinsert(uint32_t _node, uint32_t _unused, std::vector<base::BVH> &_bvh);
-  void     fixBBOX(uint32_t _node, std::vector<base::BVH> &_bvh);
-  float    mComb(uint32_t _n, std::vector<base::BVH> &_bvh);
+  uint32_t findNodeForReinsertion(uint32_t _n, base::BVH &_bvh);
+  void     reinsert(uint32_t _node, uint32_t _unused, base::BVH &_bvh);
+  void     fixBBOX(uint32_t _node, base::BVH &_bvh);
+  float    mComb(uint32_t _n, base::BVH &_bvh);
 
  public:
   Bittner13() = default;

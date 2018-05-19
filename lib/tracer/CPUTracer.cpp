@@ -28,7 +28,7 @@ using namespace BVHTest::base;
 
 CPUTracer::~CPUTracer() {}
 
-Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, vector<BVH> const &_bvh) {
+Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &_bvh) {
   Pixel lRes = {121, 167, 229, 0};
 
   /*
@@ -41,8 +41,8 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, vector<BVH> const &_bvh) {
    * cgf.12259.
    */
 
-  uint64_t   lBitStack = 0;
-  BVH const *lNode     = &_bvh[0];
+  uint64_t       lBitStack = 0;
+  BVHNode const *lNode     = &_bvh[0];
 
   Triangle lClosest        = {0, 0, 0};
   float    lNearest        = numeric_limits<float>::infinity();
@@ -56,10 +56,10 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, vector<BVH> const &_bvh) {
   while (true) {
     if (!lNode->isLeaf()) {
       lRes.intCount++;
-      BVH const *lLeft     = &_bvh[lNode->left];
-      BVH const *lRight    = &_bvh[lNode->right];
-      bool       lLeftHit  = lLeft->bbox.intersect(_ray, 0.01f, lNearest + 0.01f, lMinLeft, lTemp);
-      bool       lRightHit = lRight->bbox.intersect(_ray, 0.01f, lNearest + 0.01f, lMinRight, lTemp);
+      BVHNode const *lLeft     = &_bvh[lNode->left];
+      BVHNode const *lRight    = &_bvh[lNode->right];
+      bool           lLeftHit  = lLeft->bbox.intersect(_ray, 0.01f, lNearest + 0.01f, lMinLeft, lTemp);
+      bool           lRightHit = lRight->bbox.intersect(_ray, 0.01f, lNearest + 0.01f, lMinRight, lTemp);
 
       if (lLeftHit || lRightHit) {
         lBitStack <<= 1;
@@ -74,8 +74,8 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, vector<BVH> const &_bvh) {
         continue;
       }
     } else {
-      for (uint32_t i = 0; i < lNode->numFaces; ++i) {
-        Triangle const &lTri = _mesh.faces[lNode->left + i];
+      for (uint32_t i = 0; i < lNode->numFaces(); ++i) {
+        Triangle const &lTri = _mesh.faces[lNode->beginFaces() + i];
 
         bool lHit = intersectRayTriangle(_ray.getOrigin(),
                                          _ray.getDirection(),
@@ -101,7 +101,7 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, vector<BVH> const &_bvh) {
       lBitStack >>= 1;
     }
 
-    lNode = &_bvh[lNode->sibling];
+    lNode = &_bvh.siblingNode(*lNode);
     lBitStack ^= 1;
   }
 
