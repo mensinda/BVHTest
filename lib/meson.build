@@ -4,6 +4,7 @@
 
 # Base lib
 baseSrc = files([
+  'base/BVH.cpp',
   'base/CameraBase.cpp',
   'base/Configurable.cpp',
   'base/Config.cpp',

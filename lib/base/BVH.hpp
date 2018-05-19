@@ -178,17 +178,8 @@ class BVH {
   }
 
 
-  inline float calcSAH(float _cInner = 1.2f, float _cLeaf = 1.0f) {
-    if (bvh.empty()) { return 0.0f; }
-    float lSAH = 0.0f;
-
-#pragma omp parallel for reduction(+ : lSAH)
-    for (size_t i = 1; i < bvh.size(); ++i) {
-      lSAH = lSAH + (bvh[i].bbox.surfaceArea() * (bvh[i].isLeaf() ? _cLeaf : _cInner));
-    }
-
-    return (1.0f / bvh[0].bbox.surfaceArea()) * lSAH;
-  }
+  float calcSAH(float _cInner = 1.2f, float _cLeaf = 1.0f);
+  void  fixLevels();
 };
 
 } // namespace BVHTest::base

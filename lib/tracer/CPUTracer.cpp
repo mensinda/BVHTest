@@ -139,8 +139,8 @@ ErrorCode CPUTracer::runImpl(State &_state) {
       lIMG[j] = trace(lRays[j], _state.mesh, _state.bvh);
     };
 
-    ErrorCode lRes = writeImage(lIMG, lWidth, lHeight, _state.name + "_cam_" + to_string(lCounter++), _state);
-    if (lRes != ErrorCode::OK) { return lRes; }
+    //     ErrorCode lRes = writeImage(lIMG, lWidth, lHeight, _state.name + "_cam_" + to_string(lCounter++), _state);
+    //     if (lRes != ErrorCode::OK) { return lRes; }
   }
 
   return ErrorCode::OK;
