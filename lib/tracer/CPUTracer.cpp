@@ -17,19 +17,42 @@
 #include "CPUTracer.hpp"
 #include <glm/gtx/intersect.hpp>
 #include <glm/gtx/normal.hpp>
+#include <ctime>
 #include <fstream>
 #include <iostream>
 
 using namespace std;
+using namespace std::chrono;
 using namespace glm;
 using namespace BVHTest;
 using namespace BVHTest::tracer;
 using namespace BVHTest::base;
 
+#define USE_RDTSC 1
+
+#if USE_RDTSC
+//  Windows
+#  ifdef _WIN32
+
+#    include <intrin.h>
+uint64_t rdtsc() { return __rdtsc(); }
+
+//  Linux/GCC
+#  else
+
+uint64_t rdtsc() {
+  unsigned int lo, hi;
+  __asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));
+  return ((uint64_t)hi << 32) | lo;
+}
+
+#  endif
+#endif
+
 CPUTracer::~CPUTracer() {}
 
 Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &_bvh) {
-  Pixel lRes = {121, 167, 229, 0};
+  Pixel lRes = {121, 167, 229, 0, 0};
 
   /*
    * Algorithm from:
@@ -41,7 +64,16 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &_bvh) {
    * cgf.12259.
    */
 
-  uint64_t       lBitStack = 0;
+#if USE_RDTSC
+  uint64_t lStart = rdtsc();
+#else
+  timespec lTSStart;
+  timespec lTSEnd;
+
+  clock_gettime(CLOCK_MONOTONIC, &lTSStart);
+#endif
+
+  __int128_t     lBitStack = 0;
   BVHNode const *lNode     = &_bvh[0];
 
   Triangle lClosest        = {0, 0, 0};
@@ -121,26 +153,46 @@ LABEL_END:
     lRes.b = static_cast<uint8_t>(lDiffuse * 127.0f);
   }
 
+#if USE_RDTSC
+  lRes.rayTime = rdtsc() - lStart;
+#else
+  clock_gettime(CLOCK_MONOTONIC, &lTSEnd);
+  auto lT1     = seconds(lTSStart.tv_sec) + nanoseconds(lTSStart.tv_nsec);
+  auto lT2     = seconds(lTSEnd.tv_sec) + nanoseconds(lTSEnd.tv_nsec);
+  lRes.rayTime = duration_cast<nanoseconds>(lT2 - lT1).count();
+#endif
+
   return lRes;
 }
 
 
 
 ErrorCode CPUTracer::runImpl(State &_state) {
-  uint32_t lCounter = 0;
-  for (auto &i : _state.cameras) {
-    auto [lWidth, lHeight] = i->getResolution();
-    vector<Ray>   lRays    = i->genRays();
-    vector<Pixel> lIMG;
-    lIMG.resize(lRays.size());
+  size_t lOffset = _state.work.size();
+  _state.work.resize(lOffset + _state.cameras.size());
+
+  // Gen Rays
+  for (size_t i = 0; i < _state.cameras.size(); ++i) {
+    auto [lWidth, lHeight] = _state.cameras[i]->getResolution();
+    _state.work[lOffset + i].img.pixels.resize(lWidth * lHeight);
+    _state.work[lOffset + i].rays       = _state.cameras[i]->genRays();
+    _state.work[lOffset + i].img.width  = lWidth;
+    _state.work[lOffset + i].img.height = lHeight;
+    _state.work[lOffset + i].img.name   = _state.name + "_cam_" + to_string(i);
+  }
+
+  // Raytrace
+  for (size_t i = lOffset; i < _state.work.size(); ++i) {
+    auto &lCurr  = _state.work[i];
+    auto  lStart = high_resolution_clock::now();
 
 #pragma omp parallel for
-    for (size_t j = 0; j < lRays.size(); ++j) {
-      lIMG[j] = trace(lRays[j], _state.mesh, _state.bvh);
+    for (size_t j = 0; j < lCurr.rays.size(); ++j) {
+      lCurr.img.pixels[j] = trace(lCurr.rays[j], _state.mesh, _state.bvh);
     };
 
-    //     ErrorCode lRes = writeImage(lIMG, lWidth, lHeight, _state.name + "_cam_" + to_string(lCounter++), _state);
-    //     if (lRes != ErrorCode::OK) { return lRes; }
+    auto lEnd  = high_resolution_clock::now();
+    lCurr.time = duration_cast<nanoseconds>(lEnd - lStart);
   }
 
   return ErrorCode::OK;

@@ -28,6 +28,7 @@
 #include "io/ExportMesh.hpp"
 #include "io/ImportMesh.hpp"
 #include "io/Load.hpp"
+#include "io/WriteImage.hpp"
 #include "tracer/CPUTracer.hpp"
 #include "viewer/Viewer.hpp"
 #include "Enum2Str.hpp"
@@ -50,6 +51,7 @@ const vector<string> gCommandList = {"import",
                                      "BVHImport",
                                      "camExport",
                                      "camImport",
+                                     "writeImg",
                                      "median",
                                      "wald07",
                                      "bittner13",
@@ -67,6 +69,7 @@ Config::CMD_PTR fromString(string _s) {
     case "BVHImport"_h: return make_shared<IO::BVHImport>();
     case "camExport"_h: return make_shared<IO::CameraExport>();
     case "camImport"_h: return make_shared<IO::CameraImport>();
+    case "writeImg"_h: return make_shared<IO::WriteImage>();
     case "median"_h: return make_shared<builder::Median>();
     case "wald07"_h: return make_shared<builder::Wald07>();
     case "bittner13"_h: return make_shared<builder::Bittner13>();

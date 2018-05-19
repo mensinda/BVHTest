@@ -42,7 +42,7 @@ class alignas(16) Ray final {
   uint32_t vPY = UINT32_MAX;
 
  public:
-  Ray() = delete;
+  Ray() {}
   Ray(vec3 _pos, vec3 _dir) : Ray(_pos, _dir, UINT32_MAX, UINT32_MAX) {}
   Ray(vec3 _pos, vec3 _dir, uint32_t _x, uint32_t _y) : vPos(_pos), vDir(_dir), vPX(_x), vPY(_y) {
     vInvDir = 1.0f / vDir;

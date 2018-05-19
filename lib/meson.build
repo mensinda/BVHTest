@@ -63,7 +63,8 @@ ioSrc = files([
   'io/CameraImport.cpp',
   'io/ExportMesh.cpp',
   'io/ImportMesh.cpp',
-  'io/Load.cpp'
+  'io/Load.cpp',
+  'io/WriteImage.cpp',
 ])
 
 ioInc = files([
@@ -73,7 +74,8 @@ ioInc = files([
   'io/CameraImport.hpp',
   'io/ExportMesh.hpp',
   'io/ImportMesh.hpp',
-  'io/Load.hpp'
+  'io/Load.hpp',
+  'io/WriteImage.hpp',
 ])
 
 
@@ -91,7 +93,6 @@ tracerInc = files([
 
 # Viewer lib
 viewerSrc = files([
-  '../external/gl3w.c',
   'viewer/BVHRenderer.cpp',
   'viewer/MeshRenderer.cpp',
   'viewer/RendererBase.cpp',
@@ -139,41 +140,41 @@ enum2StrLib = library('enum2Str', enum2Str,
 baseLib = library('base', baseSrc,
   include_directories: incDirs,
   install: true,
-  link_with: [enum2StrLib],
+  link_with: [enum2StrLib, externalsLib],
   dependencies: baseDeps,
 )
 
 builderLib = library('builder', builderSrc,
   include_directories: incDirs,
   install: true,
-  link_with: [baseLib, enum2StrLib],
+  link_with: [baseLib, enum2StrLib, externalsLib],
   dependencies: baseDeps,
 )
 
 cameraLib = library('camera', cameraSrc,
   include_directories: incDirs,
   install: true,
-  link_with: [baseLib, enum2StrLib],
+  link_with: [baseLib, enum2StrLib, externalsLib],
   dependencies: baseDeps,
 )
 
 tracerLib = library('tracer', tracerSrc,
   include_directories: incDirs,
   install: true,
-  link_with: [baseLib, cameraLib, enum2StrLib],
+  link_with: [baseLib, cameraLib, enum2StrLib, externalsLib],
   dependencies: baseDeps,
 )
 
 ioLib = library('io', ioSrc,
   include_directories: incDirs,
   install: true,
-  link_with: [baseLib, cameraLib, enum2StrLib],
+  link_with: [baseLib, cameraLib, enum2StrLib, externalsLib],
   dependencies: baseDeps + [assimp],
 )
 
 viewerLib = library('viewer', viewerSrc,
   include_directories: incDirs,
   install: true,
-  link_with: [baseLib, cameraLib, tracerLib, enum2StrLib],
+  link_with: [baseLib, cameraLib, tracerLib, enum2StrLib, externalsLib],
   dependencies: baseDeps + [GL, glfw, dl, glm],
 )

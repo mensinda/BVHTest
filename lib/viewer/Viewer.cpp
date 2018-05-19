@@ -151,11 +151,11 @@ void Viewer::keyCallback(Window &_win, State &_state, Camera &_cam, int _key) {
     case GLFW_KEY_BACKSPACE: vRState.vOverlay = !vRState.vOverlay; break;
     case GLFW_KEY_ENTER: _state.cameras.push_back(make_shared<Camera>(_cam)); break;
     case GLFW_KEY_C: {
-      if (_state.cameras.empty()) { break; }
+      if (_state.work.empty()) { break; }
 
       vRState.vCurrCam++; // Undefined is UINT32_MAX --> UINT32_MAX + 1 == 0 (overflow by design!)
       if (vRState.vCurrCam != UINT32_MAX) {
-        if (vRState.vCurrCam >= _state.cameras.size()) { vRState.vCurrCam = 0; }
+        if (vRState.vCurrCam >= _state.work.size()) { vRState.vCurrCam = 0; }
       }
 
       Camera *lCamSaved = dynamic_cast<Camera *>(_state.cameras[vRState.vCurrCam].get());
@@ -168,7 +168,7 @@ void Viewer::keyCallback(Window &_win, State &_state, Camera &_cam, int _key) {
     }
     case GLFW_KEY_DELETE:
       if (vRState.vCurrCam == UINT32_MAX) { break; }
-      _state.cameras.erase(_state.cameras.begin() + vRState.vCurrCam);
+      _state.work.erase(_state.work.begin() + vRState.vCurrCam);
       vRState.vCurrCam = UINT32_MAX;
       break;
 

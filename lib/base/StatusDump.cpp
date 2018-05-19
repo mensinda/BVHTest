@@ -39,7 +39,12 @@ ErrorCode StatusDump::runImpl(State &_state) {
   lLogger->info("  -- Mesh info:");
   lLogger->info("    - Vertices: {}", _state.mesh.vert.size());
   lLogger->info("    - Faces:    {}", _state.mesh.faces.size());
-  lLogger->info("  -- Num Cameras: {}", _state.cameras.size());
+  lLogger->info("  -- Num Images: {}", _state.work.size());
+  for (auto &i : _state.work) {
+    milliseconds lMS = duration_cast<milliseconds>(i.time);
+    nanoseconds  lNS = duration_cast<nanoseconds>(i.time - lMS);
+    lLogger->info("    - Image {:<16} -- Time: {:>4}ms {:>8}ns", i.img.name, lMS.count(), lNS.count());
+  }
   lLogger->info("  -- Command times:");
   for (auto const &i : _state.commands) {
     seconds lSec = duration_cast<seconds>(i.duration);

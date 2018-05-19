@@ -18,23 +18,26 @@
 
 #include "base/Command.hpp"
 
-namespace BVHTest::tracer {
+namespace BVHTest::IO {
 
-class TracerBase : public base::Command {
+class WriteImage final : public base::Command {
  private:
-  glm::vec3 vLightLocation = {2.0f, 2.0f, 2.0f};
+  float           vPercentile = 99.0f;
+  base::ErrorCode writePNG(std::string _name, std::vector<uint8_t> const &_data, uint32_t _w, uint32_t _h);
 
  public:
-  TracerBase() = default;
-  virtual ~TracerBase();
+  WriteImage() = default;
+  virtual ~WriteImage();
 
-  inline base::CommandType getType() const override { return base::CommandType::RAY_TRACE; }
-  inline uint64_t getRequiredCommands() const override { return static_cast<uint64_t>(base::CommandType::BVH_BUILD); }
+  inline std::string       getName() const override { return "writeImg"; }
+  inline std::string       getDesc() const override { return "Writes ray-traced images to file"; }
+  inline base::CommandType getType() const override { return base::CommandType::EXPORT; }
+  inline uint64_t getRequiredCommands() const override { return static_cast<uint64_t>(base::CommandType::RAY_TRACE); }
 
-  inline glm::vec3 getLightLocation() const { return vLightLocation; }
+  base::ErrorCode runImpl(base::State &_state) override;
 
   void fromJSON(const json &_j) override;
   json toJSON() const override;
 };
 
-} // namespace BVHTest::tracer
+} // namespace BVHTest::IO

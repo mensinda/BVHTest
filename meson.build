@@ -51,6 +51,7 @@ enumGen = find_program(['external/enumGen/enumGen.py', 'enumGen.py', '/usr/bin/e
 enumParser = generator(enumGen, output: '@BASENAME@.json', arguments: ['-d', '@BUILD_DIR@', 'parse', '@INPUT@'])
 
 # Build
+subdir('external')
 subdir('lib')
 subdir('src')
 #subdir('test')

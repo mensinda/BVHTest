@@ -16,21 +16,24 @@
 
 #pragma once
 
-#include "TracerBase.hpp"
+#include <string>
+#include <vector>
 
-namespace BVHTest::tracer {
+namespace BVHTest::base {
 
-class CPUTracer final : public TracerBase {
- private:
-  base::Pixel trace(base::Ray &_ray, base::Mesh const &_mesh, base::BVH &_bvh);
-
- public:
-  CPUTracer() = default;
-  virtual ~CPUTracer();
-
-  inline std::string getName() const override { return "CPUTracer"; }
-  inline std::string getDesc() const override { return "single core CPU Ray tracer"; }
-  base::ErrorCode    runImpl(base::State &_state) override;
+struct Pixel {
+  uint8_t  r;
+  uint8_t  g;
+  uint8_t  b;
+  uint32_t intCount;
+  uint64_t rayTime;
 };
 
-} // namespace BVHTest::tracer
+struct Image {
+  std::vector<Pixel> pixels;
+  uint32_t           width;
+  uint32_t           height;
+  std::string        name;
+};
+
+} // namespace BVHTest::base

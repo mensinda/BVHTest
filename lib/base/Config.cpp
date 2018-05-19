@@ -43,7 +43,7 @@ void Config::fromJSON(json const &_j) {
       continue;
     }
 
-    lCmd->fromJSON(i.at("options"));
+    lCmd->fromJSON(i.count("options") != 0 ? i.at("options") : json::object());
     vCommands.push_back(lCmd);
   }
 }
@@ -57,8 +57,15 @@ json Config::toJSON() const {
                       {"input", vInput}}},
                     {"commands", json::array()}};
 
-  for (auto &i : vCommands)
-    lJSON["commands"].push_back(json{{"cmd", i->getName()}, {"options", i->toJSON()}});
+  for (auto &i : vCommands) {
+    json lOpts = i->toJSON();
+
+    if (!lOpts.empty()) {
+      lJSON["commands"].push_back(json{{"cmd", i->getName()}, {"options", i->toJSON()}});
+    } else {
+      lJSON["commands"].push_back(json{{"cmd", i->getName()}});
+    }
+  }
 
   return lJSON;
 }

@@ -67,20 +67,20 @@ mat4 Camera::getViewProjection() {
 vector<Ray> Camera::genRays() {
   vector<Ray> lRays;
 
-  lRays.reserve(vRes.width * vRes.height);
+  lRays.resize(vRes.width * vRes.height);
   mat4  lCamToWorld  = inverse(lookAtRH(vCam.pos, vCam.lookAt, vCam.up));
   vec3  lOrigin      = vCam.pos;
-  vec3  lDirection   = {0.0f, 0.0f, 0.0f};
   float lAspectRatio = static_cast<float>(vRes.width) / static_cast<float>(vRes.height);
   float lScale       = tan(radians(0.5 * vCam.fov));
 
+#pragma omp parallel for collapse(2)
   for (uint32_t y = 0; y < vRes.height; ++y) {
     for (uint32_t x = 0; x < vRes.width; ++x) {
-      float lPixX = (2 * ((x + 0.5) / vRes.width) - 1) * lScale * lAspectRatio;
-      float lPixY = (1 - 2 * ((y + 0.5) / vRes.height)) * lScale;
-      lDirection  = lCamToWorld * vec4(lPixX, lPixY, -1, 0.0f);
+      float lPixX      = (2 * ((x + 0.5) / vRes.width) - 1) * lScale * lAspectRatio;
+      float lPixY      = (1 - 2 * ((y + 0.5) / vRes.height)) * lScale;
+      vec3  lDirection = lCamToWorld * vec4(lPixX, lPixY, -1, 0.0f);
 
-      lRays.emplace_back(lOrigin, normalize(lDirection), x, y);
+      lRays[y * vRes.width + x] = Ray(lOrigin, normalize(lDirection), x, y);
     }
   }
 

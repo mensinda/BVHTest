@@ -7,3 +7,6 @@
 [submodule "external/gl3w"]
 	path = external/gl3w
 	url = https://github.com/skaslev/gl3w
+[submodule "external/lodepng"]
+	path = external/lodepng
+	url = https://github.com/lvandeve/lodepng.git

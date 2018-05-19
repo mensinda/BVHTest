@@ -18,12 +18,14 @@
 
 #include "BVH.hpp"
 #include "CameraBase.hpp"
+#include "Image.hpp"
 #include <chrono>
 #include <memory>
 #include <string>
 #include <vector>
 
 using std::chrono::milliseconds;
+using std::chrono::nanoseconds;
 
 namespace BVHTest::base {
 
@@ -52,10 +54,17 @@ struct State final {
     milliseconds duration;
   };
 
+  struct Work final {
+    std::vector<Ray> rays;
+    Image            img  = {{}, 0, 0, "IMG"};
+    nanoseconds      time = nanoseconds(0);
+  };
+
   std::vector<CMD> commands;
 
   Mesh                 mesh;
   std::vector<CAM_PTR> cameras;
+  std::vector<Work>    work;
   BVH                  bvh;
 };
 
