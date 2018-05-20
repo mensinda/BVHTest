@@ -22,7 +22,10 @@ namespace BVHTest::IO {
 
 class Load final : public base::Command {
  private:
-  const uint32_t vLoaderVersion = 1;
+  const uint32_t vLoaderVersion = 2;
+
+  base::ErrorCode loadVers1(base::State &_state, json &_cfg, std::fstream &_binFile);
+  base::ErrorCode loadVers2(base::State &_state, json &_cfg, std::fstream &_binFile);
 
  public:
   Load() = default;

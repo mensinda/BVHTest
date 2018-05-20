@@ -16,8 +16,8 @@
 
 #include "BVHTestCfg.hpp"
 #include "BVHExport.hpp"
+#include "minilzo-2.10/minilzo.h"
 #include <fstream>
-#include <lzo/lzo1x.h>
 
 #if __has_include(<filesystem>)
 #  include <filesystem>
@@ -44,7 +44,7 @@ json BVHExport::toJSON() const { return json{{"name", vExportName}}; }
 ErrorCode BVHExport::runImpl(State &_state) {
   auto lLogger = getLogger();
 
-  static HEAP_ALLOC(wrkmem, LZO1X_999_MEM_COMPRESS);
+  static HEAP_ALLOC(wrkmem, LZO1X_1_MEM_COMPRESS);
 
   fs::path lBasePath = _state.basePath;
   lBasePath          = lBasePath / _state.input;
@@ -80,16 +80,9 @@ ErrorCode BVHExport::runImpl(State &_state) {
   auto lCheckSumRaw = lzo_adler32(0, nullptr, 0);
   lCheckSumRaw      = lzo_adler32(lCheckSumRaw, lData.get(), lInSize);
 
-  auto lRet = lzo1x_999_compress(lData.get(), lInSize, lComp.get(), &lCompSize, wrkmem);
+  auto lRet = lzo1x_1_compress(lData.get(), lInSize, lComp.get(), &lCompSize, wrkmem);
   if (lRet != LZO_E_OK) {
     lLogger->error("Compression failed: {}", lRet);
-    return ErrorCode::IO_ERROR;
-  }
-
-  // optimize
-  lRet = lzo1x_optimize(lComp.get(), lCompSize, lData.get(), &lInSize, nullptr);
-  if (lRet != LZO_E_OK) {
-    lLogger->error("Optimization failed: {}", lRet);
     return ErrorCode::IO_ERROR;
   }
 

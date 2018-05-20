@@ -1,6 +1,7 @@
 extLibSrc = files([
   'gl3w.c',
-  'lodepng/lodepng.cpp'
+  'lodepng/lodepng.cpp',
+  'minilzo-2.10/minilzo.c'
 ])
 
 externalsLib = library('externalsLib', extLibSrc,

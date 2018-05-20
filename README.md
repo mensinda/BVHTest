@@ -30,3 +30,45 @@ Use `./build/src/bvhTest list` to list available commands, then generate a sampl
 config file with `./build/src/bvhTest genrate <OUT FILE> [LIST OF COMMANDS]`.
 
 Use `./build/src/bvhTest run <FILE>` to execute the commands for each input in baseConfig.input
+
+# Converting binary files
+
+## Mesh files
+
+Binary mesh files (`data.json`, `data.bin`) can be converted to the new file format version with:
+
+```json
+{
+  "baseConfig": {
+    "basePath": "/path/to/meshes",
+    "input": [
+      "list",
+      "of",
+      "files",
+      "to",
+      "convert"
+    ],
+    "maxThreads": 4,
+    "name": "test",
+    "verbose": true
+  },
+  "commands": [
+    {
+      "cmd": "load"
+    },
+    {
+      "cmd": "export",
+      "options": {
+        "outDir": "/path/to/meshes"
+      }
+    },
+    {
+      "cmd": "status"
+    }
+  ]
+}
+```
+
+## Saved BVH files
+
+These files can not be upgraded to a new version.

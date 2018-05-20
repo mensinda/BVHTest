@@ -32,7 +32,7 @@
 #include "tracer/CPUTracer.hpp"
 #include "viewer/Viewer.hpp"
 #include "Enum2Str.hpp"
-#include "lzo/lzo1x.h"
+#include "minilzo-2.10/minilzo.h"
 #include <fstream>
 #include <iostream>
 #include <string>

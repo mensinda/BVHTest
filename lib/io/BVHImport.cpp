@@ -16,7 +16,7 @@
 
 #include "BVHTestCfg.hpp"
 #include "BVHImport.hpp"
-#include <lzo/lzo1x.h>
+#include "minilzo-2.10/minilzo.h"
 
 #include <fstream>
 

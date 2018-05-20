@@ -16,6 +16,7 @@
 
 #include "BVHTestCfg.hpp"
 #include "Load.hpp"
+#include "minilzo-2.10/minilzo.h"
 #include <fstream>
 
 #if __has_include(<filesystem>)
@@ -36,6 +37,85 @@ using namespace BVHTest::IO;
 Load::~Load() {}
 void Load::fromJSON(const json &) {}
 json Load::toJSON() const { return json::object(); }
+
+ErrorCode Load::loadVers1(State &_state, json &_cfg, fstream &_binFile) {
+  auto lLogger = getLogger();
+  lLogger->warn("File version 1 is deprecated. Consider converting to the new format");
+
+  size_t lVert   = _cfg.at("mesh").at("vert").get<size_t>();
+  size_t lNormal = _cfg.at("mesh").at("normals").get<size_t>();
+  size_t lFaces  = _cfg.at("mesh").at("faces").get<size_t>();
+
+  _state.mesh.vert.resize(lVert);
+  _state.mesh.norm.resize(lNormal);
+  _state.mesh.faces.resize(lFaces);
+
+  _binFile.read(reinterpret_cast<char *>(_state.mesh.vert.data()), lVert * sizeof(glm::vec3));
+  _binFile.read(reinterpret_cast<char *>(_state.mesh.norm.data()), lNormal * sizeof(glm::vec3));
+  _binFile.read(reinterpret_cast<char *>(_state.mesh.faces.data()), lFaces * sizeof(Triangle));
+  _binFile.close();
+
+  return ErrorCode::OK;
+}
+
+ErrorCode Load::loadVers2(State &_state, json &_cfg, fstream &_binFile) {
+  auto lLogger = getLogger();
+
+  size_t   lVert         = _cfg.at("mesh").at("vert").get<size_t>();
+  size_t   lNormal       = _cfg.at("mesh").at("normals").get<size_t>();
+  size_t   lFaces        = _cfg.at("mesh").at("faces").get<size_t>();
+  uint32_t lCheckSumComp = _cfg.at("compressedChecksum").get<uint32_t>();
+  uint32_t lCheckSumRaw  = _cfg.at("rawChecksum").get<uint32_t>();
+
+  // Read File
+  auto lBeginPos = _binFile.tellg();
+  _binFile.seekg(0, _binFile.end);
+  size_t lCompSize = _binFile.tellg() - lBeginPos;
+  size_t lDataSize = (lVert + lNormal) * sizeof(vec3) + lFaces * sizeof(Triangle);
+  _binFile.seekg(0, _binFile.beg);
+
+  unique_ptr<uint8_t[]> lComp = unique_ptr<uint8_t[]>(new uint8_t[lCompSize]);
+  unique_ptr<uint8_t[]> lData = unique_ptr<uint8_t[]>(new uint8_t[lDataSize]);
+
+  _binFile.read(reinterpret_cast<char *>(lComp.get()), lCompSize);
+  _binFile.close();
+
+  auto lCheckSumTemp = lzo_adler32(0, nullptr, 0);
+  lCheckSumTemp      = lzo_adler32(lCheckSumTemp, lComp.get(), lCompSize);
+
+  if (lCheckSumTemp != lCheckSumComp) {
+    lLogger->error("Corrupt binary file");
+    return ErrorCode::IO_ERROR;
+  }
+
+  auto lRet = lzo1x_decompress(lComp.get(), lCompSize, lData.get(), &lDataSize, nullptr);
+  if (lRet != LZO_E_OK) {
+    lLogger->error("Decompression of binary file failed: {}", lRet);
+    return ErrorCode::IO_ERROR;
+  }
+
+  lCheckSumTemp = lzo_adler32(0, nullptr, 0);
+  lCheckSumTemp = lzo_adler32(lCheckSumTemp, lData.get(), lDataSize);
+
+  if (lCheckSumTemp != lCheckSumRaw) {
+    lLogger->error("Decompression of binary file failed: corrupt data");
+    return ErrorCode::IO_ERROR;
+  }
+
+  _state.mesh.vert.resize(lVert);
+  _state.mesh.norm.resize(lNormal);
+  _state.mesh.faces.resize(lFaces);
+
+  size_t lOffset = 0;
+  memcpy(_state.mesh.vert.data(), lData.get() + lOffset, lVert * sizeof(vec3));
+  lOffset += lVert * sizeof(vec3);
+  memcpy(_state.mesh.norm.data(), lData.get() + lOffset, lNormal * sizeof(vec3));
+  lOffset += lNormal * sizeof(vec3);
+  memcpy(_state.mesh.faces.data(), lData.get() + lOffset, lFaces * sizeof(Triangle));
+
+  return ErrorCode::OK;
+}
+
 
 ErrorCode Load::runImpl(State &_state) {
   auto lLogger = getLogger();
@@ -60,14 +140,6 @@ ErrorCode Load::runImpl(State &_state) {
 
   uint32_t lVers    = lCfg.at("version").get<uint32_t>();
   fs::path lBinPath = lPath.parent_path() / lCfg.at("bin").get<string>();
-  size_t   lVert    = lCfg.at("mesh").at("vert").get<size_t>();
-  size_t   lNormal  = lCfg.at("mesh").at("normals").get<size_t>();
-  size_t   lFaces   = lCfg.at("mesh").at("faces").get<size_t>();
-
-  if (lVers != vLoaderVersion) {
-    lLogger->error("File format version is {} but {} is required", lVers, vLoaderVersion);
-    return ErrorCode::PARSE_ERROR;
-  }
 
   if (!fs::exists(lBinPath) || !fs::is_regular_file(lBinPath)) {
     lLogger->error("File {} does not exist", lBinPath.string());
@@ -80,14 +152,13 @@ ErrorCode Load::runImpl(State &_state) {
     return ErrorCode::IO_ERROR;
   }
 
-  _state.mesh.vert.resize(lVert);
-  _state.mesh.norm.resize(lNormal);
-  _state.mesh.faces.resize(lFaces);
-
-  lBinFile.read(reinterpret_cast<char *>(_state.mesh.vert.data()), lVert * sizeof(glm::vec3));
-  lBinFile.read(reinterpret_cast<char *>(_state.mesh.norm.data()), lNormal * sizeof(glm::vec3));
-  lBinFile.read(reinterpret_cast<char *>(_state.mesh.faces.data()), lFaces * sizeof(Triangle));
-  lBinFile.close();
+  switch (lVers) {
+    case 1: return loadVers1(_state, lCfg, lBinFile);
+    case 2: return loadVers2(_state, lCfg, lBinFile);
+    default:
+      lLogger->error("File format version is {} but {} is required", lVers, vLoaderVersion);
+      return ErrorCode::PARSE_ERROR;
+  };
 
   return ErrorCode::OK;
 }
