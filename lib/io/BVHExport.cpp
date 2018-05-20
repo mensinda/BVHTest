@@ -17,6 +17,7 @@
 #include "BVHTestCfg.hpp"
 #include "BVHExport.hpp"
 #include <fstream>
+#include <lzo/lzo1x.h>
 
 #if __has_include(<filesystem>)
 #  include <filesystem>
@@ -27,6 +28,8 @@ namespace fs = std::experimental::filesystem;
 #else
 #  error "std filesystem is not supported"
 #endif
+
+#define HEAP_ALLOC(var, size) lzo_align_t __LZO_MMODEL var[((size) + (sizeof(lzo_align_t) - 1)) / sizeof(lzo_align_t)]
 
 using namespace std;
 using namespace BVHTest;
@@ -40,6 +43,8 @@ json BVHExport::toJSON() const { return json{{"name", vExportName}}; }
 
 ErrorCode BVHExport::runImpl(State &_state) {
   auto lLogger = getLogger();
+
+  static HEAP_ALLOC(wrkmem, LZO1X_999_MEM_COMPRESS);
 
   fs::path lBasePath = _state.basePath;
   lBasePath          = lBasePath / _state.input;
@@ -60,11 +65,45 @@ ErrorCode BVHExport::runImpl(State &_state) {
   fs::path lControlPath = fs::absolute(lOutDir) / (vExportName + "_bvh.json");
   fs::path lBinaryPath  = fs::absolute(lOutDir) / (vExportName + "_bvh.bin");
 
+
+  // Compress
+  size_t                lInSize   = _state.bvh.size() * sizeof(BVHNode) + _state.mesh.faces.size() * sizeof(Triangle);
+  size_t                lCompSize = lInSize + (lInSize / 16) + 64 + 3;
+  unique_ptr<uint8_t[]> lData     = unique_ptr<uint8_t[]>(new uint8_t[lInSize]);
+  unique_ptr<uint8_t[]> lComp     = unique_ptr<uint8_t[]>(new uint8_t[lCompSize]);
+
+  memcpy(lData.get(), reinterpret_cast<char *>(_state.bvh.data()), _state.bvh.size() * sizeof(BVHNode));
+  memcpy(lData.get() + _state.bvh.size() * sizeof(BVHNode),
+         reinterpret_cast<char *>(_state.mesh.faces.data()),
+         _state.mesh.faces.size() * sizeof(Triangle));
+
+  auto lCheckSumRaw = lzo_adler32(0, nullptr, 0);
+  lCheckSumRaw      = lzo_adler32(lCheckSumRaw, lData.get(), lInSize);
+
+  auto lRet = lzo1x_999_compress(lData.get(), lInSize, lComp.get(), &lCompSize, wrkmem);
+  if (lRet != LZO_E_OK) {
+    lLogger->error("Compression failed: {}", lRet);
+    return ErrorCode::IO_ERROR;
+  }
+
+  // optimize
+  lRet = lzo1x_optimize(lComp.get(), lCompSize, lData.get(), &lInSize, nullptr);
+  if (lRet != LZO_E_OK) {
+    lLogger->error("Optimization failed: {}", lRet);
+    return ErrorCode::IO_ERROR;
+  }
+
+  auto lCheckSumComp = lzo_adler32(0, nullptr, 0);
+  lCheckSumComp      = lzo_adler32(lCheckSumComp, lComp.get(), lCompSize);
+
+
   json lControlData = {{"version", vFormatVers},
                        {"bin", (vExportName + "_bvh.bin")},
                        {"BVHSize", _state.bvh.size()},
                        {"numTris", _state.mesh.faces.size()},
-                       {"treeHeight", _state.bvh.maxLevel()}};
+                       {"treeHeight", _state.bvh.maxLevel()},
+                       {"compressedChecksum", lCheckSumComp},
+                       {"rawChecksum", lCheckSumRaw}};
 
   fstream lControlFile(lControlPath.string(), lControlFile.out | lControlFile.trunc);
   fstream lBinaryFile(lBinaryPath.string(), lControlFile.out | lControlFile.trunc);
@@ -82,8 +121,7 @@ ErrorCode BVHExport::runImpl(State &_state) {
   lControlFile << lControlData.dump(2);
   lControlFile.close();
 
-  lBinaryFile.write(reinterpret_cast<char *>(_state.bvh.data()), _state.bvh.size() * sizeof(BVHNode));
-  lBinaryFile.write(reinterpret_cast<char *>(_state.mesh.faces.data()), _state.mesh.faces.size() * sizeof(Triangle));
+  lBinaryFile.write(reinterpret_cast<char *>(lComp.get()), lCompSize);
   lBinaryFile.close();
 
   return ErrorCode::OK;

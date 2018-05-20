@@ -16,6 +16,7 @@
 
 #include "BVHTestCfg.hpp"
 #include "BVHImport.hpp"
+#include <lzo/lzo1x.h>
 
 #include <fstream>
 
@@ -84,23 +85,59 @@ ErrorCode BVHImport::runImpl(State &_state) {
   uint32_t lSize       = lControlData.at("BVHSize").get<uint32_t>();
   uint32_t lNumTris    = lControlData.at("numTris").get<uint32_t>();
   _state.bvh.setMaxLevel(lControlData.at("treeHeight").get<uint16_t>());
+  uint32_t lCheckSumComp = lControlData.at("compressedChecksum").get<uint32_t>();
+  uint32_t lCheckSumRaw  = lControlData.at("rawChecksum").get<uint32_t>();
 
   if (!fs::exists(lBinaryPath) || !fs::is_regular_file(lBinaryPath)) {
     lLogger->error("Invalid BVH binary file {}", fs::absolute(lBinaryPath).string());
     return ErrorCode::IO_ERROR;
   }
 
-  fstream lBinaryFile(lBinaryPath.string(), lBinaryFile.in);
+  fstream lBinaryFile(lBinaryPath.string(), lBinaryFile.in | lBinaryFile.binary);
   if (!lBinaryFile.is_open()) {
     lLogger->error("Failed to open BVH binary file {} for reading", fs::absolute(lBinaryPath).string());
     return ErrorCode::IO_ERROR;
   }
 
+  // Read File
+  auto lBeginPos = lBinaryFile.tellg();
+  lBinaryFile.seekg(0, lBinaryFile.end);
+  size_t lCompSize = lBinaryFile.tellg() - lBeginPos;
+  size_t lDataSize = lSize * sizeof(BVHNode) + lNumTris * sizeof(Triangle);
+  lBinaryFile.seekg(0, lBinaryFile.beg);
+
+  unique_ptr<uint8_t[]> lComp = unique_ptr<uint8_t[]>(new uint8_t[lCompSize]);
+  unique_ptr<uint8_t[]> lData = unique_ptr<uint8_t[]>(new uint8_t[lDataSize]);
+
+  lBinaryFile.read(reinterpret_cast<char *>(lComp.get()), lCompSize);
+  lBinaryFile.close();
+
+  auto lCheckSumTemp = lzo_adler32(0, nullptr, 0);
+  lCheckSumTemp      = lzo_adler32(lCheckSumTemp, lComp.get(), lCompSize);
+
+  if (lCheckSumTemp != lCheckSumComp) {
+    lLogger->error("Corrupt binary file '{}'", lBinaryPath.string());
+    return ErrorCode::IO_ERROR;
+  }
+
+  auto lRet = lzo1x_decompress(lComp.get(), lCompSize, lData.get(), &lDataSize, nullptr);
+  if (lRet != LZO_E_OK) {
+    lLogger->error("Decompression of '{}' failed: {}", lBinaryPath.string(), lRet);
+    return ErrorCode::IO_ERROR;
+  }
+
+  lCheckSumTemp = lzo_adler32(0, nullptr, 0);
+  lCheckSumTemp = lzo_adler32(lCheckSumTemp, lData.get(), lDataSize);
+
+  if (lCheckSumTemp != lCheckSumRaw) {
+    lLogger->error("Decompression of '{}' failed: corrupt data", lBinaryPath.string());
+    return ErrorCode::IO_ERROR;
+  }
+
   _state.bvh.resize(lSize);
   _state.mesh.faces.resize(lNumTris);
-  lBinaryFile.read(reinterpret_cast<char *>(_state.bvh.data()), lSize * sizeof(BVHNode));
-  lBinaryFile.read(reinterpret_cast<char *>(_state.mesh.faces.data()), lNumTris * sizeof(Triangle));
-  lBinaryFile.close();
+  memcpy(_state.bvh.data(), lData.get(), lSize * sizeof(BVHNode));
+  memcpy(_state.mesh.faces.data(), lData.get() + lSize * sizeof(BVHNode), lNumTris * sizeof(Triangle));
 
   return ErrorCode::OK;
 }

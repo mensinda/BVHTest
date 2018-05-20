@@ -186,7 +186,7 @@ ErrorCode CPUTracer::runImpl(State &_state) {
     auto &lCurr  = _state.work[i];
     auto  lStart = high_resolution_clock::now();
 
-#pragma omp parallel for
+#pragma omp parallel for schedule(dynamic, 512)
     for (size_t j = 0; j < lCurr.rays.size(); ++j) {
       lCurr.img.pixels[j] = trace(lCurr.rays[j], _state.mesh, _state.bvh);
     };

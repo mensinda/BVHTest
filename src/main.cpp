@@ -32,6 +32,7 @@
 #include "tracer/CPUTracer.hpp"
 #include "viewer/Viewer.hpp"
 #include "Enum2Str.hpp"
+#include "lzo/lzo1x.h"
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -190,6 +191,11 @@ int main(int argc, char *argv[]) {
     args.push_back(argv[i]);
 
   if (args.size() == 0) return usage();
+
+  if (lzo_init() != LZO_E_OK) {
+    lLogger->error("Failed to init lzo");
+    return 4;
+  }
 
   for (size_t i = 0; i < args.size(); ++i) {
     switch (fnv1aHash(args[i])) {
