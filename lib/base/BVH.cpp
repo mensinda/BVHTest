@@ -37,9 +37,9 @@ float BVH::calcSAH(float _cInner, float _cLeaf) {
 void BVH::fixLevels() {
   if (bvh.empty()) { return; }
 
-  uint64_t lBitStack = 0;
-  uint16_t lLevel    = 0;
-  BVHNode *lNode     = &bvh[0];
+  __uint128_t lBitStack = 0;
+  uint16_t    lLevel    = 0;
+  BVHNode *   lNode     = &bvh[0];
 
   while (true) {
     lNode->level = lLevel;

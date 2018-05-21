@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "CPUTracer.hpp"
+#include "BruteForceTracer.hpp"
 #include <glm/gtx/intersect.hpp>
 #include <glm/gtx/normal.hpp>
 #include <ctime>
@@ -49,9 +49,9 @@ inline uint64_t rdtsc() {
 #  endif
 #endif
 
-CPUTracer::~CPUTracer() {}
+BruteForceTracer::~BruteForceTracer() {}
 
-Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &_bvh) {
+Pixel BruteForceTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &) {
   Pixel lRes = {121, 167, 229, 0, 0};
 
   /*
@@ -73,71 +73,29 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &_bvh) {
   clock_gettime(CLOCK_MONOTONIC, &lTSStart);
 #endif
 
-  __int128_t     lBitStack = 0;
-  BVHNode const *lNode     = &_bvh[0];
-
   Triangle lClosest        = {0, 0, 0};
   float    lNearest        = numeric_limits<float>::infinity();
   vec3     lBarycentricPos = {0.0f, 0.0f, 0.0f};
   dvec3    lBarycentricTemp;
 
-  float lMinLeft;
-  float lMinRight;
-  float lTemp;
+  for (size_t i = 0; i < _mesh.faces.size(); ++i) {
+    Triangle const &lTri = _mesh.faces[i];
 
-  while (true) {
-    if (!lNode->isLeaf()) {
-      lRes.intCount++;
-      BVHNode const *lLeft     = &_bvh[lNode->left];
-      BVHNode const *lRight    = &_bvh[lNode->right];
-      bool           lLeftHit  = lLeft->bbox.intersect(_ray, 0.01f, lNearest + 0.01f, lMinLeft, lTemp);
-      bool           lRightHit = lRight->bbox.intersect(_ray, 0.01f, lNearest + 0.01f, lMinRight, lTemp);
+    bool lHit = intersectRayTriangle<dvec3>(_ray.getOrigin(),
+                                            _ray.getDirection(),
+                                            _mesh.vert[lTri.v1],
+                                            _mesh.vert[lTri.v2],
+                                            _mesh.vert[lTri.v3],
+                                            lBarycentricTemp);
 
-      if (lLeftHit || lRightHit) {
-        lBitStack <<= 1;
-
-        if (lLeftHit && lRightHit) {
-          lBitStack |= 1;
-          lNode = lMinLeft < lMinRight ? lLeft : lRight;
-        } else {
-          lNode = lLeftHit ? lLeft : lRight;
-        }
-
-        continue;
-      }
-    } else {
-      for (uint32_t i = 0; i < lNode->numFaces(); ++i) {
-        Triangle const &lTri = _mesh.faces[lNode->beginFaces() + i];
-
-        bool lHit = intersectRayTriangle<dvec3>(_ray.getOrigin(),
-                                                _ray.getDirection(),
-                                                _mesh.vert[lTri.v1],
-                                                _mesh.vert[lTri.v2],
-                                                _mesh.vert[lTri.v3],
-                                                lBarycentricTemp);
-
-        // See https://github.com/g-truc/glm/issues/6#issuecomment-23149870 for lBaryPos.z usage
-        if (lHit && lBarycentricTemp.z < lNearest) {
-          lBarycentricPos   = lBarycentricTemp;
-          lNearest          = lBarycentricPos.z;
-          lBarycentricPos.z = 1.0f - lBarycentricPos.x - lBarycentricPos.y;
-          lClosest          = lTri;
-        }
-      }
+    // See https://github.com/g-truc/glm/issues/6#issuecomment-23149870 for lBaryPos.z usage
+    if (lHit && lBarycentricTemp.z < lNearest) {
+      lBarycentricPos   = lBarycentricTemp;
+      lNearest          = lBarycentricPos.z;
+      lBarycentricPos.z = 1.0f - lBarycentricPos.x - lBarycentricPos.y;
+      lClosest          = lTri;
     }
-
-    // Backtrac
-    while ((lBitStack & 1) == 0) {
-      if (lBitStack == 0) { goto LABEL_END; } // I know, I know...
-      lNode = &_bvh[lNode->parent];
-      lBitStack >>= 1;
-    }
-
-    lNode = &_bvh.siblingNode(*lNode);
-    lBitStack ^= 1;
   }
-
-LABEL_END:
 
   if (lNearest < numeric_limits<float>::infinity()) {
     vec3  lV1       = _mesh.vert[lClosest.v1];
@@ -167,7 +125,7 @@ LABEL_END:
 
 
 
-ErrorCode CPUTracer::runImpl(State &_state) {
+ErrorCode BruteForceTracer::runImpl(State &_state) {
   size_t lOffset = _state.work.size();
   _state.work.resize(lOffset + _state.cameras.size());
 

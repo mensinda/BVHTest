@@ -19,7 +19,7 @@
 #include "BVHTestCfg.hpp"
 #include "Viewer.hpp"
 
-#include "camera/Camera.hpp"
+#include "misc/Camera.hpp"
 #include <glm/glm.hpp>
 #include "BVHRenderer.hpp"
 #include "Enum2Str.hpp"
@@ -40,7 +40,7 @@ using namespace std::chrono;
 using namespace BVHTest;
 using namespace BVHTest::base;
 using namespace BVHTest::view;
-using namespace BVHTest::camera;
+using namespace BVHTest::misc;
 using namespace BVHTest::Enum2Str;
 
 class TextInit final {

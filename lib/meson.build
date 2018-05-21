@@ -46,12 +46,14 @@ builderInc = files([
 
 
 # Camera lib
-cameraSrc = files([
-  'camera/Camera.cpp'
+miscSrc = files([
+  'misc/Camera.cpp',
+  'misc/Validate.cpp'
 ])
 
-cameraInc = files([
-  'camera/Camera.hpp'
+miscInc = files([
+  'misc/Camera.hpp',
+  'misc/Validate.hpp'
 ])
 
 
@@ -81,11 +83,13 @@ ioInc = files([
 
 # Tracer lib
 tracerSrc = files([
+  'tracer/BruteForceTracer.cpp',
   'tracer/CPUTracer.cpp',
   'tracer/TracerBase.cpp'
 ])
 
 tracerInc = files([
+  'tracer/BruteForceTracer.hpp',
   'tracer/CPUTracer.hpp',
   'tracer/TracerBase.hpp'
 ])
@@ -113,7 +117,7 @@ viewerInc = files([
 #### Generate Enum2Str class ####
 #################################
 
-allInc = baseInc + builderInc + cameraInc + ioInc + viewerInc
+allInc = baseInc + builderInc + miscInc + ioInc + viewerInc
 enumData = []
 
 foreach i : allInc
@@ -151,7 +155,7 @@ builderLib = library('builder', builderSrc,
   dependencies: baseDeps,
 )
 
-cameraLib = library('camera', cameraSrc,
+miscLib = library('misc', miscSrc,
   include_directories: incDirs,
   install: true,
   link_with: [baseLib, enum2StrLib, externalsLib],
@@ -161,20 +165,20 @@ cameraLib = library('camera', cameraSrc,
 tracerLib = library('tracer', tracerSrc,
   include_directories: incDirs,
   install: true,
-  link_with: [baseLib, cameraLib, enum2StrLib, externalsLib],
+  link_with: [baseLib, miscLib, enum2StrLib, externalsLib],
   dependencies: baseDeps,
 )
 
 ioLib = library('io', ioSrc,
   include_directories: incDirs,
   install: true,
-  link_with: [baseLib, cameraLib, enum2StrLib, externalsLib],
+  link_with: [baseLib, miscLib, enum2StrLib, externalsLib],
   dependencies: baseDeps + [assimp],
 )
 
 viewerLib = library('viewer', viewerSrc,
   include_directories: incDirs,
   install: true,
-  link_with: [baseLib, cameraLib, tracerLib, enum2StrLib, externalsLib],
+  link_with: [baseLib, miscLib, tracerLib, enum2StrLib, externalsLib],
   dependencies: baseDeps + [GL, glfw, dl, glm],
 )

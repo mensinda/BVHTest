@@ -21,7 +21,7 @@ using namespace std;
 using namespace glm;
 using namespace BVHTest;
 using namespace BVHTest::base;
-using namespace BVHTest::camera;
+using namespace BVHTest::misc;
 
 Camera::~Camera() {}
 

@@ -1,0 +1,230 @@
+/*
+ * Copyright (C) 2018 Daniel Mensinger
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "BVHTestCfg.hpp"
+#include "Validate.hpp"
+
+using namespace std;
+using namespace BVHTest;
+using namespace BVHTest::base;
+using namespace BVHTest::misc;
+
+Validate::~Validate() {}
+void Validate::fromJSON(const json &) {}
+json Validate::toJSON() const { return json::object(); }
+
+#define NODE lBVH[lNode]
+#define PARENT lBVH[NODE.parent]
+#define LEFT lBVH[NODE.left]
+#define RIGHT lBVH[NODE.right]
+#define REQUIRE(a, cnt)                                                                                                \
+  if (not(a)) {                                                                                                        \
+    cnt++;                                                                                                             \
+    lTotalErros++;                                                                                                     \
+  }
+
+#define ERROR_IF(val, str)                                                                                             \
+  if (val != 0) { getLogger()->error(str, val); }
+
+bool Validate::checkTree(State &_state) {
+  auto &lBVH = _state.bvh;
+  if (lBVH.empty()) { return true; }
+
+  __uint128_t lBitStack = 0;
+  uint16_t    lLevel    = 0;
+  uint16_t    lMaxLevel = 0;
+  uint32_t    lNode     = 0;
+  uint32_t    lLastNode = 0;
+
+  uint32_t lTotalErros           = 0;
+  uint32_t lLevelErrors          = 0;
+  uint32_t lLeftRightErrors      = 0;
+  uint32_t lSameChildrenErrors   = 0;
+  uint32_t lWrongParentErrors    = 0;
+  uint32_t lWrongCildCountErrors = 0;
+
+  vector<uint16_t> lTraversed;
+  lTraversed.resize(lBVH.size(), 0);
+
+  while (true) {
+    lTraversed[lNode] = 1;
+    REQUIRE(NODE.level == lLevel, lLevelErrors);
+    if (lNode != 0) {
+      if (NODE.isLeftChild()) { REQUIRE(PARENT.left == lNode, lLeftRightErrors); }
+      if (NODE.isRightChild()) { REQUIRE(PARENT.right == lNode, lLeftRightErrors); }
+    }
+
+    if (!NODE.isLeaf()) {
+      REQUIRE(NODE.left != NODE.right, lSameChildrenErrors);
+      REQUIRE(NODE.numChildren == LEFT.numChildren + RIGHT.numChildren + 2, lWrongCildCountErrors);
+      lBitStack <<= 1;
+      lBitStack |= 1;
+      lLastNode = lNode;
+      lNode     = NODE.left;
+      REQUIRE(NODE.parent == lLastNode, lWrongParentErrors);
+      lLevel++;
+      lMaxLevel = std::max(lLevel, lMaxLevel);
+      continue;
+    } else {
+      REQUIRE(NODE.numChildren == 0, lWrongCildCountErrors);
+    }
+
+    // Backtrack
+    while ((lBitStack & 1) == 0) {
+      if (lBitStack == 0) { goto END_LABEL; } // Yes gotos are evil. We all know that.
+      lNode = NODE.parent;
+      lBitStack >>= 1;
+      lLevel--;
+    }
+
+    lLastNode = NODE.parent;
+    lNode     = PARENT.right;
+    REQUIRE(NODE.parent == lLastNode, lWrongParentErrors);
+    lBitStack ^= 1;
+  }
+
+END_LABEL:
+
+  uint32_t lNotTraversed = 0;
+  for (size_t i = 0; i < lTraversed.size(); ++i) {
+    if (lTraversed[i] == 0) { lNotTraversed++; }
+  }
+
+  lTotalErros += lNotTraversed;
+
+  ERROR_IF(lLevelErrors, "{:<3} Invalid BVH tree level errors");
+  ERROR_IF(lLeftRightErrors, "{:<3} Invalid left / right node indicator");
+  ERROR_IF(lSameChildrenErrors, "{:<3} Inner node with the same children");
+  ERROR_IF(lWrongParentErrors, "{:<3} Invalid BVH nodes with the wrong parent");
+  ERROR_IF(lWrongCildCountErrors, "{:<3} Invalid BVH nodes with a wrong child count");
+  ERROR_IF(lNotTraversed, "{:<3} Orphan nodes in the BVH tree");
+
+  if (lMaxLevel != lBVH.maxLevel()) {
+    getLogger()->error("Wrong max level: {} but true max level is {}", lMaxLevel, lBVH.maxLevel());
+    lTotalErros++;
+  }
+
+  ERROR_IF(lTotalErros, "{:<3} Total BVH tree errors");
+
+  return lTotalErros == 0 ? true : false;
+}
+
+bool Validate::checkBBoxes(State &_state) {
+  uint32_t lTotalErros = 0;
+  BVH &    lBVH        = _state.bvh;
+
+  for (uint32_t lNode = 0; lNode < lBVH.size(); ++lNode) {
+    if (!NODE.isLeaf()) {
+      uint32_t lErrors = 0;
+      AABB     lBBox   = NODE.bbox;
+      AABB     lLBBox  = LEFT.bbox;
+      AABB     lRBBox  = RIGHT.bbox;
+
+      REQUIRE(lBBox.min.x <= lLBBox.min.x, lErrors);
+      REQUIRE(lBBox.min.y <= lLBBox.min.y, lErrors);
+      REQUIRE(lBBox.min.z <= lLBBox.min.z, lErrors);
+      REQUIRE(lBBox.max.x >= lLBBox.max.x, lErrors);
+      REQUIRE(lBBox.max.y >= lLBBox.max.y, lErrors);
+      REQUIRE(lBBox.max.z >= lLBBox.max.z, lErrors);
+
+      REQUIRE(lBBox.min.x <= lRBBox.min.x, lErrors);
+      REQUIRE(lBBox.min.y <= lRBBox.min.y, lErrors);
+      REQUIRE(lBBox.min.z <= lRBBox.min.z, lErrors);
+      REQUIRE(lBBox.max.x >= lRBBox.max.x, lErrors);
+      REQUIRE(lBBox.max.y >= lRBBox.max.y, lErrors);
+      REQUIRE(lBBox.max.z >= lRBBox.max.z, lErrors);
+
+      if (lErrors != 0) { lTotalErros++; }
+    }
+  }
+
+  ERROR_IF(lTotalErros, "{:<3} invalid bounding boxes")
+
+  return lTotalErros == 0 ? true : false;
+}
+
+
+bool Validate::checkTris(State &_state) {
+  uint32_t lTotalErros = 0;
+  BVH &    lBVH        = _state.bvh;
+
+  vector<uint16_t> lTraversed;
+  lTraversed.resize(_state.mesh.faces.size(), 0);
+
+  for (uint32_t lNode = 0; lNode < lBVH.size(); ++lNode) {
+    if (NODE.isLeaf()) {
+      uint32_t lErrors = 0;
+      AABB     lBBox   = NODE.bbox;
+      uint32_t lStart  = NODE.beginFaces();
+      uint32_t lEnd    = lStart + NODE.numFaces();
+
+      for (uint32_t j = lStart; j < lEnd; ++j) {
+        lTraversed[j]           = 1;
+        auto [lV1i, lV2i, lV3i] = _state.mesh.faces[j];
+        vec3 const &lV1         = _state.mesh.vert[lV1i];
+        vec3 const &lV2         = _state.mesh.vert[lV2i];
+        vec3 const &lV3         = _state.mesh.vert[lV3i];
+
+        REQUIRE(lBBox.min.x <= lV1.x, lErrors);
+        REQUIRE(lBBox.min.y <= lV1.y, lErrors);
+        REQUIRE(lBBox.min.z <= lV1.z, lErrors);
+        REQUIRE(lBBox.max.x >= lV1.x, lErrors);
+        REQUIRE(lBBox.max.y >= lV1.y, lErrors);
+        REQUIRE(lBBox.max.z >= lV1.z, lErrors);
+
+        REQUIRE(lBBox.min.x <= lV2.x, lErrors);
+        REQUIRE(lBBox.min.y <= lV2.y, lErrors);
+        REQUIRE(lBBox.min.z <= lV2.z, lErrors);
+        REQUIRE(lBBox.max.x >= lV2.x, lErrors);
+        REQUIRE(lBBox.max.y >= lV2.y, lErrors);
+        REQUIRE(lBBox.max.z >= lV2.z, lErrors);
+
+        REQUIRE(lBBox.min.x <= lV3.x, lErrors);
+        REQUIRE(lBBox.min.y <= lV3.y, lErrors);
+        REQUIRE(lBBox.min.z <= lV3.z, lErrors);
+        REQUIRE(lBBox.max.x >= lV3.x, lErrors);
+        REQUIRE(lBBox.max.y >= lV3.y, lErrors);
+        REQUIRE(lBBox.max.z >= lV3.z, lErrors);
+      }
+
+      if (lErrors != 0) { lTotalErros++; }
+    }
+  }
+
+  uint32_t lNotTraversed = 0;
+  for (size_t i = 0; i < lTraversed.size(); ++i) {
+    if (lTraversed[i] == 0) { lNotTraversed++; }
+  }
+
+  lTotalErros += lNotTraversed;
+
+  ERROR_IF(lNotTraversed, "{:<3} Orphan nodes in the BVH tree");
+  ERROR_IF(lTotalErros, "{:<3} Total BVH triangle errors");
+
+  return lTotalErros == 0 ? true : false;
+}
+
+
+
+ErrorCode Validate::runImpl(State &_state) {
+  uint32_t lErrors = 0;
+
+  if (!checkTree(_state)) { lErrors++; }
+  if (!checkBBoxes(_state)) { lErrors++; }
+  if (!checkTris(_state)) { lErrors++; }
+
+  return lErrors == 0 ? ErrorCode::OK : ErrorCode::BVH_ERROR;
+}

@@ -20,7 +20,7 @@
 #include "RendererBase.hpp"
 #include "Window.hpp"
 
-namespace BVHTest::camera {
+namespace BVHTest::misc {
 class Camera;
 }
 
@@ -65,8 +65,8 @@ class Viewer final : public base::Command {
     inline bool ok() const { return isInit; }
   } vGLFWInit;
 
-  void processInput(Window &_win, camera::Camera &_cam, uint32_t _time);
-  void keyCallback(Window &_win, base::State &_state, camera::Camera &_cam, int _key);
+  void processInput(Window &_win, misc::Camera &_cam, uint32_t _time);
+  void keyCallback(Window &_win, base::State &_state, misc::Camera &_cam, int _key);
 
   bool checkSetup(Window &_win, base::State &_state);
   void oglSetup();

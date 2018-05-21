@@ -20,7 +20,7 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
-namespace BVHTest::camera {
+namespace BVHTest::misc {
 
 class Camera : public base::CameraBase {
  public:
@@ -64,4 +64,4 @@ class Camera : public base::CameraBase {
   json toJSON() const override;
 };
 
-} // namespace BVHTest::camera
+} // namespace BVHTest::misc

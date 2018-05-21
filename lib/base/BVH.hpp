@@ -132,6 +132,7 @@ class BVH {
   inline BVHNode &siblingNode(BVHNode const &_node) { return bvh[sibling(_node)]; }
 
   inline size_t   size() const noexcept { return bvh.size(); }
+  inline bool     empty() const noexcept { return bvh.empty(); }
   inline void     resize(size_t _size) { bvh.resize(_size); }
   inline void     reserve(size_t _size) { bvh.reserve(_size); }
   inline BVHNode *data() { return bvh.data(); }

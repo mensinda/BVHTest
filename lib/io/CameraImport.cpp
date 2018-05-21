@@ -16,7 +16,7 @@
 
 #include "BVHTestCfg.hpp"
 #include "CameraImport.hpp"
-#include "camera/Camera.hpp"
+#include "misc/Camera.hpp"
 #include <fstream>
 
 #if __has_include(<filesystem>)
@@ -31,7 +31,7 @@ namespace fs = std::experimental::filesystem;
 
 using namespace std;
 using namespace BVHTest;
-using namespace BVHTest::camera;
+using namespace BVHTest::misc;
 using namespace BVHTest::base;
 using namespace BVHTest::IO;
 

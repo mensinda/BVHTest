@@ -20,16 +20,16 @@
 
 namespace BVHTest::tracer {
 
-class CPUTracer final : public TracerBase {
+class BruteForceTracer final : public TracerBase {
  private:
   base::Pixel trace(base::Ray &_ray, base::Mesh const &_mesh, base::BVH &_bvh);
 
  public:
-  CPUTracer() = default;
-  virtual ~CPUTracer();
+  BruteForceTracer() = default;
+  virtual ~BruteForceTracer();
 
-  inline std::string getName() const override { return "CPUTracer"; }
-  inline std::string getDesc() const override { return "stackless BVH CPU Ray tracer"; }
+  inline std::string getName() const override { return "bruteForce"; }
+  inline std::string getDesc() const override { return "brute force raytracing. Bring lots of patiens"; }
   base::ErrorCode    runImpl(base::State &_state) override;
 };
 

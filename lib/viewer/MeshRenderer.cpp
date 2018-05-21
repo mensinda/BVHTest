@@ -15,7 +15,7 @@
  */
 
 #include "MeshRenderer.hpp"
-#include "camera/Camera.hpp"
+#include "misc/Camera.hpp"
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <string>
@@ -24,7 +24,7 @@ using namespace std;
 using namespace BVHTest;
 using namespace BVHTest::view;
 using namespace BVHTest::base;
-using namespace BVHTest::camera;
+using namespace BVHTest::misc;
 
 struct VBOData {
   glm::vec3 vert;

@@ -29,6 +29,8 @@
 #include "io/ImportMesh.hpp"
 #include "io/Load.hpp"
 #include "io/WriteImage.hpp"
+#include "misc/Validate.hpp"
+#include "tracer/BruteForceTracer.hpp"
 #include "tracer/CPUTracer.hpp"
 #include "viewer/Viewer.hpp"
 #include "Enum2Str.hpp"
@@ -57,7 +59,9 @@ const vector<string> gCommandList = {"import",
                                      "wald07",
                                      "bittner13",
                                      "CPUTracer",
+                                     "bruteForce",
                                      "status",
+                                     "validate",
                                      "viewer"};
 
 // String command to object
@@ -75,7 +79,9 @@ Config::CMD_PTR fromString(string _s) {
     case "wald07"_h: return make_shared<builder::Wald07>();
     case "bittner13"_h: return make_shared<builder::Bittner13>();
     case "CPUTracer"_h: return make_shared<tracer::CPUTracer>();
+    case "bruteForce"_h: return make_shared<tracer::BruteForceTracer>();
     case "status"_h: return make_shared<base::StatusDump>();
+    case "validate"_h: return make_shared<misc::Validate>();
     case "viewer"_h: return make_shared<view::Viewer>();
   }
   return nullptr;
