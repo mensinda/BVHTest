@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#define GLM_ENABLE_EXPERIMENTAL
+
 #include "CPUTracer.hpp"
 #include <glm/gtx/intersect.hpp>
 #include <glm/gtx/normal.hpp>
@@ -52,7 +54,8 @@ inline uint64_t rdtsc() {
 CPUTracer::~CPUTracer() {}
 
 Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &_bvh) {
-  Pixel lRes = {121, 167, 229, 0, 0};
+  Pixel              lRes      = {121, 167, 229, 0, 0};
+  static const float lInfinity = numeric_limits<float>::infinity();
 
   /*
    * Algorithm from:
@@ -76,14 +79,14 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &_bvh) {
   __int128_t     lBitStack = 0;
   BVHNode const *lNode     = &_bvh[0];
 
-  Triangle lClosest        = {0, 0, 0};
-  float    lNearest        = numeric_limits<float>::infinity();
-  vec3     lBarycentricPos = {0.0f, 0.0f, 0.0f};
-  dvec3    lBarycentricTemp;
+  Triangle lClosest = {0, 0, 0};
+  float    lNearest = lInfinity;
+  dvec2    lBarycentricTemp;
 
-  float lMinLeft;
-  float lMinRight;
-  float lTemp;
+  float  lMinLeft;
+  float  lMinRight;
+  float  lTemp;
+  double lDistance;
 
   while (true) {
     if (!lNode->isLeaf()) {
@@ -109,19 +112,17 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &_bvh) {
       for (uint32_t i = 0; i < lNode->numFaces(); ++i) {
         Triangle const &lTri = _mesh.faces[lNode->beginFaces() + i];
 
-        bool lHit = intersectRayTriangle<dvec3>(_ray.getOrigin(),
-                                                _ray.getDirection(),
-                                                _mesh.vert[lTri.v1],
-                                                _mesh.vert[lTri.v2],
-                                                _mesh.vert[lTri.v3],
-                                                lBarycentricTemp);
+        bool lHit = intersectRayTriangle<double>(static_cast<dvec3 const &>(_ray.getOrigin()),
+                                                 static_cast<dvec3 const &>(_ray.getDirection()),
+                                                 static_cast<dvec3 const &>(_mesh.vert[lTri.v1]),
+                                                 static_cast<dvec3 const &>(_mesh.vert[lTri.v2]),
+                                                 static_cast<dvec3 const &>(_mesh.vert[lTri.v3]),
+                                                 lBarycentricTemp,
+                                                 lDistance);
 
-        // See https://github.com/g-truc/glm/issues/6#issuecomment-23149870 for lBaryPos.z usage
-        if (lHit && lBarycentricTemp.z < lNearest) {
-          lBarycentricPos   = lBarycentricTemp;
-          lNearest          = lBarycentricPos.z;
-          lBarycentricPos.z = 1.0f - lBarycentricPos.x - lBarycentricPos.y;
-          lClosest          = lTri;
+        if (lHit && lDistance < lNearest) {
+          lNearest = lDistance;
+          lClosest = lTri;
         }
       }
     }
@@ -139,18 +140,13 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &_bvh) {
 
 LABEL_END:
 
-  if (lNearest < numeric_limits<float>::infinity()) {
-    vec3  lV1       = _mesh.vert[lClosest.v1];
-    vec3  lV2       = _mesh.vert[lClosest.v2];
-    vec3  lV3       = _mesh.vert[lClosest.v3];
-    vec3  lNorm     = triangleNormal(lV1, lV2, lV3);
-    vec3  lHitPos   = lV1 * lBarycentricPos.x + lV2 * lBarycentricPos.y + lV3 * lBarycentricPos.z;
+  if (lNearest < lInfinity) {
+    vec3  lNorm     = triangleNormal(_mesh.vert[lClosest.v1], _mesh.vert[lClosest.v2], _mesh.vert[lClosest.v3]);
+    vec3  lHitPos   = _ray.getOrigin() + lNearest * _ray.getDirection();
     vec3  lLightDir = normalize(getLightLocation() - lHitPos);
     float lDiffuse  = std::max(1.0f + dot(lNorm, lLightDir), 0.0f);
 
-    lRes.r = static_cast<uint8_t>(lDiffuse * 127.0f);
-    lRes.g = static_cast<uint8_t>(lDiffuse * 127.0f);
-    lRes.b = static_cast<uint8_t>(lDiffuse * 127.0f);
+    lRes.r = lRes.g = lRes.b = static_cast<uint8_t>(lDiffuse * 127.0f);
   }
 
 #if USE_RDTSC
