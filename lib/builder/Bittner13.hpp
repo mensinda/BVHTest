@@ -17,13 +17,19 @@
 #pragma once
 
 #include "OptimizerBase.hpp"
+#include <tuple>
 
 namespace BVHTest::builder {
 
 class Bittner13 final : public OptimizerBase {
+ public:
+  typedef std::tuple<float, float> SumMin;
+
  private:
   uint32_t vMaxNumStepps = 500;
   float    vBatchPercent = 1.0f;
+
+  std::vector<SumMin> vSumAndMin;
 
   inline float directCost(base::BVHNode const &_l, base::BVHNode const &_x) {
     base::AABB lMerge = _l.bbox;
@@ -32,8 +38,9 @@ class Bittner13 final : public OptimizerBase {
   }
 
   uint32_t findNodeForReinsertion(uint32_t _n, base::BVH &_bvh);
-  void     reinsert(uint32_t _node, uint32_t _unused, base::BVH &_bvh);
-  void     fixBBOX(uint32_t _node, base::BVH &_bvh);
+  bool     reinsert(uint32_t _node, uint32_t _unused, base::BVH &_bvh);
+  void     fixTree(uint32_t _node, base::BVH &_bvh);
+  void     initSumAndMin(base::BVH &_bvh);
   float    mComb(uint32_t _n, base::BVH &_bvh);
 
  public:

@@ -14,20 +14,28 @@
  * limitations under the License.
  */
 
-#include "BVHTestCfg.hpp"
 #include "Bittner13.hpp"
 #include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <queue>
 #include <thread>
-#include <tuple>
 
 using namespace std;
 using namespace glm;
 using namespace BVHTest;
 using namespace BVHTest::builder;
 using namespace BVHTest::base;
+
+
+// Quality of life defines
+#define SUM_OF(x) get<0>(vSumAndMin[x])
+#define MIN_OF(x) get<1>(vSumAndMin[x])
+
+#define NODE _bvh[lNode]
+#define PARENT _bvh[NODE.parent]
+#define LEFT _bvh[NODE.left]
+#define RIGHT _bvh[NODE.right]
 
 Bittner13::~Bittner13() {}
 
@@ -36,7 +44,8 @@ void Bittner13::fromJSON(const json &_j) {
   vMaxNumStepps = _j.value("maxNumStepps", vMaxNumStepps);
   vBatchPercent = _j.value("batchPercent", vBatchPercent);
 
-  if (vBatchPercent <= 0.5f || vBatchPercent >= 75.0f) vBatchPercent = 1.0f;
+  if (vBatchPercent <= 0.1f) vBatchPercent = 0.1f;
+  if (vBatchPercent >= 75.0f) vBatchPercent = 75.0f;
 }
 
 json Bittner13::toJSON() const {
@@ -93,54 +102,50 @@ uint32_t Bittner13::findNodeForReinsertion(uint32_t _n, BVH &_bvh) {
   return lBestNodeIndex;
 }
 
-inline tuple<float, float, uint32_t> travNode(uint32_t _n, BVH &_bvh) {
-  BVHNode const &lNode   = _bvh[_n];
-  float          lNodeSA = lNode.bbox.surfaceArea();
-
-  if (lNode.isLeaf()) { return {lNodeSA, lNodeSA, 1}; }
-
-  auto [lMin, lSum, lNum] = travNode(lNode.left, _bvh);
-  auto [rMin, rSum, rNum] = travNode(lNode.right, _bvh);
-
-  return {min(lMin, rMin), lSum + rSum, lNum + rNum};
-}
-
 float Bittner13::mComb(uint32_t _n, BVH &_bvh) {
-  float lSum = 1.0f;
-  float lMin = 1.0f;
+  BVHNode &lNode   = _bvh[_n];
+  float    lNodeSA = lNode.surfaceArea;
 
-  BVHNode const &lNode   = _bvh[_n];
-  float          lNodeSA = lNode.bbox.surfaceArea();
+  if (lNode.isLeaf()) { return 0.0f; }
 
-  if (!lNode.isLeaf()) {
-    auto [lSumSA, lMinSA, lNumChilds] = travNode(_n, _bvh);
-
-    lSum = lNodeSA / ((1.0f / static_cast<float>(lNumChilds)) * lSumSA);
-    lMin = lMinSA;
-  }
+#if 0
+  float lSum = lNodeSA / (SUM_OF(_n) / static_cast<float>(lNode.numChildren));
+  float lMin = lNodeSA / MIN_OF(_n);
 
   return lSum * lMin * lNodeSA;
+#else
+  /*
+   * $ \frac{lNodeSA}{\frac{1}{lNode.numChildren} * SUM_OF(_n)} * \frac{lNodeSA}{MIN_OF(_n)} * lNodeSA $
+   *
+   * can be simplified to:
+   *
+   * $ \frac{ lNodeSA^3 * lNode.numChildren }{ SUM_OF(_n) * MIN_OF(_n) } $
+   */
+  return (lNodeSA * lNodeSA * lNodeSA * static_cast<float>(lNode.numChildren)) / (SUM_OF(_n) * MIN_OF(_n));
+#endif
 }
 
 
-void Bittner13::fixBBOX(uint32_t _node, BVH &_bvh) {
-  uint32_t lCurrNode = _node;
-  while (lCurrNode != 0) {
-    BVHNode &lCurr    = _bvh[lCurrNode];
-    AABB     lNewAABB = _bvh[lCurr.left].bbox;
-    lNewAABB.mergeWith(_bvh[lCurr.right].bbox);
-    lCurr.bbox = lNewAABB;
-    lCurrNode  = lCurr.parent;
+void Bittner13::fixTree(uint32_t _node, BVH &_bvh) {
+  uint32_t lNode = _node;
+  while (true) {
+    AABB lNewAABB = LEFT.bbox;
+    lNewAABB.mergeWith(RIGHT.bbox);
+    NODE.bbox         = lNewAABB;
+    NODE.surfaceArea  = lNewAABB.surfaceArea();
+    NODE.numChildren  = LEFT.numChildren + RIGHT.numChildren + 2;
+    vSumAndMin[lNode] = {SUM_OF(NODE.left) + SUM_OF(NODE.right), min(MIN_OF(NODE.left), MIN_OF(NODE.right))};
+
+    if (lNode == 0) { return; } // We processed the root ==> everything is done
+
+    lNode = NODE.parent;
   }
 }
 
 
-void Bittner13::reinsert(uint32_t _node, uint32_t _unused, BVH &_bvh) {
+bool Bittner13::reinsert(uint32_t _node, uint32_t _unused, BVH &_bvh) {
   uint32_t lBestIndex = findNodeForReinsertion(_node, _bvh);
-  if (lBestIndex == 0) {
-    getLogger()->error("Bittner13: Can not reinsert at the root!");
-    return;
-  }
+  if (lBestIndex == 0) { return false; }
 
   BVHNode &lNode      = _bvh[_node];
   BVHNode &lBest      = _bvh[lBestIndex];
@@ -167,29 +172,58 @@ void Bittner13::reinsert(uint32_t _node, uint32_t _unused, BVH &_bvh) {
   lNode.parent = _unused;
   lNode.isLeft = FALSE;
 
-  fixBBOX(_unused, _bvh);
+  fixTree(_unused, _bvh);
+  return true;
+}
+
+void Bittner13::initSumAndMin(BVH &_bvh) {
+  vSumAndMin.resize(_bvh.size(), {numeric_limits<float>::infinity(), numeric_limits<float>::infinity()});
+  if (_bvh.empty()) { return; }
+
+  __uint128_t lBitStack = 0;
+  uint32_t    lNode     = 0;
+
+  while (true) {
+    while (!NODE.isLeaf()) {
+      lBitStack <<= 1;
+      lBitStack |= 1;
+      lNode = NODE.left;
+    }
+
+    // Leaf
+    vSumAndMin[lNode] = {0.0f, NODE.surfaceArea};
+
+    // Backtrack if left and right children are processed
+    while ((lBitStack & 1) == 0) {
+      if (lBitStack == 0 && lNode == 0) { return; } // We are done
+      lNode             = NODE.parent;
+      vSumAndMin[lNode] = {SUM_OF(NODE.left) + SUM_OF(NODE.right), min(MIN_OF(NODE.left), MIN_OF(NODE.right))};
+      lBitStack >>= 1;
+    }
+
+    lNode = PARENT.right;
+    lBitStack ^= 1;
+  }
 }
 
 
 ErrorCode Bittner13::runImpl(State &_state) {
-  auto                           lLogger = getLogger();
   typedef tuple<uint32_t, float> TUP;
   vector<TUP>                    lTodoList;
   lTodoList.resize(_state.bvh.size());
+
+  initSumAndMin(_state.bvh);
 
   uint32_t lNumNodes = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
   auto     lComp     = [](TUP const &_l, TUP const &_r) -> bool { return get<1>(_l) > get<1>(_r); };
 
   for (uint32_t i = 0; i < vMaxNumStepps; ++i) {
-    //     lLogger->info("RUN: {}", i);
-    cout << fmt::format("\x1b[2K\x1b[1GProgress: {}%",
-                        static_cast<int>((static_cast<float>(i) / vMaxNumStepps) * 100.0f))
-         << flush;
+    cout << "\x1b[2K\x1b[1GProgress: " << (int)(((float)i / vMaxNumStepps) * 100.0f) << "%" << flush;
 
 // Select nodes to reinsert
 #pragma omp parallel for
     for (uint32_t j = 0; j < _state.bvh.size(); ++j) {
-      float lCost  = _state.bvh[j].isLeaf() ? 0 : mComb(j, _state.bvh);
+      float lCost  = mComb(j, _state.bvh);
       lTodoList[j] = {j, lCost};
     }
 
@@ -232,18 +266,21 @@ ErrorCode Bittner13::runImpl(State &_state) {
       }
 
       // update Bounding Boxes
-      fixBBOX(lGrandParentIndex, _state.bvh);
+      fixTree(lGrandParentIndex, _state.bvh);
 
       // Insert nodes
       uint32_t lFirstIndex  = lLeftSA > lRightSA ? lNode.left : lNode.right;
       uint32_t lSecondIndex = lLeftSA <= lRightSA ? lNode.left : lNode.right;
 
-      reinsert(lFirstIndex, lNodeIndex, _state.bvh);
-      reinsert(lSecondIndex, lParentIndex, _state.bvh);
+      if (!reinsert(lFirstIndex, lNodeIndex, _state.bvh)) { return ErrorCode::BVH_ERROR; }
+      if (!reinsert(lSecondIndex, lParentIndex, _state.bvh)) { return ErrorCode::BVH_ERROR; }
     }
   }
 
   cout << "\x1b[2K\x1b[1G" << flush;
+  _state.bvh.fixLevels();
+
+  vector<SumMin>().swap(vSumAndMin); // Clear memory of vSumAndMin
 
   return ErrorCode::OK;
 }
