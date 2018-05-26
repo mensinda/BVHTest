@@ -105,7 +105,7 @@ struct alignas(16) BVHNode {
   uint32_t unused16BitInt : 16; // Find some use for this
   uint32_t level : 8;           // Tree height of the current node
 
-  float unusedFloat;
+  float surfaceArea; // TODO: Find a better use for these 4 Byte
 
   inline bool     isLeaf() const noexcept { return numChildren == 0; }
   inline uint32_t beginFaces() const noexcept { return left; }
@@ -155,7 +155,7 @@ class BVH {
         _isLeft ? TRUE : FALSE, // isLeft
         0,                      // unused16BitInt
         lLevel,                 // treeHeight
-        0.0f                    // unusedFloat
+        _bbox.surfaceArea()     // surfaceArea
     });
     return bvh.size() - 1;
   }
@@ -173,7 +173,7 @@ class BVH {
         _isLeft ? TRUE : FALSE, // isLeft
         0,                      // unused16BitInt
         lLevel,                 // treeHeight
-        0.0f                    // unusedFloat
+        _bbox.surfaceArea()     // surfaceArea
     });
     return bvh.size() - 1;
   }
@@ -181,6 +181,7 @@ class BVH {
 
   float calcSAH(float _cInner = 1.2f, float _cLeaf = 1.0f);
   void  fixLevels();
+  void  fixSurfaceAreas();
 };
 
 } // namespace BVHTest::base

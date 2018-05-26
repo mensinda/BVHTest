@@ -114,6 +114,7 @@ BuilderBase::BuildRes BuilderBase::build(BuilderBase::ITER _begin,
     lNode.numChildren = 2 + _bvh[lID1].numChildren + _bvh[lID2].numChildren;
     lNode.left        = lID1;
     lNode.right       = lID2;
+    lNode.surfaceArea = lNodeBBox.surfaceArea();
   }
 
   return {lNewNode, lNodeBBox};

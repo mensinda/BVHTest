@@ -126,6 +126,7 @@ bool Validate::checkBBoxes(State &_state) {
   uint32_t lTotalErros = 0;
   BVH &    lBVH        = _state.bvh;
 
+#pragma omp parallel for
   for (uint32_t lNode = 0; lNode < lBVH.size(); ++lNode) {
     if (!NODE.isLeaf()) {
       uint32_t lErrors = 0;
@@ -160,6 +161,7 @@ bool Validate::checkBBoxesStrict(State &_state) {
   uint32_t lTotalErros = 0;
   BVH &    lBVH        = _state.bvh;
 
+#pragma omp parallel for
   for (uint32_t lNode = 0; lNode < lBVH.size(); ++lNode) {
     if (!NODE.isLeaf()) {
       uint32_t lErrors = 0;
@@ -183,6 +185,19 @@ bool Validate::checkBBoxesStrict(State &_state) {
   return lTotalErros == 0 ? true : false;
 }
 
+bool Validate::checkSurfaceArea(State &_state) {
+  uint32_t lTotalErros = 0;
+  BVH &    lBVH        = _state.bvh;
+
+#pragma omp parallel for
+  for (uint32_t lNode = 0; lNode < lBVH.size(); ++lNode) {
+    REQUIRE(NODE.surfaceArea == NODE.bbox.surfaceArea(), lTotalErros);
+  }
+
+  ERROR_IF(lTotalErros, "{:<3} wrong pre-calculated surface areas");
+
+  return lTotalErros == 0 ? true : false;
+}
 
 
 bool Validate::checkTris(State &_state) {
@@ -192,6 +207,7 @@ bool Validate::checkTris(State &_state) {
   vector<uint16_t> lTraversed;
   lTraversed.resize(_state.mesh.faces.size(), 0);
 
+#pragma omp parallel for
   for (uint32_t lNode = 0; lNode < lBVH.size(); ++lNode) {
     if (NODE.isLeaf()) {
       uint32_t lErrors = 0;
@@ -253,6 +269,7 @@ ErrorCode Validate::runImpl(State &_state) {
   if (!checkTree(_state)) { lErrors++; }
   if (!checkBBoxes(_state)) { lErrors++; }
   if (!checkBBoxesStrict(_state)) { lErrors++; }
+  if (!checkSurfaceArea(_state)) { lErrors++; }
   if (!checkTris(_state)) { lErrors++; }
 
   return lErrors == 0 ? ErrorCode::OK : ErrorCode::BVH_ERROR;

@@ -58,7 +58,7 @@ uint32_t Bittner13::findNodeForReinsertion(uint32_t _n, BVH &_bvh) {
   float          lBestCost      = numeric_limits<float>::infinity();
   uint32_t       lBestNodeIndex = 0;
   BVHNode const &lNode          = _bvh[_n];
-  float          lSArea         = lNode.bbox.surfaceArea();
+  float          lSArea         = lNode.surfaceArea;
   auto           lComp          = [](T1 const &_l, T1 const &_r) -> bool { return get<1>(_l) > get<1>(_r); };
   priority_queue<T1, vector<T1>, decltype(lComp)> lPQ(lComp);
 
@@ -81,8 +81,8 @@ uint32_t Bittner13::findNodeForReinsertion(uint32_t _n, BVH &_bvh) {
       lBestNodeIndex = lCurrNodeIndex;
     }
 
-    float lNewInduced = lTotalCost - lCurrNode.bbox.surfaceArea();
-    if (lNewInduced + lSArea < lBestCost) {
+    float lNewInduced = lTotalCost - lCurrNode.surfaceArea;
+    if ((lNewInduced + lSArea) < lBestCost) {
       if (!lCurrNode.isLeaf()) {
         lPQ.push({lCurrNode.left, lNewInduced});
         lPQ.push({lCurrNode.right, lNewInduced});
@@ -214,8 +214,8 @@ ErrorCode Bittner13::runImpl(State &_state) {
       // FREE LIST:   lNode, lParent
       // INSERT LIST: lLeft, lRight
 
-      float lLeftSA  = lLeft.bbox.surfaceArea();
-      float lRightSA = lRight.bbox.surfaceArea();
+      float lLeftSA  = lLeft.surfaceArea;
+      float lRightSA = lRight.surfaceArea;
 
 
       if (lParentIndex == 0) { continue; } // Can not remove node with this algorithm

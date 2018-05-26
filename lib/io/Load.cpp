@@ -94,6 +94,8 @@ ErrorCode Load::loadVers2(State &_state, json &_cfg, fstream &_binFile) {
     return ErrorCode::IO_ERROR;
   }
 
+  lComp = nullptr; // free memory
+
   lCheckSumTemp = lzo_adler32(0, nullptr, 0);
   lCheckSumTemp = lzo_adler32(lCheckSumTemp, lData.get(), lDataSize);
 

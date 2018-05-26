@@ -126,6 +126,8 @@ ErrorCode BVHImport::runImpl(State &_state) {
     return ErrorCode::IO_ERROR;
   }
 
+  lComp = nullptr; // Free memory
+
   lCheckSumTemp = lzo_adler32(0, nullptr, 0);
   lCheckSumTemp = lzo_adler32(lCheckSumTemp, lData.get(), lDataSize);
 
