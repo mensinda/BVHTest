@@ -117,7 +117,8 @@ struct alignas(16) BVHNode {
 class BVH {
  private:
   std::vector<BVHNode> bvh;
-  uint16_t             vMaxLevel = 0;
+  uint32_t             vRootIndex = 0;
+  uint16_t             vMaxLevel  = 0;
 
  public:
   inline uint32_t sibling(uint32_t _node) const {
@@ -137,11 +138,14 @@ class BVH {
   inline void     reserve(size_t _size) { bvh.reserve(_size); }
   inline BVHNode *data() { return bvh.data(); }
   inline char *   dataBin() { return reinterpret_cast<char *>(bvh.data()); }
+  inline uint32_t root() const noexcept { return vRootIndex; }
+  inline BVHNode &rootNode() { return bvh[vRootIndex]; }
   inline BVHNode &at(uint32_t _node) { return bvh.at(_node); }
   inline BVHNode &operator[](uint32_t _node) { return bvh[_node]; }
   inline uint32_t nextNodeIndex() const noexcept { return static_cast<uint32_t>(bvh.size()); }
   inline uint16_t maxLevel() const noexcept { return vMaxLevel; }
-  inline void     setMaxLevel(uint16_t _level) { vMaxLevel = _level; }
+  inline void     setMaxLevel(uint16_t _level) noexcept { vMaxLevel = _level; }
+  inline void     setNewRoot(uint32_t _root) noexcept { vRootIndex = _root; }
 
   inline uint32_t addLeaf(AABB const &_bbox, uint32_t _parent, uint32_t _firstFace, uint32_t _numFaces, bool _isLeft) {
     uint16_t lLevel = bvh.empty() ? 0 : bvh[_parent].level + 1;

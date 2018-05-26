@@ -175,7 +175,7 @@ BVHRenderer::BVHRenderer(BVH &_bvh) {
   lVert.resize(_bvh.size() * 8);
   lIndex.resize(_bvh.size() * 12);
 
-  uint32_t lNumGenerated = processNode(_bvh, 0, 0, lVert, lIndex);
+  uint32_t lNumGenerated = processNode(_bvh, _bvh.root(), 0, lVert, lIndex);
 
   lVert.resize(lNumGenerated * 8);
   lIndex.resize(lNumGenerated * 12);

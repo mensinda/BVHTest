@@ -46,8 +46,8 @@ bool Validate::checkTree(State &_state) {
   __uint128_t lBitStack = 0;
   uint16_t    lLevel    = 0;
   uint16_t    lMaxLevel = 0;
-  uint32_t    lNode     = 0;
-  uint32_t    lLastNode = 0;
+  uint32_t    lNode     = lBVH.root();
+  uint32_t    lLastNode = lBVH.root();
 
   uint32_t lTotalErros           = 0;
   uint32_t lLevelErrors          = 0;
@@ -62,7 +62,7 @@ bool Validate::checkTree(State &_state) {
   while (true) {
     lTraversed[lNode] = 1;
     REQUIRE(NODE.level == lLevel, lLevelErrors);
-    if (lNode != 0) {
+    if (lNode != lBVH.root()) {
       if (NODE.isLeftChild()) { REQUIRE(PARENT.left == lNode, lLeftRightErrors); }
       if (NODE.isRightChild()) { REQUIRE(PARENT.right == lNode, lLeftRightErrors); }
     }

@@ -44,7 +44,7 @@ void Bittner13::fromJSON(const json &_j) {
   vMaxNumStepps = _j.value("maxNumStepps", vMaxNumStepps);
   vBatchPercent = _j.value("batchPercent", vBatchPercent);
 
-  if (vBatchPercent <= 0.1f) vBatchPercent = 0.1f;
+  if (vBatchPercent <= 0.01f) vBatchPercent = 0.01f;
   if (vBatchPercent >= 75.0f) vBatchPercent = 75.0f;
 }
 
@@ -71,7 +71,7 @@ uint32_t Bittner13::findNodeForReinsertion(uint32_t _n, BVH &_bvh) {
   auto           lComp          = [](T1 const &_l, T1 const &_r) -> bool { return get<1>(_l) > get<1>(_r); };
   priority_queue<T1, vector<T1>, decltype(lComp)> lPQ(lComp);
 
-  lPQ.push({0, 0.0f});
+  lPQ.push({_bvh.root(), 0.0f});
   while (!lPQ.empty()) {
     auto [lCurrNodeIndex, lCurrCost] = lPQ.top();
     BVHNode const &lCurrNode         = _bvh[lCurrNodeIndex];
@@ -103,8 +103,8 @@ uint32_t Bittner13::findNodeForReinsertion(uint32_t _n, BVH &_bvh) {
 }
 
 float Bittner13::mComb(uint32_t _n, BVH &_bvh) {
-  BVHNode &lNode   = _bvh[_n];
-  float    lNodeSA = lNode.surfaceArea;
+  BVHNode const &lNode   = _bvh[_n];
+  float          lNodeSA = lNode.surfaceArea;
 
   if (lNode.isLeaf()) { return 0.0f; }
 
@@ -136,7 +136,7 @@ void Bittner13::fixTree(uint32_t _node, BVH &_bvh) {
     NODE.numChildren  = LEFT.numChildren + RIGHT.numChildren + 2;
     vSumAndMin[lNode] = {SUM_OF(NODE.left) + SUM_OF(NODE.right), min(MIN_OF(NODE.left), MIN_OF(NODE.right))};
 
-    if (lNode == 0) { return; } // We processed the root ==> everything is done
+    if (lNode == _bvh.root()) { return; } // We processed the root ==> everything is done
 
     lNode = NODE.parent;
   }
@@ -145,7 +145,6 @@ void Bittner13::fixTree(uint32_t _node, BVH &_bvh) {
 
 bool Bittner13::reinsert(uint32_t _node, uint32_t _unused, BVH &_bvh) {
   uint32_t lBestIndex = findNodeForReinsertion(_node, _bvh);
-  if (lBestIndex == 0) { return false; }
 
   BVHNode &lNode      = _bvh[_node];
   BVHNode &lBest      = _bvh[lBestIndex];
@@ -153,13 +152,19 @@ bool Bittner13::reinsert(uint32_t _node, uint32_t _unused, BVH &_bvh) {
   uint32_t lRootIndex = lBest.parent;
   BVHNode &lRoot      = _bvh[lRootIndex];
 
-  // Insert the unused node
-  if (lBest.isLeftChild()) {
-    lRoot.left     = _unused;
-    lUnused.isLeft = TRUE;
+  if (lBestIndex == _bvh.root()) {
+    // Adjust root if needed
+    _bvh.setNewRoot(_unused);
+    lRootIndex = _unused;
   } else {
-    lRoot.right    = _unused;
-    lUnused.isLeft = FALSE;
+    // Insert the unused node
+    if (lBest.isLeftChild()) {
+      lRoot.left     = _unused;
+      lUnused.isLeft = TRUE;
+    } else {
+      lRoot.right    = _unused;
+      lUnused.isLeft = FALSE;
+    }
   }
 
   // Insert the other nodes
@@ -181,7 +186,7 @@ void Bittner13::initSumAndMin(BVH &_bvh) {
   if (_bvh.empty()) { return; }
 
   __uint128_t lBitStack = 0;
-  uint32_t    lNode     = 0;
+  uint32_t    lNode     = _bvh.root();
 
   while (true) {
     while (!NODE.isLeaf()) {
@@ -191,7 +196,7 @@ void Bittner13::initSumAndMin(BVH &_bvh) {
     }
 
     // Leaf
-    vSumAndMin[lNode] = {0.0f, NODE.surfaceArea};
+    vSumAndMin[lNode] = {NODE.surfaceArea, NODE.surfaceArea};
 
     // Backtrack if left and right children are processed
     while ((lBitStack & 1) == 0) {
@@ -232,7 +237,7 @@ ErrorCode Bittner13::runImpl(State &_state) {
     // Reinsert nodes
     for (uint32_t j = 0; j < lNumNodes; ++j) {
       auto [lNodeIndex, _] = lTodoList[j];
-      if (_state.bvh[lNodeIndex].isLeaf() || lNodeIndex == 0) continue; // Theoretically should never happen
+      if (_state.bvh[lNodeIndex].isLeaf() || lNodeIndex == _state.bvh.root()) { continue; }
 
       BVHNode &lNode             = _state.bvh[lNodeIndex];
       uint32_t lSiblingIndex     = _state.bvh.sibling(lNode);
@@ -252,7 +257,7 @@ ErrorCode Bittner13::runImpl(State &_state) {
       float lRightSA = lRight.surfaceArea;
 
 
-      if (lParentIndex == 0) { continue; } // Can not remove node with this algorithm
+      if (lParentIndex == _state.bvh.root()) { continue; } // Can not remove node with this algorithm
 
       // Remove nodes
       if (lParent.isLeftChild()) {

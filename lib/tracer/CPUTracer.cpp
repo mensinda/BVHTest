@@ -77,7 +77,7 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &_bvh) {
 #endif
 
   __int128_t     lBitStack = 0;
-  BVHNode const *lNode     = &_bvh[0];
+  BVHNode const *lNode     = &_bvh.rootNode();
 
   Triangle lClosest = {0, 0, 0};
   float    lNearest = lInfinity;
