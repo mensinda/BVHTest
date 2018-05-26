@@ -156,6 +156,34 @@ bool Validate::checkBBoxes(State &_state) {
   return lTotalErros == 0 ? true : false;
 }
 
+bool Validate::checkBBoxesStrict(State &_state) {
+  uint32_t lTotalErros = 0;
+  BVH &    lBVH        = _state.bvh;
+
+  for (uint32_t lNode = 0; lNode < lBVH.size(); ++lNode) {
+    if (!NODE.isLeaf()) {
+      uint32_t lErrors = 0;
+      AABB     lBBox   = NODE.bbox;
+      AABB     lLBBox  = LEFT.bbox;
+      AABB     lRBBox  = RIGHT.bbox;
+
+      REQUIRE(lBBox.min.x == min(lLBBox.min.x, lRBBox.min.x), lErrors);
+      REQUIRE(lBBox.min.y == min(lLBBox.min.y, lRBBox.min.y), lErrors);
+      REQUIRE(lBBox.min.z == min(lLBBox.min.z, lRBBox.min.z), lErrors);
+      REQUIRE(lBBox.max.x == max(lLBBox.max.x, lRBBox.max.x), lErrors);
+      REQUIRE(lBBox.max.y == max(lLBBox.max.y, lRBBox.max.y), lErrors);
+      REQUIRE(lBBox.max.z == max(lLBBox.max.z, lRBBox.max.z), lErrors)
+
+      if (lErrors != 0) { lTotalErros++; }
+    }
+  }
+
+  ERROR_IF(lTotalErros, "{:<3} invalid bounding boxes (strict)")
+
+  return lTotalErros == 0 ? true : false;
+}
+
+
 
 bool Validate::checkTris(State &_state) {
   uint32_t lTotalErros = 0;
@@ -224,6 +252,7 @@ ErrorCode Validate::runImpl(State &_state) {
 
   if (!checkTree(_state)) { lErrors++; }
   if (!checkBBoxes(_state)) { lErrors++; }
+  if (!checkBBoxesStrict(_state)) { lErrors++; }
   if (!checkTris(_state)) { lErrors++; }
 
   return lErrors == 0 ? ErrorCode::OK : ErrorCode::BVH_ERROR;

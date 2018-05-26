@@ -24,6 +24,7 @@ class Validate final : public base::Command {
  private:
   bool checkTree(base::State &_state);
   bool checkBBoxes(base::State &_state);
+  bool checkBBoxesStrict(base::State &_state);
   bool checkTris(base::State &_state);
 
  public:
