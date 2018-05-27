@@ -10,7 +10,7 @@ project( 'BVHTest', ['cpp', 'c'],
   version : '0.0.1',
   license : 'Apache 2')
 
-incDirs = include_directories('external', 'external/spdlog/include', 'lib', '.', './lib')
+incDirs = include_directories('external', 'external/fmt', 'external/spdlog/include', 'lib', '.', './lib')
 assimp  = dependency('assimp',  required: true, version: '>=4.1.0')
 glfw    = dependency('glfw3',   required: true, version: '>=3.1.0')
 GL      = dependency('GL',      required: true, version: '>=3.3')

@@ -17,7 +17,7 @@
 #include "Bittner13.hpp"
 #include <algorithm>
 #include <chrono>
-#include <iostream>
+#include <fmt/format.h>
 #include <queue>
 #include <thread>
 
@@ -108,12 +108,6 @@ float Bittner13::mComb(uint32_t _n, BVH &_bvh) {
 
   if (lNode.isLeaf()) { return 0.0f; }
 
-#if 0
-  float lSum = lNodeSA / (SUM_OF(_n) / static_cast<float>(lNode.numChildren));
-  float lMin = lNodeSA / MIN_OF(_n);
-
-  return lSum * lMin * lNodeSA;
-#else
   /*
    * $ \frac{lNodeSA}{\frac{1}{lNode.numChildren} * SUM_OF(_n)} * \frac{lNodeSA}{MIN_OF(_n)} * lNodeSA $
    *
@@ -122,7 +116,6 @@ float Bittner13::mComb(uint32_t _n, BVH &_bvh) {
    * $ \frac{ lNodeSA^3 * lNode.numChildren }{ SUM_OF(_n) * MIN_OF(_n) } $
    */
   return (lNodeSA * lNodeSA * lNodeSA * static_cast<float>(lNode.numChildren)) / (SUM_OF(_n) * MIN_OF(_n));
-#endif
 }
 
 
@@ -223,7 +216,7 @@ ErrorCode Bittner13::runImpl(State &_state) {
   auto     lComp     = [](TUP const &_l, TUP const &_r) -> bool { return get<1>(_l) > get<1>(_r); };
 
   for (uint32_t i = 0; i < vMaxNumStepps; ++i) {
-    cout << "\x1b[2K\x1b[1GProgress: " << (int)(((float)i / vMaxNumStepps) * 100.0f) << "%" << flush;
+    PROGRESS(fmt::format("Stepp {:<3}; SAH: {:<6}", i, _state.bvh.calcSAH()), i, vMaxNumStepps - 1);
 
 // Select nodes to reinsert
 #pragma omp parallel for
@@ -282,7 +275,6 @@ ErrorCode Bittner13::runImpl(State &_state) {
     }
   }
 
-  cout << "\x1b[2K\x1b[1G" << flush;
   _state.bvh.fixLevels();
 
   vector<SumMin>().swap(vSumAndMin); // Clear memory of vSumAndMin

@@ -164,7 +164,12 @@ ErrorCode WriteImage::runImpl(State &_state) {
   uint32_t lMaxInter = lAllInter[lOff];
   uint32_t lMaxRTime = lAllRTime[lOff];
 
+  uint32_t lCounter = 0;
+
   for (auto &i : _state.work) {
+    PROGRESS("Writing Image " + to_string(lCounter), lCounter, _state.work.size() - 1);
+    lCounter++;
+
     if (i.img.pixels.empty() || i.img.width == 0 || i.img.height == 0) { continue; }
 
     fs::path lColorPath = lOutDir / (i.img.name + "_color.png");

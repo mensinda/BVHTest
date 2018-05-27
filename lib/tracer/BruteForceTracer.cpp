@@ -137,6 +137,7 @@ ErrorCode BruteForceTracer::runImpl(State &_state) {
 
   // Raytrace
   for (size_t i = lOffset; i < _state.work.size(); ++i) {
+    PROGRESS("Tracing Image: " + to_string(i - lOffset), i - lOffset, _state.work.size() - lOffset - 1);
     auto &lCurr  = _state.work[i];
     auto  lStart = high_resolution_clock::now();
 

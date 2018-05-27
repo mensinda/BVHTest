@@ -19,6 +19,14 @@
 #include "Configurable.hpp"
 #include "State.hpp"
 
+#define ENABLE_PROGRESS_BAR 1
+
+#if ENABLE_PROGRESS_BAR
+#  define PROGRESS(...) progress(__VA_ARGS__)
+#else
+#  define PROGRESS(...)
+#endif
+
 namespace BVHTest::base {
 
 enum class ErrorCode {
@@ -33,6 +41,9 @@ enum class ErrorCode {
 class Command : public Configurable {
  protected:
   virtual ErrorCode runImpl(State &_state) = 0;
+
+  void progress(std::string _str, float _val);
+  void progress(std::string _str, uint32_t _curr, uint32_t _max);
 
  public:
   Command() = default;
