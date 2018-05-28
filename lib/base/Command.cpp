@@ -75,7 +75,7 @@ void Command::progress(std::string _str, float _val) {
   lWidth = ws.ws_col;
 #endif
 
-  lWidth -= 38;
+  lWidth -= 58;
   uint32_t lPWidth = static_cast<uint32_t>(_val * lWidth);
   uint32_t lVal    = static_cast<uint32_t>(_val * 100);
   string   lFMT;
@@ -86,7 +86,7 @@ void Command::progress(std::string _str, float _val) {
   } else {
     lFMT = fmt::format("[{{0:#>{}}}{{1: >{}}}]", lPWidth, lWidth - lPWidth);
   }
-  fmt::print("\x1b[2K\x1b[1G\x1b[1m{2:<30}" + lFMT + " {3:>3}%\x1b[0m", "", "", _str, lVal);
+  fmt::print("\x1b[2K\x1b[1G\x1b[1m{2:<50}" + lFMT + " {3:>3}%\x1b[0m", "", "", _str, lVal);
   fflush(stdout);
 }
 

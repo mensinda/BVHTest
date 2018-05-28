@@ -23,11 +23,15 @@ namespace BVHTest::builder {
 
 class Bittner13 final : public OptimizerBase {
  public:
-  typedef std::tuple<float, float> SumMin;
+  typedef std::tuple<float, float>                                                         SumMin;
+  typedef std::tuple<bool, std::tuple<uint32_t, uint32_t>, std::tuple<uint32_t, uint32_t>> RM_RES;
 
  private:
-  uint32_t vMaxNumStepps = 500;
-  float    vBatchPercent = 1.0f;
+  uint32_t vMaxNumStepps     = 500;
+  float    vBatchPercent     = 1.0f;
+  bool     vRandom           = false;
+  bool     vSortBatch        = true;
+  bool     vStrictSequential = false;
 
   std::vector<SumMin> vSumAndMin;
 
@@ -38,10 +42,13 @@ class Bittner13 final : public OptimizerBase {
   }
 
   uint32_t findNodeForReinsertion(uint32_t _n, base::BVH &_bvh);
-  bool     reinsert(uint32_t _node, uint32_t _unused, base::BVH &_bvh);
+  RM_RES   removeNode(uint32_t _node, base::BVH &_bvh);
+  void     reinsert(uint32_t _node, uint32_t _unused, base::BVH &_bvh);
   void     fixTree(uint32_t _node, base::BVH &_bvh);
   void     initSumAndMin(base::BVH &_bvh);
-  float    mComb(uint32_t _n, base::BVH &_bvh);
+
+  base::ErrorCode runMetric(base::State &_state);
+  base::ErrorCode runRandom(base::State &_state);
 
  public:
   Bittner13() = default;
