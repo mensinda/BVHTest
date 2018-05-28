@@ -267,8 +267,6 @@ ErrorCode Bittner13::runMetric(State &_state) {
 
     OMP_fi lWorstNode = {0.0f, 0};
 
-    initSumAndMin(_state.bvh);
-
     // Select nodes to reinsert
 #pragma omp parallel for reduction(maxValF : lWorstNode)
     for (uint32_t j = 0; j < _state.bvh.size(); ++j) {
