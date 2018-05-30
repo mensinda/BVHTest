@@ -19,6 +19,7 @@
 #include "base/StatusDump.hpp"
 #include "base/StringHash.hpp"
 #include "builder/Bittner13.hpp"
+#include "builder/Bittner13Par.hpp"
 #include "builder/Median.hpp"
 #include "builder/Wald07.hpp"
 #include "io/BVHExport.hpp"
@@ -58,6 +59,7 @@ const vector<string> gCommandList = {"import",
                                      "median",
                                      "wald07",
                                      "bittner13",
+                                     "bittner13Par",
                                      "CPUTracer",
                                      "bruteForce",
                                      "status",
@@ -78,6 +80,7 @@ Config::CMD_PTR fromString(string _s) {
     case "median"_h: return make_shared<builder::Median>();
     case "wald07"_h: return make_shared<builder::Wald07>();
     case "bittner13"_h: return make_shared<builder::Bittner13>();
+    case "bittner13Par"_h: return make_shared<builder::Bittner13Par>();
     case "CPUTracer"_h: return make_shared<tracer::CPUTracer>();
     case "bruteForce"_h: return make_shared<tracer::BruteForceTracer>();
     case "status"_h: return make_shared<base::StatusDump>();
@@ -108,7 +111,7 @@ int list() {
       return 1;
     }
 
-    cout << "  - {:<10} [{:^10}] -- {}"_format(i, toStr(lCmd->getType()), lCmd->getDesc()) << endl;
+    cout << "  - {:<16} [{:^10}] -- {}"_format(i, toStr(lCmd->getType()), lCmd->getDesc()) << endl;
   }
   return 0;
 }

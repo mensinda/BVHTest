@@ -35,7 +35,7 @@ Command::~Command() {}
 ErrorCode Command::run(State &_state) {
   auto lLogger = getLogger();
   auto lName   = getName();
-  lLogger->info("Running:  [{:^10}] command {:<10} -- {}", toStr(getType()), lName, getDesc());
+  lLogger->info("Running:  [{:^10}] command {:<16} -- {}", toStr(getType()), lName, getDesc());
 
   if ((_state.commandsRun & getRequiredCommands()) != getRequiredCommands()) {
     lLogger->error("Command {} has unmet requirements: Required: {}", lName);

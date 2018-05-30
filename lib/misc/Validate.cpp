@@ -113,7 +113,7 @@ END_LABEL:
   ERROR_IF(lNotTraversed, "{:<3} Orphan nodes in the BVH tree");
 
   if (lMaxLevel != lBVH.maxLevel()) {
-    getLogger()->error("Wrong max level: {} but true max level is {}", lMaxLevel, lBVH.maxLevel());
+    getLogger()->error("Wrong max level: {} but true max level is {}", lBVH.maxLevel(), lMaxLevel);
     lTotalErros++;
   }
 

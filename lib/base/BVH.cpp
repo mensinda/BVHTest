@@ -43,6 +43,8 @@ void BVH::fixLevels() {
   uint16_t    lLevel    = 0;
   BVHNode *   lNode     = &rootNode();
 
+  vMaxLevel = 0;
+
   while (true) {
     lNode->level = lLevel;
     if (!lNode->isLeaf()) {

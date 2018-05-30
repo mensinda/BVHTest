@@ -15,6 +15,7 @@ baseSrc = files([
 
 baseInc = files([
   'base/BVH.hpp',
+  'base/BVHPatch.hpp',
   'base/CameraBase.hpp',
   'base/Configurable.hpp',
   'base/Config.hpp',
@@ -29,6 +30,7 @@ baseInc = files([
 # Builder lib
 builderSrc = files([
   'builder/Bittner13.cpp',
+  'builder/Bittner13Par.cpp',
   'builder/BuilderBase.cpp',
   'builder/Median.cpp',
   'builder/OptimizerBase.cpp',
@@ -38,6 +40,7 @@ builderSrc = files([
 
 builderInc = files([
   'builder/Bittner13.hpp',
+  'builder/Bittner13Par.hpp',
   'builder/BuilderBase.hpp',
   'builder/Median.hpp',
   'builder/OptimizerBase.hpp',
