@@ -141,6 +141,7 @@ class BVH {
   inline uint32_t root() const noexcept { return vRootIndex; }
   inline BVHNode &rootNode() { return bvh[vRootIndex]; }
   inline BVHNode &at(uint32_t _node) { return bvh.at(_node); }
+  inline BVHNode &get(uint32_t _node) { return bvh[_node]; }
   inline BVHNode &operator[](uint32_t _node) { return bvh[_node]; }
   inline uint32_t nextNodeIndex() const noexcept { return static_cast<uint32_t>(bvh.size()); }
   inline uint16_t maxLevel() const noexcept { return vMaxLevel; }

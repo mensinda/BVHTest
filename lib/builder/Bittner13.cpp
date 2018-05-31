@@ -192,36 +192,34 @@ void Bittner13::reinsert(uint32_t _node, uint32_t _unused, BVH &_bvh) {
 void Bittner13::fixTree(uint32_t _node, BVH &_bvh) {
   uint32_t lNode = _node;
 
-  uint32_t lLastIndex   = NODE.left;
-  BVHNode *lLast        = &_bvh[lLastIndex];
-  bool     lLastWasLeft = true;
-  uint32_t lCurrSiblingIndex;
-  BVHNode *lCurrSibling = nullptr;
+  uint32_t lLastIndex        = NODE.left;
+  BVHNode *lLast             = &_bvh[lLastIndex];
+  bool     lLastWasLeft      = true;
+  uint32_t lCurrSiblingIndex = 0;
+  BVHNode *lCurrSibling      = nullptr;
 
-  // BBox, sum, min, numChildren
-  tuple<AABB, float, float, uint32_t> lLastD = {LEFT.bbox, SUM_OF(lLastIndex), MIN_OF(lLastIndex), lLast->numChildren};
+  AABB  lBBox = LEFT.bbox;
+  float lSum  = SUM_OF(lLastIndex);
+  float lMin  = MIN_OF(lLastIndex);
+  float lNum  = lLast->numChildren;
 
   float lSArea;
 
 
   while (true) {
-    if (lLastWasLeft) {
-      lCurrSiblingIndex = NODE.right;
-    } else {
-      lCurrSiblingIndex = NODE.left;
-    }
+    lCurrSiblingIndex = lLastWasLeft ? NODE.right : NODE.left;
+    lCurrSibling      = &_bvh[lCurrSiblingIndex];
 
-    lCurrSibling = &_bvh[lCurrSiblingIndex];
-    get<0>(lLastD).mergeWith(lCurrSibling->bbox);
-    lSArea           = get<0>(lLastD).surfaceArea();
-    NODE.bbox        = get<0>(lLastD);
+    lBBox.mergeWith(lCurrSibling->bbox);
+    lSArea           = lBBox.surfaceArea();
+    NODE.bbox        = lBBox;
     NODE.surfaceArea = lSArea;
 
-    get<1>(lLastD)    = get<1>(lLastD) + SUM_OF(lCurrSiblingIndex) + lSArea * getCostInner();
-    get<2>(lLastD)    = min(get<2>(lLastD), MIN_OF(lCurrSiblingIndex));
-    get<3>(lLastD)    = get<3>(lLastD) + lCurrSibling->numChildren + 2;
-    vSumAndMin[lNode] = {get<1>(lLastD), get<2>(lLastD)};
-    NODE.numChildren  = get<3>(lLastD);
+    lSum              = lSum + SUM_OF(lCurrSiblingIndex) + lSArea * getCostInner();
+    lMin              = min(lMin, MIN_OF(lCurrSiblingIndex));
+    lNum              = lNum + lCurrSibling->numChildren + 2;
+    vSumAndMin[lNode] = {lSum, lMin};
+    NODE.numChildren  = lNum;
 
     if (lNode == _bvh.root()) { return; } // We processed the root ==> everything is done
 
@@ -238,6 +236,7 @@ void Bittner13::initSumAndMin(BVH &_bvh) {
 
   __uint128_t lBitStack = 0;
   uint32_t    lNode     = _bvh.root();
+  uint32_t    lRoot     = lNode;
 
   while (true) {
     while (!NODE.isLeaf()) {
@@ -251,7 +250,7 @@ void Bittner13::initSumAndMin(BVH &_bvh) {
 
     // Backtrack if left and right children are processed
     while ((lBitStack & 1) == 0) {
-      if (lBitStack == 0 && lNode == 0) { return; } // We are done
+      if (lBitStack == 0 && lNode == lRoot) { return; } // We are done
       lNode             = NODE.parent;
       vSumAndMin[lNode] = {SUM_OF(NODE.left) + SUM_OF(NODE.right) + NODE.surfaceArea * getCostInner(),
                            min(MIN_OF(NODE.left), MIN_OF(NODE.right))};

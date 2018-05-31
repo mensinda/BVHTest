@@ -70,9 +70,8 @@ void Command::progress(std::string _str, float _val) {
 
 #ifdef ENABLE_IOCTL
   struct winsize ws;
-  ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
-
-  lWidth = ws.ws_col;
+  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0) { lWidth = ws.ws_col; }
+  lWidth = min(lWidth, 1000u);
 #endif
 
   lWidth -= 58;

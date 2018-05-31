@@ -22,7 +22,7 @@
 
 namespace BVHTest::base {
 
-template <size_t NNode, size_t NPath>
+template <size_t NNode, size_t NPath, size_t NAABB>
 class BVHPatch final {
  private:
   BVH *    vBVH;
@@ -33,20 +33,19 @@ class BVHPatch final {
   std::array<uint32_t, NNode> vPatch;
   std::array<BVHNode, NNode>  vNodes;
 
-  std::array<uint32_t, NPath>               vAABBPath;
-  std::array<std::pair<AABB, float>, NPath> vAABBs;
+  std::array<uint32_t, NAABB>               vAABBPath;
+  std::array<std::pair<AABB, float>, NAABB> vAABBs;
 
  public:
   BVHPatch() = delete;
-  BVHPatch(BVH &_bvh) : vBVH(&_bvh) { clear(); }
+  BVHPatch(BVH *_bvh) : vBVH(_bvh) { clear(); }
 
-  inline uint32_t sibling(uint32_t _node) const {
-    return getConst(_node).isRightChild() ? getConst(getConst(_node).parent).left
-                                          : getConst(getConst(_node).parent).right;
+  inline uint32_t sibling(uint32_t _node) {
+    return get(_node)->isRightChild() ? get(get(_node)->parent)->left : get(get(_node)->parent)->right;
   }
 
-  inline uint32_t sibling(BVHNode const &_node) const {
-    return _node.isRightChild() ? getConst(_node.parent).left : getConst(_node.parent).right;
+  inline uint32_t sibling(BVHNode const &_node) {
+    return _node.isRightChild() ? get(_node.parent)->left : get(_node.parent)->right;
   }
 
   inline BVHNode &siblingNode(uint32_t _node) { return get(sibling(_node)); }
@@ -54,32 +53,44 @@ class BVHPatch final {
 
   inline uint32_t patchIndex(uint32_t _node) const noexcept {
     for (uint32_t i = 0; i < NNode; ++i) {
+      if (i >= vSize) { break; }
       if (vPatch[i] == _node) { return i; }
     }
     return UINT32_MAX;
   }
 
-  inline BVHNode &get(uint32_t _node) {
+  inline BVHNode *get(uint32_t _node) {
     uint32_t lIndex = patchIndex(_node);
-    if (lIndex == UINT32_MAX) { return (*vBVH)[_node]; }
-    return vNodes[lIndex];
+    if (lIndex == UINT32_MAX) { return &vBVH->get(_node); }
+    assert(lIndex < vSize);
+    return &vNodes[lIndex];
   }
 
-  inline BVHNode const &getConst(uint32_t _node) const {
-    uint32_t lIndex = patchIndex(_node);
-    if (lIndex == UINT32_MAX) { return (*vBVH)[_node]; }
-    return vNodes[lIndex];
-  }
+  inline BVHNode *rootNode() { return get(vRootIndex); }
+  inline BVHNode *operator[](uint32_t _node) { return get(_node); }
 
-  inline BVHNode &rootNode() { return get(vRootIndex); }
-  inline BVHNode &operator[](uint32_t _node) { return get(_node); }
-
-  inline BVHNode &patchNode(uint32_t _node) {
+  inline BVHNode *patchNode(uint32_t _node) {
+    assert(vSize < NNode);
     vPatch[vSize]  = _node;
-    vNodes[vSize]  = (*vBVH)[_node];
-    BVHNode &lNode = vNodes[vSize];
+    vNodes[vSize]  = vBVH->get(_node);
+    BVHNode *lNode = &vNodes[vSize];
     vSize++;
     return lNode;
+  }
+
+  inline void clear() {
+    vSize      = 0;
+    vNumAABBs  = 0;
+    vRootIndex = vBVH->root();
+  }
+
+  inline void apply() {
+    for (uint32_t i = 0; i < NNode; ++i) {
+      if (i >= vSize) { break; }
+      vBVH->get(vPatch[i]) = vNodes[i];
+    }
+    vBVH->setNewRoot(vRootIndex);
+    clear();
   }
 
   /*!
@@ -87,67 +98,38 @@ class BVHPatch final {
    */
   inline void patchAABBFrom(uint32_t _node) {
     uint32_t lNodeIndex = _node;
-    BVHNode *lNode      = &get(lNodeIndex);
+    BVHNode *lNode      = get(lNodeIndex);
 
     // Merge the BBox up the tree
-    AABB lBBox        = get(lNode->left).bbox;
+    AABB lBBox        = get(lNode->left)->bbox;
     bool lLastWasLeft = true; // Always remember if we have to fetch the left or right childs bbox
     while (true) {
       // Merge with the sibling of the last processed Node
       if (lLastWasLeft) {
-        lBBox.mergeWith(get(lNode->right).bbox);
+        lBBox.mergeWith(get(lNode->right)->bbox);
       } else {
-        lBBox.mergeWith(get(lNode->left).bbox);
+        lBBox.mergeWith(get(lNode->left)->bbox);
       }
 
-      vAABBPath[vNumAABBs] = _node;
+      assert(vNumAABBs < NAABB);
+      vAABBPath[vNumAABBs] = lNodeIndex;
       vAABBs[vNumAABBs]    = {lBBox, lBBox.surfaceArea()};
       vNumAABBs++;
 
-      if (lNodeIndex == vRootIndex) { return; } // We processed the root ==> everything is done
+      if (lNodeIndex == root()) { return; } // We processed the root ==> everything is done
 
       lLastWasLeft = lNode->isLeftChild();
       lNodeIndex   = lNode->parent;
-      lNode        = &get(lNodeIndex);
+      lNode        = get(lNodeIndex);
     }
   }
 
-  /*!
-   * \brief Get the AABB at tree height / level _level of the node _node
-   *
-   * Stored AABB path is from start to root: [ maxLevel, maxLevel - 1, ..., 1, 0 ]
-   */
-  inline std::pair<AABB, float> const &getAABB(uint32_t _node, uint32_t _level) {
-    if (_level < vNumAABBs) {
-      if (vAABBPath[vNumAABBs - _level - 1] == _node) {
-        // At level _level the node _node was patched. For this to work node MUST be at tree level _level
-        return vAABBs[_level];
-      }
-    }
 
-    BVHNode &lNode = get(_node);
-    return {lNode.bbox, lNode.surfaceArea};
-  }
+  inline std::pair<AABB, float> getAABB(uint32_t _node, uint32_t _level) {
+    if (_level < vNumAABBs && vAABBPath[vNumAABBs - _level - 1] == _node) { return vAABBs[vNumAABBs - _level - 1]; }
 
-  inline void clear() {
-    vSize      = 0;
-    vNumAABBs  = 0;
-    vRootIndex = vBVH->root();
-    for (uint32_t i = 0; i < NNode; ++i) {
-      vPatch[i] = UINT32_MAX;
-    }
-    for (uint32_t i = 0; i < NPath; ++i) {
-      vAABBPath[i] = UINT32_MAX;
-    }
-  }
-
-  inline void apply() {
-    assert(vSize == NNode);
-    for (uint32_t i = 0; i < NNode; ++i) {
-      (*vBVH)[vPatch[i]] = vNodes[i];
-    }
-    vBVH->setNewRoot(vRootIndex);
-    clear();
+    BVHNode *lNode = get(_node);
+    return {lNode->bbox, lNode->surfaceArea};
   }
 
   inline size_t   size() const noexcept { return vBVH->size(); }
@@ -155,8 +137,8 @@ class BVHPatch final {
   inline uint32_t root() const noexcept { return vRootIndex; }
   inline uint16_t maxLevel() const noexcept { return vBVH->maxLevel(); }
   inline void     setNewRoot(uint32_t _root) noexcept { vRootIndex = _root; }
-};
+}; // namespace BVHTest::base
 
-typedef BVHPatch<10, 128> BVHPatchBittner;
+typedef BVHPatch<10, 2, 128> BVHPatchBittner;
 
 } // namespace BVHTest::base

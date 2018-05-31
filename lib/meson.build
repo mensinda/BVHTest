@@ -151,17 +151,17 @@ baseLib = library('base', baseSrc,
   dependencies: baseDeps,
 )
 
-builderLib = library('builder', builderSrc,
+miscLib = library('misc', miscSrc,
   include_directories: incDirs,
   install: true,
   link_with: [baseLib, enum2StrLib, externalsLib],
   dependencies: baseDeps,
 )
 
-miscLib = library('misc', miscSrc,
+builderLib = library('builder', builderSrc,
   include_directories: incDirs,
   install: true,
-  link_with: [baseLib, enum2StrLib, externalsLib],
+  link_with: [baseLib, miscLib, enum2StrLib, externalsLib],
   dependencies: baseDeps,
 )
 

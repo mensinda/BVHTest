@@ -34,16 +34,9 @@ class Bittner13Par final : public OptimizerBase {
   bool     vRandom       = false;
   bool     vSortBatch    = true;
 
-  inline float directCost(base::BVHNode const &_l, base::BVHNode const &_x) {
-    base::AABB lMerge = _l.bbox;
-    lMerge.mergeWith(_x.bbox);
-    return lMerge.surfaceArea();
-  }
-
   uint32_t findNodeForReinsertion(uint32_t _n, base::BVHPatchBittner &_bvh);
-  RM_RES   removeNode(uint32_t _node, base::BVHPatchBittner &_bvh, SumMin *_sumMin);
-  void     reinsert(uint32_t _node, uint32_t _unused, base::BVHPatchBittner &_bvh, SumMin *_sumMin);
-  void     fixTree(uint32_t _node, base::BVH &_bvh, SumMin *_sumMin);
+  RM_RES   removeNode(uint32_t _node, base::BVHPatchBittner &_bvh);
+  void     reinsert(uint32_t _node, uint32_t _unused, base::BVHPatchBittner &_bvh);
   void     initSumAndMin(base::BVH &_bvh, SumMin *_sumMin);
 
   base::ErrorCode runMetric(base::State &_state, SumMin *_sumMin);
