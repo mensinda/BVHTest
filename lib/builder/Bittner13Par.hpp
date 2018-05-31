@@ -25,8 +25,8 @@ namespace BVHTest::builder {
 
 class Bittner13Par final : public OptimizerBase {
  public:
-  typedef std::tuple<float, float, std::atomic_uint32_t>                                   SumMin;
-  typedef std::tuple<bool, std::tuple<uint32_t, uint32_t>, std::tuple<uint32_t, uint32_t>> RM_RES;
+  typedef std::tuple<float, float, std::atomic_uint32_t>                                             SumMin;
+  typedef std::tuple<bool, std::tuple<uint32_t, uint32_t>, std::tuple<uint32_t, uint32_t>, uint32_t> RM_RES;
 
  private:
   uint32_t vMaxNumStepps = 500;
@@ -36,7 +36,8 @@ class Bittner13Par final : public OptimizerBase {
 
   std::pair<uint32_t, uint32_t> findNodeForReinsertion(uint32_t _n, base::BVHPatchBittner &_bvh);
   RM_RES                        removeNode(uint32_t _node, base::BVHPatchBittner &_bvh);
-  void                          reinsert(uint32_t _node, uint32_t _unused, base::BVHPatchBittner &_bvh);
+  void                          reinsert(uint32_t _node, uint32_t _unused, base::BVHPatchBittner &_bvh, bool _update);
+  void                          fixTree(uint32_t _node, base::BVH &_bvh, SumMin *_sumMin);
   void                          initSumAndMin(base::BVH &_bvh, SumMin *_sumMin);
 
   base::ErrorCode runMetric(base::State &_state, SumMin *_sumMin);

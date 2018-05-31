@@ -16,7 +16,6 @@
 
 #include "Bittner13Par.hpp"
 #include "misc/OMPReductions.hpp"
-#include "misc/Validate.hpp"
 #include <algorithm>
 #include <chrono>
 #include <fmt/format.h>
@@ -110,7 +109,7 @@ pair<uint32_t, uint32_t> Bittner13Par::findNodeForReinsertion(uint32_t _n, BVHPa
 }
 
 Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, BVHPatchBittner &_bvh) {
-  if (_bvh[_node]->isLeaf() || _node == _bvh.root()) { return {false, {0, 0}, {0, 0}}; }
+  if (_bvh[_node]->isLeaf() || _node == _bvh.root()) { return {false, {0, 0}, {0, 0}, 0}; }
 
   BVHNode *lNode             = _bvh.patchNode(_node);
   uint32_t lSiblingIndex     = _bvh.sibling(*lNode);
@@ -130,7 +129,7 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, BVHPatchBittner &_
   float lRightSA = lRight->surfaceArea;
 
 
-  if (lParentIndex == _bvh.root()) { return {false, {0, 0}, {0, 0}}; } // Can not remove node with this algorithm
+  if (lParentIndex == _bvh.root()) { return {false, {0, 0}, {0, 0}, 0}; } // Can not remove node with this algorithm
 
   // Remove nodes
   if (lParent->isLeftChild()) {
@@ -147,14 +146,14 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, BVHPatchBittner &_
   _bvh.patchAABBFrom(lGrandParentIndex);
 
   if (lLeftSA > lRightSA) {
-    return {true, {lNode->left, lNode->right}, {_node, lParentIndex}};
+    return {true, {lNode->left, lNode->right}, {_node, lParentIndex}, lGrandParentIndex};
   } else {
-    return {true, {lNode->right, lNode->left}, {_node, lParentIndex}};
+    return {true, {lNode->right, lNode->left}, {_node, lParentIndex}, lGrandParentIndex};
   }
 }
 
 
-void Bittner13Par::reinsert(uint32_t _node, uint32_t _unused, BVHPatchBittner &_bvh) {
+void Bittner13Par::reinsert(uint32_t _node, uint32_t _unused, BVHPatchBittner &_bvh, bool _update) {
   auto [lBestIndex, lLevelOfBest] = findNodeForReinsertion(_node, _bvh);
 
   BVHNode *lNode      = _bvh[_node];
@@ -188,7 +187,52 @@ void Bittner13Par::reinsert(uint32_t _node, uint32_t _unused, BVHPatchBittner &_
   lNode->parent = _unused;
   lNode->isLeft = FALSE;
 
-  _bvh.nodeUpdated(lBestIndex, lLevelOfBest);
+  if (_update) {
+    _bvh.nodeUpdated(lBestIndex, lLevelOfBest);
+    _bvh.patchAABBFrom(_unused);
+  }
+}
+
+void Bittner13Par::fixTree(uint32_t _node, BVH &_bvh, SumMin *_sumMin) {
+  uint32_t lNode = _node;
+
+  uint32_t lLastIndex        = NODE.left;
+  BVHNode *lLast             = &_bvh[lLastIndex];
+  bool     lLastWasLeft      = true;
+  uint32_t lCurrSiblingIndex = 0;
+  BVHNode *lCurrSibling      = nullptr;
+
+  AABB  lBBox = LEFT.bbox;
+  float lSum  = SUM_OF(lLastIndex);
+  float lMin  = MIN_OF(lLastIndex);
+  float lNum  = lLast->numChildren;
+
+  float lSArea;
+
+
+  while (true) {
+    lCurrSiblingIndex = lLastWasLeft ? NODE.right : NODE.left;
+    lCurrSibling      = &_bvh[lCurrSiblingIndex];
+
+    lBBox.mergeWith(lCurrSibling->bbox);
+    lSArea           = lBBox.surfaceArea();
+    NODE.bbox        = lBBox;
+    NODE.surfaceArea = lSArea;
+
+    lSum             = lSum + SUM_OF(lCurrSiblingIndex) + lSArea * getCostInner();
+    lMin             = min(lMin, MIN_OF(lCurrSiblingIndex));
+    lNum             = lNum + lCurrSibling->numChildren + 2;
+    SUM_OF(lNode)    = lSum;
+    MIN_OF(lNode)    = lMin;
+    NODE.numChildren = lNum;
+
+    if (lNode == _bvh.root()) { return; } // We processed the root ==> everything is done
+
+    lLastWasLeft = NODE.isLeftChild();
+    lLastIndex   = lNode;
+    lLast        = &_bvh[lLastIndex];
+    lNode        = NODE.parent;
+  }
 }
 
 void Bittner13Par::initSumAndMin(BVH &_bvh, SumMin *_sumMin) {
@@ -243,8 +287,6 @@ ErrorCode Bittner13Par::runMetric(State &_state, SumMin *_sumMin) {
   lTodoList.resize(_state.bvh.size());
   lPatches.resize(lNumNodes, BVHPatchBittner(&_state.bvh));
 
-  Validate lValidator;
-
   for (uint32_t i = 0; i < vMaxNumStepps; ++i) {
 #if ENABLE_PROGRESS_BAR
     progress(fmt::format("METRIC; Stepp {:<12}; SAH: {:<6.6}", i, _state.bvh.calcSAH()), i, vMaxNumStepps - 1);
@@ -276,23 +318,20 @@ ErrorCode Bittner13Par::runMetric(State &_state, SumMin *_sumMin) {
                vMaxNumStepps * lNumNodes - 1);
 #endif
       lPatches[j].clear();
-      auto [lNodeIndex, _]            = lTodoList[j];
-      auto [lRes, lTInsert, lTUnused] = removeNode(lNodeIndex, lPatches[j]);
-      auto [l1stIndex, l2ndIndex]     = lTInsert;
-      auto [lU1, lU2]                 = lTUnused;
+      auto [lNodeIndex, _]                 = lTodoList[j];
+      auto [lRes, lTInsert, lTUnused, lGP] = removeNode(lNodeIndex, lPatches[j]);
+      auto [l1stIndex, l2ndIndex]          = lTInsert;
+      auto [lU1, lU2]                      = lTUnused;
 
       if (!lRes) { continue; }
 
-      reinsert(l1stIndex, lU1, lPatches[j]);
-      reinsert(l2ndIndex, lU2, lPatches[j]);
+      reinsert(l1stIndex, lU1, lPatches[j], true);
+      reinsert(l2ndIndex, lU2, lPatches[j], false);
 
       lPatches[j].apply();
-      initSumAndMin(_state.bvh, _sumMin);
-      //       _state.bvh.fixLevels();
-      //       if (lValidator.runImpl(_state) != ErrorCode::OK) {
-      //         fmt::print("A:  Error on j = {}\n", j);
-      //         return ErrorCode::BVH_ERROR;
-      //       }
+      fixTree(lGP, _state.bvh, _sumMin);
+      fixTree(lU1, _state.bvh, _sumMin);
+      fixTree(lU2, _state.bvh, _sumMin);
     }
 
     initSumAndMin(_state.bvh, _sumMin);
@@ -329,16 +368,19 @@ ErrorCode Bittner13Par::runRandom(State &_state, SumMin *_sumMin) {
 
     // Reinsert nodes
     for (uint32_t j = 0; j < lNumNodes; ++j) {
-      auto [lRes, lTInsert, lTUnused] = removeNode(lTodoList[j], lPatches[j]);
-      auto [l1stIndex, l2ndIndex]     = lTInsert;
-      auto [lU1, lU2]                 = lTUnused;
+      auto [lRes, lTInsert, lTUnused, lGP] = removeNode(lTodoList[j], lPatches[j]);
+      auto [l1stIndex, l2ndIndex]          = lTInsert;
+      auto [lU1, lU2]                      = lTUnused;
 
       if (!lRes) { continue; }
 
-      reinsert(l1stIndex, lU1, lPatches[j]);
-      reinsert(l2ndIndex, lU2, lPatches[j]);
+      reinsert(l1stIndex, lU1, lPatches[j], true);
+      reinsert(l2ndIndex, lU2, lPatches[j], false);
 
       lPatches[j].apply();
+      fixTree(lGP, _state.bvh, _sumMin);
+      fixTree(lU1, _state.bvh, _sumMin);
+      fixTree(lU2, _state.bvh, _sumMin);
     }
 
     initSumAndMin(_state.bvh, _sumMin);
