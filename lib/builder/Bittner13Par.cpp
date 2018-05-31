@@ -65,15 +65,15 @@ json Bittner13Par::toJSON() const {
 }
 
 
-uint32_t Bittner13Par::findNodeForReinsertion(uint32_t _n, BVHPatchBittner &_bvh) {
+pair<uint32_t, uint32_t> Bittner13Par::findNodeForReinsertion(uint32_t _n, BVHPatchBittner &_bvh) {
   typedef tuple<uint32_t, float, uint32_t> T1; // Node Ind, cost, tree level
 
-  float          lBestCost      = numeric_limits<float>::infinity();
-  uint32_t       lBestNodeIndex = 0;
-  BVHNode const *lNode          = _bvh[_n];
-  AABB const &   lNodeBBox      = lNode->bbox;
-  float          lSArea         = lNode->surfaceArea;
-  auto           lComp          = [](T1 const &_l, T1 const &_r) -> bool { return get<1>(_l) > get<1>(_r); };
+  float                    lBestCost      = numeric_limits<float>::infinity();
+  pair<uint32_t, uint32_t> lBestNodeIndex = {0, 0};
+  BVHNode const *          lNode          = _bvh[_n];
+  AABB const &             lNodeBBox      = lNode->bbox;
+  float                    lSArea         = lNode->surfaceArea;
+  auto                     lComp          = [](T1 const &_l, T1 const &_r) -> bool { return get<1>(_l) > get<1>(_r); };
   priority_queue<T1, vector<T1>, decltype(lComp)> lPQ(lComp);
 
   lPQ.push({_bvh.root(), 0.0f, 0});
@@ -94,7 +94,7 @@ uint32_t Bittner13Par::findNodeForReinsertion(uint32_t _n, BVHPatchBittner &_bvh
     if (lTotalCost < lBestCost) {
       // Merging here improves the total SAH cost
       lBestCost      = lTotalCost;
-      lBestNodeIndex = lCurrNodeIndex;
+      lBestNodeIndex = {lCurrNodeIndex, lLevel};
     }
 
     float lNewInduced = lTotalCost - lCurrSArea;
@@ -155,7 +155,7 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, BVHPatchBittner &_
 
 
 void Bittner13Par::reinsert(uint32_t _node, uint32_t _unused, BVHPatchBittner &_bvh) {
-  uint32_t lBestIndex = findNodeForReinsertion(_node, _bvh);
+  auto [lBestIndex, lLevelOfBest] = findNodeForReinsertion(_node, _bvh);
 
   BVHNode *lNode      = _bvh[_node];
   BVHNode *lBest      = _bvh.patchIndex(lBestIndex) == UINT32_MAX ? _bvh.patchNode(lBestIndex) : _bvh[lBestIndex];
@@ -187,6 +187,8 @@ void Bittner13Par::reinsert(uint32_t _node, uint32_t _unused, BVHPatchBittner &_
   lBest->isLeft = TRUE;
   lNode->parent = _unused;
   lNode->isLeft = FALSE;
+
+  _bvh.nodeUpdated(lBestIndex, lLevelOfBest);
 }
 
 void Bittner13Par::initSumAndMin(BVH &_bvh, SumMin *_sumMin) {
@@ -268,6 +270,11 @@ ErrorCode Bittner13Par::runMetric(State &_state, SumMin *_sumMin) {
 
     // Reinsert nodes
     for (uint32_t j = 0; j < lNumNodes; ++j) {
+#if ENABLE_PROGRESS_BAR && false
+      progress(fmt::format("METRIC; Stepp {}", i * lNumNodes + j, _state.bvh.calcSAH()),
+               i * lNumNodes + j,
+               vMaxNumStepps * lNumNodes - 1);
+#endif
       lPatches[j].clear();
       auto [lNodeIndex, _]            = lTodoList[j];
       auto [lRes, lTInsert, lTUnused] = removeNode(lNodeIndex, lPatches[j]);

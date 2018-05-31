@@ -18,6 +18,7 @@
 
 #include "BVH.hpp"
 #include <array>
+#include <tuple>
 #include <utility>
 
 namespace BVHTest::base {
@@ -27,14 +28,19 @@ class BVHPatch final {
  private:
   BVH *    vBVH;
   uint32_t vSize     = 0;
-  uint32_t vNumAABBs = 0;
+  uint32_t vNumPaths = 0;
   uint32_t vRootIndex;
 
   std::array<uint32_t, NNode> vPatch;
   std::array<BVHNode, NNode>  vNodes;
 
-  std::array<uint32_t, NAABB>               vAABBPath;
-  std::array<std::pair<AABB, float>, NAABB> vAABBs;
+  struct AABBPath {
+    std::array<uint32_t, NAABB>               vAABBPath;
+    std::array<std::pair<AABB, float>, NAABB> vAABBs;
+    uint32_t                                  vNumAABBs = 0;
+  };
+
+  std::array<AABBPath, NPath> vPaths;
 
  public:
   BVHPatch() = delete;
@@ -79,8 +85,11 @@ class BVHPatch final {
   }
 
   inline void clear() {
-    vSize      = 0;
-    vNumAABBs  = 0;
+    vSize     = 0;
+    vNumPaths = 0;
+    for (uint32_t i = 0; i < NPath; ++i) {
+      vPaths[i].vNumAABBs = 0;
+    }
     vRootIndex = vBVH->root();
   }
 
@@ -98,38 +107,70 @@ class BVHPatch final {
    */
   inline void patchAABBFrom(uint32_t _node) {
     uint32_t lNodeIndex = _node;
-    BVHNode *lNode      = get(lNodeIndex);
+    BVHNode *lStart     = get(lNodeIndex);
+    BVHNode *lNode      = lStart;
 
-    // Merge the BBox up the tree
-    AABB lBBox        = get(lNode->left)->bbox;
+    // Pair: sibling node (= the node we need to fetch) , current Node index
+    std::array<std::pair<uint32_t, uint32_t>, NAABB> lNodePairs;
+    uint32_t                                         lNumNodes = 0;
+
     bool lLastWasLeft = true; // Always remember if we have to fetch the left or right childs bbox
+
+    // Get node index list
     while (true) {
       // Merge with the sibling of the last processed Node
       if (lLastWasLeft) {
-        lBBox.mergeWith(get(lNode->right)->bbox);
+        lNodePairs[lNumNodes] = {lNode->right, lNodeIndex};
       } else {
-        lBBox.mergeWith(get(lNode->left)->bbox);
+        lNodePairs[lNumNodes] = {lNode->left, lNodeIndex};
       }
 
-      assert(vNumAABBs < NAABB);
-      vAABBPath[vNumAABBs] = lNodeIndex;
-      vAABBs[vNumAABBs]    = {lBBox, lBBox.surfaceArea()};
-      vNumAABBs++;
-
-      if (lNodeIndex == root()) { return; } // We processed the root ==> everything is done
+      assert(lNumNodes < NAABB);
+      lNumNodes++;
+      if (lNodeIndex == root()) { break; } // We processed the root ==> everything is done
 
       lLastWasLeft = lNode->isLeftChild();
       lNodeIndex   = lNode->parent;
       lNode        = get(lNodeIndex);
     }
+
+    // Merge the BBox up the tree
+    auto [lBBox, lSArea] = getAABB(lStart->left, lNumNodes - 1);
+    for (uint32_t i = 0; i < lNumNodes; ++i) {
+      // Merge with the sibling of the last processed Node
+      auto [lNewAABB, lNewSArea] = getAABB(lNodePairs[i].first, lNumNodes - i - 1);
+      lBBox.mergeWith(lNewAABB);
+
+      vPaths[vNumPaths].vAABBPath[lNumNodes - i - 1] = lNodePairs[i].second;
+      vPaths[vNumPaths].vAABBs[lNumNodes - i - 1]    = {lBBox, lBBox.surfaceArea()};
+    }
+
+    vPaths[vNumPaths].vNumAABBs = lNumNodes;
+    vNumPaths++;
   }
 
-
   inline std::pair<AABB, float> getAABB(uint32_t _node, uint32_t _level) {
-    if (_level < vNumAABBs && vAABBPath[vNumAABBs - _level - 1] == _node) { return vAABBs[vNumAABBs - _level - 1]; }
-
+    for (int32_t i = NPath - 1; i >= 0; --i) {
+      if (_level < vPaths[i].vNumAABBs && vPaths[i].vAABBPath[_level] == _node) {
+        // AAA
+        return vPaths[i].vAABBs[_level];
+      }
+    }
     BVHNode *lNode = get(_node);
     return {lNode->bbox, lNode->surfaceArea};
+  }
+
+  // Handle case when node is inserted in the stored AABB path
+  inline void nodeUpdated(uint32_t _node, uint32_t _level) {
+    for (uint32_t i = 0; i < NPath; ++i) {
+      if (_level < vPaths[i].vNumAABBs && vPaths[i].vAABBPath[_level] == _node) {
+        uint32_t lOld = vNumPaths;
+        vNumPaths     = i;
+        vPaths[i].vNumAABBs -= _level + 1; // Shift index to the insertion point on the path
+        patchAABBFrom(_node);              // Redo the AABB calculation on the path
+        vNumPaths = lOld;
+      }
+    }
   }
 
   inline size_t   size() const noexcept { return vBVH->size(); }

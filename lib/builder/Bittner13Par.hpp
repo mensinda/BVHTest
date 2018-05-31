@@ -34,10 +34,10 @@ class Bittner13Par final : public OptimizerBase {
   bool     vRandom       = false;
   bool     vSortBatch    = true;
 
-  uint32_t findNodeForReinsertion(uint32_t _n, base::BVHPatchBittner &_bvh);
-  RM_RES   removeNode(uint32_t _node, base::BVHPatchBittner &_bvh);
-  void     reinsert(uint32_t _node, uint32_t _unused, base::BVHPatchBittner &_bvh);
-  void     initSumAndMin(base::BVH &_bvh, SumMin *_sumMin);
+  std::pair<uint32_t, uint32_t> findNodeForReinsertion(uint32_t _n, base::BVHPatchBittner &_bvh);
+  RM_RES                        removeNode(uint32_t _node, base::BVHPatchBittner &_bvh);
+  void                          reinsert(uint32_t _node, uint32_t _unused, base::BVHPatchBittner &_bvh);
+  void                          initSumAndMin(base::BVH &_bvh, SumMin *_sumMin);
 
   base::ErrorCode runMetric(base::State &_state, SumMin *_sumMin);
   base::ErrorCode runRandom(base::State &_state, SumMin *_sumMin);
