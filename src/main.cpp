@@ -175,7 +175,7 @@ bool run(string _file) {
     auto lCommands = lCfg.getCommands();
 
     for (auto &i : lInput) {
-      lLogger->info("Processing {}", i);
+      lLogger->info("\x1b[1mProcessing \x1b[33m{}\x1b[0m", i);
       State lState;
       lState.input    = i;
       lState.basePath = lCfg.getBasePath();

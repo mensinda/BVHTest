@@ -99,7 +99,6 @@ class BVHPatch final {
       vBVH->get(vPatch[i]) = vNodes[i];
     }
     vBVH->setNewRoot(vRootIndex);
-    clear();
   }
 
   /*!
@@ -151,10 +150,7 @@ class BVHPatch final {
 
   inline std::pair<AABB, float> getAABB(uint32_t _node, uint32_t _level) {
     for (int32_t i = NPath - 1; i >= 0; --i) {
-      if (_level < vPaths[i].vNumAABBs && vPaths[i].vAABBPath[_level] == _node) {
-        // AAA
-        return vPaths[i].vAABBs[_level];
-      }
+      if (_level < vPaths[i].vNumAABBs && vPaths[i].vAABBPath[_level] == _node) { return vPaths[i].vAABBs[_level]; }
     }
     BVHNode *lNode = get(_node);
     return {lNode->bbox, lNode->surfaceArea};
@@ -179,7 +175,5 @@ class BVHPatch final {
   inline uint16_t maxLevel() const noexcept { return vBVH->maxLevel(); }
   inline void     setNewRoot(uint32_t _root) noexcept { vRootIndex = _root; }
 }; // namespace BVHTest::base
-
-typedef BVHPatch<10, 2, 128> BVHPatchBittner;
 
 } // namespace BVHTest::base

@@ -25,6 +25,8 @@ namespace BVHTest::builder {
 
 class Bittner13Par final : public OptimizerBase {
  public:
+  typedef base::BVHPatch<10, 2, 128> PATCH;
+  static_assert(sizeof(std::atomic_uint32_t) == sizeof(uint32_t), "Size of atomic");
   typedef std::tuple<float, float, std::atomic_uint32_t>                                             SumMin;
   typedef std::tuple<bool, std::tuple<uint32_t, uint32_t>, std::tuple<uint32_t, uint32_t>, uint32_t> RM_RES;
 
@@ -34,14 +36,12 @@ class Bittner13Par final : public OptimizerBase {
   bool     vRandom       = false;
   bool     vSortBatch    = true;
 
-  std::pair<uint32_t, uint32_t> findNodeForReinsertion(uint32_t _n, base::BVHPatchBittner &_bvh);
-  RM_RES                        removeNode(uint32_t _node, base::BVHPatchBittner &_bvh);
-  void                          reinsert(uint32_t _node, uint32_t _unused, base::BVHPatchBittner &_bvh, bool _update);
-  void                          fixTree(uint32_t _node, base::BVH &_bvh, SumMin *_sumMin);
-  void                          initSumAndMin(base::BVH &_bvh, SumMin *_sumMin);
+  std::pair<uint32_t, uint32_t> findNodeForReinsertion(uint32_t _n, PATCH &_bvh);
 
-  base::ErrorCode runMetric(base::State &_state, SumMin *_sumMin);
-  base::ErrorCode runRandom(base::State &_state, SumMin *_sumMin);
+  RM_RES removeNode(uint32_t _node, PATCH &_bvh, SumMin *_sumMin);
+  bool   reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, SumMin *_sumMin);
+  void   fixTree(uint32_t _node, base::BVH &_bvh, SumMin *_sumMin);
+  void   initSumAndMin(base::BVH &_bvh, SumMin *_sumMin);
 
  public:
   Bittner13Par() = default;

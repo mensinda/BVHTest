@@ -64,7 +64,7 @@ json Bittner13Par::toJSON() const {
 }
 
 
-pair<uint32_t, uint32_t> Bittner13Par::findNodeForReinsertion(uint32_t _n, BVHPatchBittner &_bvh) {
+pair<uint32_t, uint32_t> Bittner13Par::findNodeForReinsertion(uint32_t _n, PATCH &_bvh) {
   typedef tuple<uint32_t, float, uint32_t> T1; // Node Ind, cost, tree level
 
   float                    lBestCost      = numeric_limits<float>::infinity();
@@ -108,16 +108,60 @@ pair<uint32_t, uint32_t> Bittner13Par::findNodeForReinsertion(uint32_t _n, BVHPa
   return lBestNodeIndex;
 }
 
-Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, BVHPatchBittner &_bvh) {
-  if (_bvh[_node]->isLeaf() || _node == _bvh.root()) { return {false, {0, 0}, {0, 0}, 0}; }
+#define IF_NOT_LOCK(N)                                                                                                 \
+  lTempID = 0;                                                                                                         \
+  if (!ATO_OF(N).compare_exchange_strong(lTempID, 1))
 
-  BVHNode *lNode             = _bvh.patchNode(_node);
-  uint32_t lSiblingIndex     = _bvh.sibling(*lNode);
-  BVHNode *lSibling          = _bvh.patchNode(lSiblingIndex);
-  uint32_t lParentIndex      = lNode->parent;
+Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMin *_sumMin) {
+  RM_RES lFalse = {false, {0, 0}, {0, 0}, 0};
+  if (_bvh[_node]->isLeaf() || _node == _bvh.root()) { return lFalse; }
+
+  uint32_t lTempID;
+
+  IF_NOT_LOCK(_node) { return lFalse; }
+
+  BVHNode *lNode         = _bvh.patchNode(_node);
+  uint32_t lSiblingIndex = _bvh.sibling(*lNode);
+  uint32_t lParentIndex  = lNode->parent;
+
+  IF_NOT_LOCK(lSiblingIndex) {
+    ATO_OF(_node) = 0;
+    return lFalse;
+  }
+  BVHNode *lSibling = _bvh.patchNode(lSiblingIndex);
+
+  IF_NOT_LOCK(lParentIndex) {
+    ATO_OF(_node)         = 0;
+    ATO_OF(lSiblingIndex) = 0;
+    return lFalse;
+  }
   BVHNode *lParent           = _bvh.patchNode(lParentIndex);
   uint32_t lGrandParentIndex = lParent->parent;
-  BVHNode *lGrandParent      = _bvh.patchNode(lGrandParentIndex);
+
+  IF_NOT_LOCK(lGrandParentIndex) {
+    ATO_OF(_node)         = 0;
+    ATO_OF(lSiblingIndex) = 0;
+    ATO_OF(lParentIndex)  = 0;
+    return lFalse;
+  }
+  BVHNode *lGrandParent = _bvh.patchNode(lGrandParentIndex);
+
+  IF_NOT_LOCK(lNode->left) {
+    ATO_OF(_node)             = 0;
+    ATO_OF(lSiblingIndex)     = 0;
+    ATO_OF(lParentIndex)      = 0;
+    ATO_OF(lGrandParentIndex) = 0;
+    return lFalse;
+  }
+
+  IF_NOT_LOCK(lNode->right) {
+    ATO_OF(_node)             = 0;
+    ATO_OF(lSiblingIndex)     = 0;
+    ATO_OF(lParentIndex)      = 0;
+    ATO_OF(lGrandParentIndex) = 0;
+    ATO_OF(lNode->left)       = 0;
+    return lFalse;
+  }
 
   BVHNode *lLeft  = _bvh.patchNode(lNode->left);
   BVHNode *lRight = _bvh.patchNode(lNode->right);
@@ -129,7 +173,7 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, BVHPatchBittner &_
   float lRightSA = lRight->surfaceArea;
 
 
-  if (lParentIndex == _bvh.root()) { return {false, {0, 0}, {0, 0}, 0}; } // Can not remove node with this algorithm
+  if (lParentIndex == _bvh.root()) { return lFalse; } // Can not remove node with this algorithm
 
   // Remove nodes
   if (lParent->isLeftChild()) {
@@ -153,29 +197,34 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, BVHPatchBittner &_
 }
 
 
-void Bittner13Par::reinsert(uint32_t _node, uint32_t _unused, BVHPatchBittner &_bvh, bool _update) {
+bool Bittner13Par::reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, SumMin *_sumMin) {
   auto [lBestIndex, lLevelOfBest] = findNodeForReinsertion(_node, _bvh);
+  if (lBestIndex == _bvh.root()) { return false; }
+
+  uint32_t lTempID;
+
+  IF_NOT_LOCK(lBestIndex) { return false; }
 
   BVHNode *lNode      = _bvh[_node];
   BVHNode *lBest      = _bvh.patchIndex(lBestIndex) == UINT32_MAX ? _bvh.patchNode(lBestIndex) : _bvh[lBestIndex];
   BVHNode *lUnused    = _bvh[_unused];
   uint32_t lRootIndex = lBest->parent;
-  BVHNode *lRoot      = _bvh.patchIndex(lRootIndex) == UINT32_MAX ? _bvh.patchNode(lRootIndex) : _bvh[lRootIndex];
 
-  if (lBestIndex == _bvh.root()) {
-    // Adjust root if needed
-    _bvh.setNewRoot(_unused);
-    lRootIndex = _unused;
-  } else {
-    // Insert the unused node
-    if (lBest->isLeftChild()) {
-      lRoot->left     = _unused;
-      lUnused->isLeft = TRUE;
-    } else {
-      lRoot->right    = _unused;
-      lUnused->isLeft = FALSE;
-    }
+  IF_NOT_LOCK(lRootIndex) {
+    ATO_OF(lBestIndex) = 0;
+    return false;
   }
+  BVHNode *lRoot = _bvh.patchIndex(lRootIndex) == UINT32_MAX ? _bvh.patchNode(lRootIndex) : _bvh[lRootIndex];
+
+  // Insert the unused node
+  if (lBest->isLeftChild()) {
+    lRoot->left     = _unused;
+    lUnused->isLeft = TRUE;
+  } else {
+    lRoot->right    = _unused;
+    lUnused->isLeft = FALSE;
+  }
+
 
   // Insert the other nodes
   lUnused->parent = lRootIndex;
@@ -191,6 +240,8 @@ void Bittner13Par::reinsert(uint32_t _node, uint32_t _unused, BVHPatchBittner &_
     _bvh.nodeUpdated(lBestIndex, lLevelOfBest);
     _bvh.patchAABBFrom(_unused);
   }
+
+  return true;
 }
 
 void Bittner13Par::fixTree(uint32_t _node, BVH &_bvh, SumMin *_sumMin) {
@@ -252,7 +303,6 @@ void Bittner13Par::initSumAndMin(BVH &_bvh, SumMin *_sumMin) {
     // Leaf
     SUM_OF(lNode) = NODE.surfaceArea * getCostTri();
     MIN_OF(lNode) = NODE.surfaceArea;
-    //     ATO_OF(lNode) = 0;
 
     // Backtrack if left and right children are processed
     while ((lBitStack & 1) == 0) {
@@ -267,7 +317,6 @@ void Bittner13Par::initSumAndMin(BVH &_bvh, SumMin *_sumMin) {
       NODE.numChildren = LEFT.numChildren + RIGHT.numChildren + 2;
       SUM_OF(lNode)    = SUM_OF(NODE.left) + SUM_OF(NODE.right) + (lSArea * getCostInner());
       MIN_OF(lNode)    = min(MIN_OF(NODE.left), MIN_OF(NODE.right));
-      //       ATO_OF(lNode)    = 0;
       lBitStack >>= 1;
     }
 
@@ -276,133 +325,183 @@ void Bittner13Par::initSumAndMin(BVH &_bvh, SumMin *_sumMin) {
   }
 }
 
-ErrorCode Bittner13Par::runMetric(State &_state, SumMin *_sumMin) {
+
+
+
+ErrorCode Bittner13Par::runImpl(State &_state) {
   typedef tuple<uint32_t, float> TUP;
+
+  unique_ptr<SumMin[]> lSumMin(new SumMin[_state.bvh.size()]);
+  SumMin *             _sumMin = lSumMin.get();
+  initSumAndMin(_state.bvh, _sumMin);
 
   uint32_t lNumNodes = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
   auto     lComp     = [](TUP const &_l, TUP const &_r) -> bool { return get<1>(_l) > get<1>(_r); };
 
-  vector<TUP>             lTodoList;
-  vector<BVHPatchBittner> lPatches;
+  vector<TUP>      lTodoList;
+  vector<PATCH>    lPatches;
+  vector<bool>     lSkipp;
+  vector<uint32_t> lFixList;
   lTodoList.resize(_state.bvh.size());
-  lPatches.resize(lNumNodes, BVHPatchBittner(&_state.bvh));
+  lPatches.resize(lNumNodes, PATCH(&_state.bvh));
+  lSkipp.resize(lNumNodes);
+  lFixList.resize(lNumNodes * 3);
 
-  for (uint32_t i = 0; i < vMaxNumStepps; ++i) {
-#if ENABLE_PROGRESS_BAR
-    progress(fmt::format("METRIC; Stepp {:<12}; SAH: {:<6.6}", i, _state.bvh.calcSAH()), i, vMaxNumStepps - 1);
-#endif
-
-    // Select nodes to reinsert
-#pragma omp parallel for
-    for (uint32_t j = 0; j < _state.bvh.size(); ++j) {
-      BVHNode const &lNode = _state.bvh[j];
-      float          lSA   = lNode.surfaceArea;
-
-      bool lIsRoot       = j == _state.bvh.root();
-      bool lParentIsRoot = lNode.parent == _state.bvh.root();
-      bool lCanRemove    = !lIsRoot && !lParentIsRoot && !lNode.isLeaf();
-
-      float lCost  = lCanRemove ? ((lSA * lSA * lSA * (float)lNode.numChildren) / (SUM_OF(j) * MIN_OF(j))) : 0.0f;
-      lTodoList[j] = {j, lCost};
-    }
-
-
-    nth_element(begin(lTodoList), begin(lTodoList) + lNumNodes, end(lTodoList), lComp);
-    if (vSortBatch) { sort(begin(lTodoList), begin(lTodoList) + lNumNodes, lComp); }
-
-    // Reinsert nodes
-    for (uint32_t j = 0; j < lNumNodes; ++j) {
-#if ENABLE_PROGRESS_BAR && false
-      progress(fmt::format("METRIC; Stepp {}", i * lNumNodes + j, _state.bvh.calcSAH()),
-               i * lNumNodes + j,
-               vMaxNumStepps * lNumNodes - 1);
-#endif
-      lPatches[j].clear();
-      auto [lNodeIndex, _]                 = lTodoList[j];
-      auto [lRes, lTInsert, lTUnused, lGP] = removeNode(lNodeIndex, lPatches[j]);
-      auto [l1stIndex, l2ndIndex]          = lTInsert;
-      auto [lU1, lU2]                      = lTUnused;
-
-      if (!lRes) { continue; }
-
-      reinsert(l1stIndex, lU1, lPatches[j], true);
-      reinsert(l2ndIndex, lU2, lPatches[j], false);
-
-      lPatches[j].apply();
-      fixTree(lGP, _state.bvh, _sumMin);
-      fixTree(lU1, _state.bvh, _sumMin);
-      fixTree(lU2, _state.bvh, _sumMin);
-    }
-
-    initSumAndMin(_state.bvh, _sumMin);
-  }
-
-  return ErrorCode::OK;
-}
-
-ErrorCode Bittner13Par::runRandom(State &_state, SumMin *_sumMin) {
-  uint32_t lNumNodes = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
-
-  vector<uint32_t>        lTodoList;
-  vector<BVHPatchBittner> lPatches;
-  lTodoList.resize(_state.bvh.size());
-  lPatches.resize(lNumNodes, BVHPatchBittner(&_state.bvh));
+  uint32_t lSkipped = 0;
 
   // Init List
 #pragma omp parallel for
   for (uint32_t i = 0; i < lTodoList.size(); ++i) {
-    lTodoList[i] = i;
+    lTodoList[i] = {i, 0.0f};
   }
 
   random_device                      lRD;
   mt19937                            lPRNG(lRD());
   uniform_int_distribution<uint32_t> lDis(0, lTodoList.size() - 1);
 
+
+  /*****  ___  ___      _         _                         *****/
+  /*****  |  \/  |     (_)       | |                        *****/
+  /*****  | .  . | __ _ _ _ __   | |     ___   ___  _ __    *****/
+  /*****  | |\/| |/ _` | | '_ \  | |    / _ \ / _ \| '_ \   *****/
+  /*****  | |  | | (_| | | | | | | |___| (_) | (_) | |_) |  *****/
+  /*****  \_|  |_/\__,_|_|_| |_| \_____/\___/ \___/| .__/   *****/
+  /*****                                           | |      *****/
+  /*****                                           |_|      *****/
+
+
+
   for (uint32_t i = 0; i < vMaxNumStepps; ++i) {
 #if ENABLE_PROGRESS_BAR
-    progress(fmt::format("RAND; Stepp {:<12}; SAH: {:<6.6}", i, _state.bvh.calcSAH()), i, vMaxNumStepps - 1);
+    progress(
+        fmt::format("Stepp {:<3}; SAH: {:<6.5}; Skipped {:<6} of {:<6}", i, _state.bvh.calcSAH(), lSkipped, lNumNodes),
+        i,
+        vMaxNumStepps - 1);
 #endif
+    lSkipped = 0;
 
-    // Select nodes to reinsert
-    shuffle(begin(lTodoList), end(lTodoList), lPRNG);
 
-    // Reinsert nodes
+    /*   _____ _                     __      _____      _           _     _   _           _             */
+    /*  /  ___| |                   /  | _  /  ___|    | |         | |   | \ | |         | |            */
+    /*  \ `--.| |_ ___ _ __  _ __   `| |(_) \ `--.  ___| | ___  ___| |_  |  \| | ___   __| | ___  ___   */
+    /*   `--. \ __/ _ \ '_ \| '_ \   | |     `--. \/ _ \ |/ _ \/ __| __| | . ` |/ _ \ / _` |/ _ \/ __|  */
+    /*  /\__/ / ||  __/ |_) | |_) | _| |__  /\__/ /  __/ |  __/ (__| |_  | |\  | (_) | (_| |  __/\__ \  */
+    /*  \____/ \__\___| .__/| .__/  \___(_) \____/ \___|_|\___|\___|\__| \_| \_/\___/ \__,_|\___||___/  */
+    /*                | |   | |                                                                         */
+    /*                |_|   |_|                                                                         */
+
+
+    if (vRandom) {
+      // === Random suffle ===
+      shuffle(begin(lTodoList), end(lTodoList), lPRNG);
+
+#pragma omp parallel for
+      for (uint32_t j = 0; j < _state.bvh.size(); ++j) {
+        ATO_OF(j).store(0, memory_order_relaxed);
+      }
+
+    } else {
+      // === Metric selction ===
+#pragma omp parallel for
+      for (uint32_t j = 0; j < _state.bvh.size(); ++j) {
+        BVHNode const &lNode = _state.bvh[j];
+        float          lSA   = lNode.surfaceArea;
+
+        bool lIsRoot       = j == _state.bvh.root();
+        bool lParentIsRoot = lNode.parent == _state.bvh.root();
+        bool lCanRemove    = !lIsRoot && !lParentIsRoot && !lNode.isLeaf();
+
+        float lCost  = lCanRemove ? ((lSA * lSA * lSA * (float)lNode.numChildren) / (SUM_OF(j) * MIN_OF(j))) : 0.0f;
+        lTodoList[j] = {j, lCost};
+        ATO_OF(j).store(0, memory_order_relaxed);
+      }
+
+
+      nth_element(begin(lTodoList), begin(lTodoList) + lNumNodes, end(lTodoList), lComp);
+      if (vSortBatch) { sort(begin(lTodoList), begin(lTodoList) + lNumNodes, lComp); }
+    }
+
+
+    /*   _____ _                     _____     ______     _                     _     _   _           _             */
+    /*  /  ___| |                   / __  \ _  | ___ \   (_)                   | |   | \ | |         | |            */
+    /*  \ `--.| |_ ___ _ __  _ __   `' / /'(_) | |_/ /___ _ _ __  ___  ___ _ __| |_  |  \| | ___   __| | ___  ___   */
+    /*   `--. \ __/ _ \ '_ \| '_ \    / /      |    // _ \ | '_ \/ __|/ _ \ '__| __| | . ` |/ _ \ / _` |/ _ \/ __|  */
+    /*  /\__/ / ||  __/ |_) | |_) | ./ /___ _  | |\ \  __/ | | | \__ \  __/ |  | |_  | |\  | (_) | (_| |  __/\__ \  */
+    /*  \____/ \__\___| .__/| .__/  \_____/(_) \_| \_\___|_|_| |_|___/\___|_|   \__| \_| \_/\___/ \__,_|\___||___/  */
+    /*                | |   | |                                                                                     */
+    /*                |_|   |_|                                                                                     */
+
+#pragma omp parallel for
     for (uint32_t j = 0; j < lNumNodes; ++j) {
-      auto [lRes, lTInsert, lTUnused, lGP] = removeNode(lTodoList[j], lPatches[j]);
+      lPatches[j].clear();
+      auto [lNodeIndex, _]                 = lTodoList[j];
+      auto [lRes, lTInsert, lTUnused, lGP] = removeNode(lNodeIndex, lPatches[j], _sumMin);
       auto [l1stIndex, l2ndIndex]          = lTInsert;
       auto [lU1, lU2]                      = lTUnused;
 
-      if (!lRes) { continue; }
+      if (!lRes) {
+        lSkipp[j] = true;
+        continue;
+      }
 
-      reinsert(l1stIndex, lU1, lPatches[j], true);
-      reinsert(l2ndIndex, lU2, lPatches[j], false);
+      bool lR1 = reinsert(l1stIndex, lU1, lPatches[j], true, _sumMin);
+      bool lR2 = reinsert(l2ndIndex, lU2, lPatches[j], false, _sumMin);
+      if (!lR1 || !lR2) {
+        lSkipp[j] = true;
 
-      lPatches[j].apply();
-      fixTree(lGP, _state.bvh, _sumMin);
-      fixTree(lU1, _state.bvh, _sumMin);
-      fixTree(lU2, _state.bvh, _sumMin);
+        // Unlock Nodes
+        ATO_OF(lNodeIndex) = 0;
+        ATO_OF(l1stIndex)  = 0;
+        ATO_OF(l2ndIndex)  = 0;
+        ATO_OF(lU1)        = 0;
+        ATO_OF(lU2)        = 0;
+        ATO_OF(lGP)        = 0;
+        continue;
+      }
+
+      lSkipp[j]           = false;
+      lFixList[j * 3 + 0] = lGP;
+      lFixList[j * 3 + 1] = lU1;
+      lFixList[j * 3 + 2] = lU2;
     }
 
-    initSumAndMin(_state.bvh, _sumMin);
-  }
+    /*   _____ _                     _____      ___              _        ______     _       _                 */
+    /*  /  ___| |                   |____ |_   / _ \            | |       | ___ \   | |     | |                */
+    /*  \ `--.| |_ ___ _ __  _ __       / (_) / /_\ \_ __  _ __ | |_   _  | |_/ /_ _| |_ ___| |__   ___  ___   */
+    /*   `--. \ __/ _ \ '_ \| '_ \      \ \   |  _  | '_ \| '_ \| | | | | |  __/ _` | __/ __| '_ \ / _ \/ __|  */
+    /*  /\__/ / ||  __/ |_) | |_) | .___/ /_  | | | | |_) | |_) | | |_| | | | | (_| | || (__| | | |  __/\__ \  */
+    /*  \____/ \__\___| .__/| .__/  \____/(_) \_| |_/ .__/| .__/|_|\__, | \_|  \__,_|\__\___|_| |_|\___||___/  */
+    /*                | |   | |                     | |   | |       __/ |                                      */
+    /*                |_|   |_|                     |_|   |_|      |___/                                       */
 
-  return ErrorCode::OK;
-}
+#pragma omp parallel for
+    for (uint32_t j = 0; j < lNumNodes; ++j) {
+      if (lSkipp[j]) { continue; }
+      lPatches[j].apply();
+    }
+
+    /*   _____ _                       ___    ______ _        _   _            _                   */
+    /*  /  ___| |                     /   |_  |  ___(_)      | | | |          | |                  */
+    /*  \ `--.| |_ ___ _ __  _ __    / /| (_) | |_   ___  __ | |_| |__   ___  | |_ _ __ ___  ___   */
+    /*   `--. \ __/ _ \ '_ \| '_ \  / /_| |   |  _| | \ \/ / | __| '_ \ / _ \ | __| '__/ _ \/ _ \  */
+    /*  /\__/ / ||  __/ |_) | |_) | \___  |_  | |   | |>  <  | |_| | | |  __/ | |_| | |  __/  __/  */
+    /*  \____/ \__\___| .__/| .__/      |_(_) \_|   |_/_/\_\  \__|_| |_|\___|  \__|_|  \___|\___|  */
+    /*                | |   | |                                                                    */
+    /*                |_|   |_|                                                                    */
 
 
+    for (uint32_t j = 0; j < lNumNodes; ++j) {
+      if (lSkipp[j]) {
+        lSkipped++;
+        continue;
+      }
 
-ErrorCode Bittner13Par::runImpl(State &_state) {
-  unique_ptr<SumMin[]> lSumMinArr(new SumMin[_state.bvh.size()]);
-  initSumAndMin(_state.bvh, lSumMinArr.get());
-
-  ErrorCode lRet;
-  if (vRandom) {
-    lRet = runRandom(_state, lSumMinArr.get());
-  } else {
-    lRet = runMetric(_state, lSumMinArr.get());
+      fixTree(lFixList[j * 3 + 0], _state.bvh, _sumMin);
+      fixTree(lFixList[j * 3 + 1], _state.bvh, _sumMin);
+      fixTree(lFixList[j * 3 + 2], _state.bvh, _sumMin);
+    }
   }
 
   _state.bvh.fixLevels();
-
-  return lRet;
+  return ErrorCode::OK;
 }
