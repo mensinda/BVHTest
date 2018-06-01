@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "BVHTestCfg.hpp"
 #include "Bittner13Par.hpp"
 #include "misc/OMPReductions.hpp"
 #include <algorithm>
@@ -49,6 +50,7 @@ void Bittner13Par::fromJSON(const json &_j) {
   vBatchPercent = _j.value("batchPercent", vBatchPercent);
   vRandom       = _j.value("random", vRandom);
   vSortBatch    = _j.value("sort", vSortBatch);
+  vShuffleList  = _j.value("shuffle", vShuffleList);
 
   if (vBatchPercent <= 0.01f) vBatchPercent = 0.01f;
   if (vBatchPercent >= 75.0f) vBatchPercent = 75.0f;
@@ -60,6 +62,7 @@ json Bittner13Par::toJSON() const {
   lJSON["batchPercent"] = vBatchPercent;
   lJSON["random"]       = vRandom;
   lJSON["sort"]         = vSortBatch;
+  lJSON["shuffle"]      = vShuffleList;
   return lJSON;
 }
 
@@ -373,13 +376,8 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
 
   for (uint32_t i = 0; i < vMaxNumStepps; ++i) {
 #if ENABLE_PROGRESS_BAR
-    progress(
-        fmt::format("Stepp {:<3}; SAH: {:<6.5}; Skipped {:<6} of {:<6}", i, _state.bvh.calcSAH(), lSkipped, lNumNodes),
-        i,
-        vMaxNumStepps - 1);
+    progress(fmt::format("Stepp {:<3}; SAH: {:<6.5}", i, _state.bvh.calcSAH()), i, vMaxNumStepps - 1);
 #endif
-    lSkipped = 0;
-
 
     /*   _____ _                     __      _____      _           _     _   _           _             */
     /*  /  ___| |                   /  | _  /  ___|    | |         | |   | \ | |         | |            */
@@ -419,6 +417,7 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
 
       nth_element(begin(lTodoList), begin(lTodoList) + lNumNodes, end(lTodoList), lComp);
       if (vSortBatch) { sort(begin(lTodoList), begin(lTodoList) + lNumNodes, lComp); }
+      if (vShuffleList) { shuffle(begin(lTodoList), begin(lTodoList) + lNumNodes, lPRNG); }
     }
 
 
@@ -501,6 +500,13 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
       fixTree(lFixList[j * 3 + 2], _state.bvh, _sumMin);
     }
   }
+
+  PROGRESS_DONE;
+
+  getLogger()->info("Skipped {:<8} of {:<8} -- {}%",
+                    lSkipped,
+                    lNumNodes * vMaxNumStepps,
+                    (int)(((float)lSkipped / (float)(lNumNodes * vMaxNumStepps)) * 100));
 
   _state.bvh.fixLevels();
   return ErrorCode::OK;

@@ -35,6 +35,7 @@ class Bittner13Par final : public OptimizerBase {
   float    vBatchPercent = 1.0f;
   bool     vRandom       = false;
   bool     vSortBatch    = true;
+  bool     vShuffleList  = false;
 
   std::pair<uint32_t, uint32_t> findNodeForReinsertion(uint32_t _n, PATCH &_bvh);
 

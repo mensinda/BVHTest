@@ -47,7 +47,7 @@ ErrorCode Command::run(State &_state) {
   ErrorCode lRet   = runImpl(_state);
   auto      lEnd   = high_resolution_clock::now();
 
-  fmt::print("\x1b[2K\x1b[1G"); // Clear progress line
+  PROGRESS_DONE;
 
   if (lRet != ErrorCode::OK) {
     lLogger->error("Command {} returned {}", lName, toStr(lRet));
@@ -58,6 +58,11 @@ ErrorCode Command::run(State &_state) {
   _state.commands.push_back({lName, duration_cast<milliseconds>(lEnd - lStart)});
   return ErrorCode::OK;
 }
+
+void Command::progressDone() {
+  fmt::print("\x1b[2K\x1b[1G"); // Clear progress line
+}
+
 
 #define ESC_SEQ "\x1b[2K\x1b[1G\x1b[1m"
 #define ESC_END "\x1b[0m"

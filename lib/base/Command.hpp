@@ -23,8 +23,10 @@
 
 #if ENABLE_PROGRESS_BAR
 #  define PROGRESS(...) progress(__VA_ARGS__)
+#  define PROGRESS_DONE progressDone()
 #else
 #  define PROGRESS(...)
+#  define PROGRESS_DONE
 #endif
 
 namespace BVHTest::base {
@@ -44,6 +46,7 @@ class Command : public Configurable {
 
   void progress(std::string _str, float _val);
   void progress(std::string _str, uint32_t _curr, uint32_t _max);
+  void progressDone();
 
  public:
   Command() = default;
