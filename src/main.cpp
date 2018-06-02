@@ -196,8 +196,7 @@ bool run(string _file) {
 int main(int argc, char *argv[]) {
   auto           lLogger = getLogger();
   vector<string> args;
-  for (int i = 1; i < argc; ++i)
-    args.push_back(argv[i]);
+  for (int i = 1; i < argc; ++i) args.push_back(argv[i]);
 
   if (args.size() == 0) return usage();
 

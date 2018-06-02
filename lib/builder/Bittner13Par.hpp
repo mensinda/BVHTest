@@ -25,9 +25,8 @@ namespace BVHTest::builder {
 
 class Bittner13Par final : public OptimizerBase {
  public:
-  typedef base::BVHPatch<10, 2, 128> PATCH;
-  static_assert(sizeof(std::atomic_uint32_t) == sizeof(uint32_t), "Size of atomic");
-  typedef std::tuple<float, float, std::atomic_uint32_t>                                             SumMin;
+  typedef base::BVHPatch<10, 2, 128>                                                                 PATCH;
+  typedef std::tuple<float, float, std::atomic_flag>                                                 SumMin;
   typedef std::tuple<bool, std::tuple<uint32_t, uint32_t>, std::tuple<uint32_t, uint32_t>, uint32_t> RM_RES;
 
  private:

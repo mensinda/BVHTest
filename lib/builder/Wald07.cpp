@@ -113,9 +113,7 @@ BuilderBase::ITER Wald07::split(ITER _begin, ITER _end, uint32_t) {
     }
   }();
 
-  for (size_t i = 0; i < lSize; ++i) {
-    _begin[i] = lBestSorted[i];
-  }
+  for (size_t i = 0; i < lSize; ++i) { _begin[i] = lBestSorted[i]; }
 
   return _begin + lBestEven;
 }

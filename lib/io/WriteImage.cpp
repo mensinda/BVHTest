@@ -143,9 +143,7 @@ ErrorCode WriteImage::runImpl(State &_state) {
   vector<uint32_t> lAllInter;
   vector<uint64_t> lAllRTime;
 
-  for (auto &i : _state.work) {
-    lTotalSize += i.img.pixels.size();
-  }
+  for (auto &i : _state.work) { lTotalSize += i.img.pixels.size(); }
 
   lAllInter.resize(lTotalSize);
   lAllRTime.resize(lTotalSize);

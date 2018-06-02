@@ -350,9 +350,7 @@ ErrorCode Bittner13::runRandom(State &_state) {
 
   // Init List
 #pragma omp parallel for
-  for (uint32_t i = 0; i < lTodoList.size(); ++i) {
-    lTodoList[i] = i;
-  }
+  for (uint32_t i = 0; i < lTodoList.size(); ++i) { lTodoList[i] = i; }
 
   uint32_t      lNumNodes  = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
   uint32_t      lNumStepps = vMaxNumStepps;

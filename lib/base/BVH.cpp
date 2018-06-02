@@ -72,7 +72,5 @@ void BVH::fixLevels() {
 void BVH::fixSurfaceAreas() {
 
 #pragma omp parallel for
-  for (size_t i = 0; i < bvh.size(); ++i) {
-    bvh[i].surfaceArea = bvh[i].bbox.surfaceArea();
-  }
+  for (size_t i = 0; i < bvh.size(); ++i) { bvh[i].surfaceArea = bvh[i].bbox.surfaceArea(); }
 }

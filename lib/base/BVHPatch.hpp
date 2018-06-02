@@ -90,9 +90,7 @@ class BVHPatch final {
   inline void clear() {
     vSize     = 0;
     vNumPaths = 0;
-    for (uint32_t i = 0; i < NPath; ++i) {
-      vPaths[i].vNumAABBs = 0;
-    }
+    for (uint32_t i = 0; i < NPath; ++i) { vPaths[i].vNumAABBs = 0; }
     vRootIndex = vBVH->root();
   }
 
