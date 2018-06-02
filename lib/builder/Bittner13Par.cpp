@@ -374,16 +374,12 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
 #pragma omp parallel for
   for (uint32_t i = 0; i < lTodoList.size(); ++i) {
     lTodoList[i] = {i, 0.0f};
+    ATO_OF(i)    = 0;
   }
 
   random_device                      lRD;
   mt19937                            lPRNG(lRD());
   uniform_int_distribution<uint32_t> lDis(0, lTodoList.size() - 1);
-
-#pragma omp parallel for
-  for (uint32_t j = 0; j < _state.bvh.size(); ++j) {
-    ATO_OF(j) = 0;
-  }
 
 
   /*****  ___  ___      _         _                         *****/
