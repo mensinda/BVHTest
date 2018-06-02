@@ -72,7 +72,8 @@ class BVHPatch final {
     return &vNodes[lIndex];
   }
 
-  inline BVHNode *getPatch(uint32_t _patchIndex) { return &vNodes[_patchIndex]; }
+  inline BVHNode *getPatchedNode(uint32_t _patchIndex) { return &vNodes[_patchIndex]; }
+  inline uint32_t getPatchedNodeIndex(uint32_t _patchIndex) { return vPatch[_patchIndex]; }
 
   inline BVHNode *rootNode() { return get(vRootIndex); }
   inline BVHNode *operator[](uint32_t _node) { return get(_node); }
@@ -171,10 +172,9 @@ class BVHPatch final {
     }
   }
 
-  inline size_t   size() const noexcept { return vBVH->size(); }
-  inline bool     empty() const noexcept { return vBVH->empty(); }
+  inline size_t   size() const noexcept { return vSize; }
+  inline bool     empty() const noexcept { return vSize == 0; }
   inline uint32_t root() const noexcept { return vRootIndex; }
-  inline uint16_t maxLevel() const noexcept { return vBVH->maxLevel(); }
   inline void     setNewRoot(uint32_t _root) noexcept { vRootIndex = _root; }
 }; // namespace BVHTest::base
 

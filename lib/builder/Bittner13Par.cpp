@@ -47,6 +47,7 @@ Bittner13Par::~Bittner13Par() {}
 void Bittner13Par::fromJSON(const json &_j) {
   OptimizerBase::fromJSON(_j);
   vMaxNumStepps = _j.value("maxNumStepps", vMaxNumStepps);
+  vNumChunks    = _j.value("numChunks", vNumChunks);
   vBatchPercent = _j.value("batchPercent", vBatchPercent);
   vRandom       = _j.value("random", vRandom);
   vSortBatch    = _j.value("sort", vSortBatch);
@@ -59,6 +60,7 @@ void Bittner13Par::fromJSON(const json &_j) {
 json Bittner13Par::toJSON() const {
   json lJSON            = OptimizerBase::toJSON();
   lJSON["maxNumStepps"] = vMaxNumStepps;
+  lJSON["numChunks"]    = vNumChunks;
   lJSON["batchPercent"] = vBatchPercent;
   lJSON["random"]       = vRandom;
   lJSON["sort"]         = vSortBatch;
@@ -215,7 +217,7 @@ bool Bittner13Par::reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool 
     lBest = _bvh.patchNode(lBestIndex);
   } else {
     // Node is already owned by this thread ==> no need to lock it
-    lBest = _bvh.getPatch(lBestPatchIndex);
+    lBest = _bvh.getPatchedNode(lBestPatchIndex);
   }
 
   BVHNode *lNode           = _bvh[_node];
@@ -231,7 +233,7 @@ bool Bittner13Par::reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool 
     }
     lRoot = _bvh.patchNode(lRootIndex);
   } else {
-    lRoot = _bvh.getPatch(lRootPatchIndex);
+    lRoot = _bvh.getPatchedNode(lRootPatchIndex);
   }
 
   // Insert the unused node
@@ -353,17 +355,18 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
   SumMin *             _sumMin = lSumMin.get();
   initSumAndMin(_state.bvh, _sumMin);
 
-  uint32_t lNumNodes = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
-  auto     lComp     = [](TUP const &_l, TUP const &_r) -> bool { return get<1>(_l) > get<1>(_r); };
+  uint32_t lNumNodes  = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
+  uint32_t lChunkSize = lNumNodes / vNumChunks;
+  auto     lComp      = [](TUP const &_l, TUP const &_r) -> bool { return get<1>(_l) > get<1>(_r); };
 
   vector<TUP>      lTodoList;
   vector<PATCH>    lPatches;
   vector<bool>     lSkipp;
   vector<uint32_t> lFixList;
   lTodoList.resize(_state.bvh.size());
-  lPatches.resize(lNumNodes, PATCH(&_state.bvh));
-  lSkipp.resize(lNumNodes);
-  lFixList.resize(lNumNodes * 3);
+  lPatches.resize(lChunkSize, PATCH(&_state.bvh));
+  lSkipp.resize(lChunkSize);
+  lFixList.resize(lChunkSize * 3);
 
   uint32_t lSkipped = 0;
 
@@ -377,6 +380,11 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
   mt19937                            lPRNG(lRD());
   uniform_int_distribution<uint32_t> lDis(0, lTodoList.size() - 1);
 
+#pragma omp parallel for
+  for (uint32_t j = 0; j < _state.bvh.size(); ++j) {
+    ATO_OF(j) = 0;
+  }
+
 
   /*****  ___  ___      _         _                         *****/
   /*****  |  \/  |     (_)       | |                        *****/
@@ -386,7 +394,6 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
   /*****  \_|  |_/\__,_|_|_| |_| \_____/\___/ \___/| .__/   *****/
   /*****                                           | |      *****/
   /*****                                           |_|      *****/
-
 
 
   for (uint32_t i = 0; i < vMaxNumStepps; ++i) {
@@ -403,15 +410,9 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
     /*                | |   | |                                                                         */
     /*                |_|   |_|                                                                         */
 
-
     if (vRandom) {
       // === Random suffle ===
       shuffle(begin(lTodoList), end(lTodoList), lPRNG);
-
-#pragma omp parallel for
-      for (uint32_t j = 0; j < _state.bvh.size(); ++j) {
-        ATO_OF(j).store(0, memory_order_relaxed);
-      }
 
     } else {
       // === Metric selction ===
@@ -426,7 +427,6 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
 
         float lCost  = lCanRemove ? ((lSA * lSA * lSA * (float)lNode.numChildren) / (SUM_OF(j) * MIN_OF(j))) : 0.0f;
         lTodoList[j] = {j, lCost};
-        ATO_OF(j).store(0, memory_order_relaxed);
       }
 
 
@@ -435,84 +435,95 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
       if (vShuffleList) { shuffle(begin(lTodoList), begin(lTodoList) + lNumNodes, lPRNG); }
     }
 
+    // Separate the batch into chunks
+    for (uint32_t j = 0; j < vNumChunks; ++j) {
 
-    /*   _____ _                     _____     ______     _                     _     _   _           _             */
-    /*  /  ___| |                   / __  \ _  | ___ \   (_)                   | |   | \ | |         | |            */
-    /*  \ `--.| |_ ___ _ __  _ __   `' / /'(_) | |_/ /___ _ _ __  ___  ___ _ __| |_  |  \| | ___   __| | ___  ___   */
-    /*   `--. \ __/ _ \ '_ \| '_ \    / /      |    // _ \ | '_ \/ __|/ _ \ '__| __| | . ` |/ _ \ / _` |/ _ \/ __|  */
-    /*  /\__/ / ||  __/ |_) | |_) | ./ /___ _  | |\ \  __/ | | | \__ \  __/ |  | |_  | |\  | (_) | (_| |  __/\__ \  */
-    /*  \____/ \__\___| .__/| .__/  \_____/(_) \_| \_\___|_|_| |_|___/\___|_|   \__| \_| \_/\___/ \__,_|\___||___/  */
-    /*                | |   | |                                                                                     */
-    /*                |_|   |_|                                                                                     */
+
+      /*   _____ _                     _____     ______     _                     _     _   _           _             */
+      /*  /  ___| |                   / __  \ _  | ___ \   (_)                   | |   | \ | |         | |            */
+      /*  \ `--.| |_ ___ _ __  _ __   `' / /'(_) | |_/ /___ _ _ __  ___  ___ _ __| |_  |  \| | ___   __| | ___  ___   */
+      /*   `--. \ __/ _ \ '_ \| '_ \    / /      |    // _ \ | '_ \/ __|/ _ \ '__| __| | . ` |/ _ \ / _` |/ _ \/ __|  */
+      /*  /\__/ / ||  __/ |_) | |_) | ./ /___ _  | |\ \  __/ | | | \__ \  __/ |  | |_  | |\  | (_) | (_| |  __/\__ \  */
+      /*  \____/ \__\___| .__/| .__/  \_____/(_) \_| \_\___|_|_| |_|___/\___|_|   \__| \_| \_/\___/ \__,_|\___||___/  */
+      /*                | |   | |                                                                                     */
+      /*                |_|   |_|                                                                                     */
+
+#pragma omp parallel for schedule(dynamic, 128)
+      for (uint32_t k = 0; k < lChunkSize; ++k) {
+        lPatches[k].clear();
+        auto [lNodeIndex, _]                 = lTodoList[j * lChunkSize + k];
+        auto [lRes, lTInsert, lTUnused, lGP] = removeNode(lNodeIndex, lPatches[k], _sumMin);
+        auto [l1stIndex, l2ndIndex]          = lTInsert;
+        auto [lU1, lU2]                      = lTUnused;
+
+        if (!lRes) {
+          lSkipp[k] = true;
+          continue;
+        }
+
+        bool lR1 = reinsert(l1stIndex, lU1, lPatches[k], true, _sumMin);
+        bool lR2 = reinsert(l2ndIndex, lU2, lPatches[k], false, _sumMin);
+        if (!lR1 || !lR2) {
+          lSkipp[k] = true;
+
+          // Unlock Nodes
+          ATO_OF(lNodeIndex) = 0;
+          ATO_OF(l1stIndex)  = 0;
+          ATO_OF(l2ndIndex)  = 0;
+          ATO_OF(lU1)        = 0;
+          ATO_OF(lU2)        = 0;
+          ATO_OF(lGP)        = 0;
+          continue;
+        }
+
+        lSkipp[k]           = false;
+        lFixList[k * 3 + 0] = lGP;
+        lFixList[k * 3 + 1] = lU1;
+        lFixList[k * 3 + 2] = lU2;
+      }
+
+
+      /*   _____ _                     _____      ___              _        ______     _       _                 */
+      /*  /  ___| |                   |____ |_   / _ \            | |       | ___ \   | |     | |                */
+      /*  \ `--.| |_ ___ _ __  _ __       / (_) / /_\ \_ __  _ __ | |_   _  | |_/ /_ _| |_ ___| |__   ___  ___   */
+      /*   `--. \ __/ _ \ '_ \| '_ \      \ \   |  _  | '_ \| '_ \| | | | | |  __/ _` | __/ __| '_ \ / _ \/ __|  */
+      /*  /\__/ / ||  __/ |_) | |_) | .___/ /_  | | | | |_) | |_) | | |_| | | | | (_| | || (__| | | |  __/\__ \  */
+      /*  \____/ \__\___| .__/| .__/  \____/(_) \_| |_/ .__/| .__/|_|\__, | \_|  \__,_|\__\___|_| |_|\___||___/  */
+      /*                | |   | |                     | |   | |       __/ |                                      */
+      /*                |_|   |_|                     |_|   |_|      |___/                                       */
 
 #pragma omp parallel for
-    for (uint32_t j = 0; j < lNumNodes; ++j) {
-      lPatches[j].clear();
-      auto [lNodeIndex, _]                 = lTodoList[j];
-      auto [lRes, lTInsert, lTUnused, lGP] = removeNode(lNodeIndex, lPatches[j], _sumMin);
-      auto [l1stIndex, l2ndIndex]          = lTInsert;
-      auto [lU1, lU2]                      = lTUnused;
+      for (uint32_t k = 0; k < lChunkSize; ++k) {
+        // Reset locks
+        for (uint32_t l = 0; l < 10; ++l) {
+          if (l >= lPatches[k].size()) { break; }
+          ATO_OF(lPatches[k].getPatchedNodeIndex(l)) = 0;
+        }
 
-      if (!lRes) {
-        lSkipp[j] = true;
-        continue;
+        if (lSkipp[k]) { continue; }
+        lPatches[k].apply();
       }
 
-      bool lR1 = reinsert(l1stIndex, lU1, lPatches[j], true, _sumMin);
-      bool lR2 = reinsert(l2ndIndex, lU2, lPatches[j], false, _sumMin);
-      if (!lR1 || !lR2) {
-        lSkipp[j] = true;
+      /*   _____ _                       ___    ______ _        _   _            _                   */
+      /*  /  ___| |                     /   |_  |  ___(_)      | | | |          | |                  */
+      /*  \ `--.| |_ ___ _ __  _ __    / /| (_) | |_   ___  __ | |_| |__   ___  | |_ _ __ ___  ___   */
+      /*   `--. \ __/ _ \ '_ \| '_ \  / /_| |   |  _| | \ \/ / | __| '_ \ / _ \ | __| '__/ _ \/ _ \  */
+      /*  /\__/ / ||  __/ |_) | |_) | \___  |_  | |   | |>  <  | |_| | | |  __/ | |_| | |  __/  __/  */
+      /*  \____/ \__\___| .__/| .__/      |_(_) \_|   |_/_/\_\  \__|_| |_|\___|  \__|_|  \___|\___|  */
+      /*                | |   | |                                                                    */
+      /*                |_|   |_|                                                                    */
 
-        // Unlock Nodes
-        ATO_OF(lNodeIndex) = 0;
-        ATO_OF(l1stIndex)  = 0;
-        ATO_OF(l2ndIndex)  = 0;
-        ATO_OF(lU1)        = 0;
-        ATO_OF(lU2)        = 0;
-        ATO_OF(lGP)        = 0;
-        continue;
+
+      for (uint32_t k = 0; k < lChunkSize; ++k) {
+        if (lSkipp[k]) {
+          lSkipped++;
+          continue;
+        }
+
+        fixTree(lFixList[k * 3 + 0], _state.bvh, _sumMin);
+        fixTree(lFixList[k * 3 + 1], _state.bvh, _sumMin);
+        fixTree(lFixList[k * 3 + 2], _state.bvh, _sumMin);
       }
-
-      lSkipp[j]           = false;
-      lFixList[j * 3 + 0] = lGP;
-      lFixList[j * 3 + 1] = lU1;
-      lFixList[j * 3 + 2] = lU2;
-    }
-
-    /*   _____ _                     _____      ___              _        ______     _       _                 */
-    /*  /  ___| |                   |____ |_   / _ \            | |       | ___ \   | |     | |                */
-    /*  \ `--.| |_ ___ _ __  _ __       / (_) / /_\ \_ __  _ __ | |_   _  | |_/ /_ _| |_ ___| |__   ___  ___   */
-    /*   `--. \ __/ _ \ '_ \| '_ \      \ \   |  _  | '_ \| '_ \| | | | | |  __/ _` | __/ __| '_ \ / _ \/ __|  */
-    /*  /\__/ / ||  __/ |_) | |_) | .___/ /_  | | | | |_) | |_) | | |_| | | | | (_| | || (__| | | |  __/\__ \  */
-    /*  \____/ \__\___| .__/| .__/  \____/(_) \_| |_/ .__/| .__/|_|\__, | \_|  \__,_|\__\___|_| |_|\___||___/  */
-    /*                | |   | |                     | |   | |       __/ |                                      */
-    /*                |_|   |_|                     |_|   |_|      |___/                                       */
-
-#pragma omp parallel for
-    for (uint32_t j = 0; j < lNumNodes; ++j) {
-      if (lSkipp[j]) { continue; }
-      lPatches[j].apply();
-    }
-
-    /*   _____ _                       ___    ______ _        _   _            _                   */
-    /*  /  ___| |                     /   |_  |  ___(_)      | | | |          | |                  */
-    /*  \ `--.| |_ ___ _ __  _ __    / /| (_) | |_   ___  __ | |_| |__   ___  | |_ _ __ ___  ___   */
-    /*   `--. \ __/ _ \ '_ \| '_ \  / /_| |   |  _| | \ \/ / | __| '_ \ / _ \ | __| '__/ _ \/ _ \  */
-    /*  /\__/ / ||  __/ |_) | |_) | \___  |_  | |   | |>  <  | |_| | | |  __/ | |_| | |  __/  __/  */
-    /*  \____/ \__\___| .__/| .__/      |_(_) \_|   |_/_/\_\  \__|_| |_|\___|  \__|_|  \___|\___|  */
-    /*                | |   | |                                                                    */
-    /*                |_|   |_|                                                                    */
-
-
-    for (uint32_t j = 0; j < lNumNodes; ++j) {
-      if (lSkipp[j]) {
-        lSkipped++;
-        continue;
-      }
-
-      fixTree(lFixList[j * 3 + 0], _state.bvh, _sumMin);
-      fixTree(lFixList[j * 3 + 1], _state.bvh, _sumMin);
-      fixTree(lFixList[j * 3 + 2], _state.bvh, _sumMin);
     }
   }
 

@@ -32,6 +32,7 @@ class Bittner13Par final : public OptimizerBase {
 
  private:
   uint32_t vMaxNumStepps = 500;
+  uint32_t vNumChunks    = 32;
   float    vBatchPercent = 1.0f;
   bool     vRandom       = false;
   bool     vSortBatch    = true;
