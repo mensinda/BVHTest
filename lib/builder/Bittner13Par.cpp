@@ -206,18 +206,33 @@ bool Bittner13Par::reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool 
 
   uint32_t lTempID;
 
-  IF_NOT_LOCK(lBestIndex) { return false; }
+  uint32_t lBestPatchIndex = _bvh.patchIndex(lBestIndex); // Check if node is already patched
+  BVHNode *lBest           = nullptr;
 
-  BVHNode *lNode      = _bvh[_node];
-  BVHNode *lBest      = _bvh.patchIndex(lBestIndex) == UINT32_MAX ? _bvh.patchNode(lBestIndex) : _bvh[lBestIndex];
-  BVHNode *lUnused    = _bvh[_unused];
-  uint32_t lRootIndex = lBest->parent;
-
-  IF_NOT_LOCK(lRootIndex) {
-    ATO_OF(lBestIndex) = 0;
-    return false;
+  if (lBestPatchIndex == UINT32_MAX) {
+    // Node is not patched ==> try to lock it
+    IF_NOT_LOCK(lBestIndex) { return false; }
+    lBest = _bvh.patchNode(lBestIndex);
+  } else {
+    // Node is already owned by this thread ==> no need to lock it
+    lBest = _bvh.getPatch(lBestPatchIndex);
   }
-  BVHNode *lRoot = _bvh.patchIndex(lRootIndex) == UINT32_MAX ? _bvh.patchNode(lRootIndex) : _bvh[lRootIndex];
+
+  BVHNode *lNode           = _bvh[_node];
+  BVHNode *lUnused         = _bvh[_unused];
+  uint32_t lRootIndex      = lBest->parent;
+  uint32_t lRootPatchIndex = _bvh.patchIndex(lRootIndex);
+  BVHNode *lRoot           = nullptr;
+
+  if (lRootPatchIndex == UINT32_MAX) {
+    IF_NOT_LOCK(lRootIndex) {
+      ATO_OF(lBestIndex) = 0;
+      return false;
+    }
+    lRoot = _bvh.patchNode(lRootIndex);
+  } else {
+    lRoot = _bvh.getPatch(lRootPatchIndex);
+  }
 
   // Insert the unused node
   if (lBest->isLeftChild()) {

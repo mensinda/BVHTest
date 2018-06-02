@@ -72,6 +72,8 @@ class BVHPatch final {
     return &vNodes[lIndex];
   }
 
+  inline BVHNode *getPatch(uint32_t _patchIndex) { return &vNodes[_patchIndex]; }
+
   inline BVHNode *rootNode() { return get(vRootIndex); }
   inline BVHNode *operator[](uint32_t _node) { return get(_node); }
 
