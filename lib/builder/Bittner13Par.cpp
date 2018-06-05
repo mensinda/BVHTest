@@ -50,6 +50,7 @@ void Bittner13Par::fromJSON(const json &_j) {
   vRandom       = _j.value("random", vRandom);
   vSortBatch    = _j.value("sort", vSortBatch);
   vShuffleList  = _j.value("shuffle", vShuffleList);
+  vOffsetAccess = _j.value("offsetAccess", vOffsetAccess);
 
   if (vBatchPercent <= 0.01f) vBatchPercent = 0.01f;
   if (vBatchPercent >= 75.0f) vBatchPercent = 75.0f;
@@ -63,6 +64,7 @@ json Bittner13Par::toJSON() const {
   lJSON["random"]       = vRandom;
   lJSON["sort"]         = vSortBatch;
   lJSON["shuffle"]      = vShuffleList;
+  lJSON["offsetAccess"] = vOffsetAccess;
   return lJSON;
 }
 
@@ -367,7 +369,7 @@ void Bittner13Par::initSumAndMin(BVH &_bvh, SumMin *_sumMin) {
 
 
 ErrorCode Bittner13Par::runImpl(State &_state) {
-  typedef tuple<uint32_t, float> TUP;
+  typedef pair<uint32_t, float> TUP;
 
   unique_ptr<SumMin[]> lSumMin(new SumMin[_state.bvh.size()]);
   SumMin *             _sumMin = lSumMin.get();
@@ -375,7 +377,8 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
 
   uint32_t lNumNodes  = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
   uint32_t lChunkSize = lNumNodes / vNumChunks;
-  auto     lComp      = [](TUP const &_l, TUP const &_r) -> bool { return get<1>(_l) > get<1>(_r); };
+  lNumNodes           = lChunkSize * vNumChunks;
+  auto lComp          = [](TUP const &_l, TUP const &_r) -> bool { return _l.second > _r.second; };
 
   vector<TUP>      lTodoList;
   vector<PATCH>    lPatches;
@@ -465,7 +468,7 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
 #pragma omp parallel for schedule(dynamic, 128)
       for (uint32_t k = 0; k < lChunkSize; ++k) {
         lPatches[k].clear();
-        auto [lNodeIndex, _]                 = lTodoList[j * lChunkSize + k];
+        auto [lNodeIndex, _]                 = lTodoList[vOffsetAccess ? k * vNumChunks + j : j * lChunkSize + k];
         auto [lRes, lTInsert, lTUnused, lGP] = removeNode(lNodeIndex, lPatches[k], _sumMin);
         auto [l1stIndex, l2ndIndex]          = lTInsert;
         auto [lU1, lU2]                      = lTUnused;
