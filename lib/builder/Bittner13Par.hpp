@@ -25,9 +25,27 @@ namespace BVHTest::builder {
 
 class Bittner13Par final : public OptimizerBase {
  public:
-  typedef base::BVHPatch<10, 2, 128>                                                                 PATCH;
-  typedef std::tuple<float, float, std::atomic_flag>                                                 SumMin;
-  typedef std::tuple<bool, std::tuple<uint32_t, uint32_t>, std::tuple<uint32_t, uint32_t>, uint32_t> RM_RES;
+  typedef base::BVHPatch<10, 2, 128> PATCH;
+
+  struct SumMin {
+    float            sum;
+    float            min;
+    std::atomic_flag flag;
+  };
+
+  struct RM_RES {
+    struct NodePair {
+      uint32_t n1;
+      uint32_t n2;
+    };
+
+    bool     res;
+    NodePair toInsert;
+    NodePair unused;
+    uint32_t grandParent;
+  };
+
+  static const size_t QUEUE_SIZE = 512;
 
  private:
   uint32_t vMaxNumStepps = 500;

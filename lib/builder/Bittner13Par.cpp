@@ -20,7 +20,6 @@
 #include <algorithm>
 #include <chrono>
 #include <fmt/format.h>
-#include <queue>
 #include <random>
 #include <thread>
 
@@ -33,9 +32,8 @@ using namespace BVHTest::misc;
 
 
 // Quality of life defines
-#define SUM_OF(x) get<0>(_sumMin[x])
-#define MIN_OF(x) get<1>(_sumMin[x])
-#define ATO_OF(x) get<2>(_sumMin[x])
+#define SUM_OF(x) _sumMin[x].sum
+#define MIN_OF(x) _sumMin[x].min
 
 #define NODE _bvh[lNode]
 #define PARENT _bvh[NODE.parent]
@@ -68,24 +66,31 @@ json Bittner13Par::toJSON() const {
   return lJSON;
 }
 
+struct FindNodeStruct {
+  uint32_t node;
+  float    cost;
+  uint32_t level;
+
+  inline bool operator<(FindNodeStruct const &_b) const noexcept { return cost > _b.cost; }
+};
 
 pair<uint32_t, uint32_t> Bittner13Par::findNodeForReinsertion(uint32_t _n, PATCH &_bvh) {
-  typedef tuple<uint32_t, float, uint32_t> T1; // Node Ind, cost, tree level
+  float                             lBestCost      = numeric_limits<float>::infinity();
+  pair<uint32_t, uint32_t>          lBestNodeIndex = {0, 0};
+  BVHNode const *                   lNode          = _bvh[_n];
+  AABB const &                      lNodeBBox      = lNode->bbox;
+  float                             lSArea         = lNode->surfaceArea;
+  uint32_t                          lSize          = 1;
+  array<FindNodeStruct, QUEUE_SIZE> lPQ;
+  auto                              lBegin = begin(lPQ);
 
-  float                    lBestCost      = numeric_limits<float>::infinity();
-  pair<uint32_t, uint32_t> lBestNodeIndex = {0, 0};
-  BVHNode const *          lNode          = _bvh[_n];
-  AABB const &             lNodeBBox      = lNode->bbox;
-  float                    lSArea         = lNode->surfaceArea;
-  auto                     lComp          = [](T1 const &_l, T1 const &_r) -> bool { return get<1>(_l) > get<1>(_r); };
-  priority_queue<T1, vector<T1>, decltype(lComp)> lPQ(lComp);
-
-  lPQ.push({_bvh.root(), 0.0f, 0});
-  while (!lPQ.empty()) {
-    auto [lCurrNodeIndex, lCurrCost, lLevel] = lPQ.top();
+  lPQ[0] = {_bvh.root(), 0.0f, 0};
+  while (lSize > 0) {
+    auto [lCurrNodeIndex, lCurrCost, lLevel] = lPQ[0];
     BVHNode *lCurrNode                       = _bvh[lCurrNodeIndex];
     auto [lAABB, lCurrSArea]                 = _bvh.getAABB(lCurrNodeIndex, lLevel);
-    lPQ.pop();
+    pop_heap(lBegin, lBegin + lSize);
+    lSize--;
 
     if ((lCurrCost + lSArea) >= lBestCost) {
       // Early termination - not possible to further optimize
@@ -104,8 +109,12 @@ pair<uint32_t, uint32_t> Bittner13Par::findNodeForReinsertion(uint32_t _n, PATCH
     float lNewInduced = lTotalCost - lCurrSArea;
     if ((lNewInduced + lSArea) < lBestCost) {
       if (!lCurrNode->isLeaf()) {
-        lPQ.push({lCurrNode->left, lNewInduced, lLevel + 1});
-        lPQ.push({lCurrNode->right, lNewInduced, lLevel + 1});
+        assert(lSize + 2 < QUEUE_SIZE);
+        lPQ[lSize + 0] = {lCurrNode->left, lNewInduced, lLevel + 1};
+        lPQ[lSize + 1] = {lCurrNode->right, lNewInduced, lLevel + 1};
+        push_heap(lBegin, lBegin + lSize + 1);
+        push_heap(lBegin, lBegin + lSize + 2);
+        lSize += 2;
       }
     }
   }
@@ -114,9 +123,9 @@ pair<uint32_t, uint32_t> Bittner13Par::findNodeForReinsertion(uint32_t _n, PATCH
 }
 
 #define SPINN_LOCK(N)                                                                                                  \
-  while (ATO_OF(N).test_and_set(memory_order_acquire)) { this_thread::yield(); }
-#define IF_NOT_LOCK(N) if (ATO_OF(N).test_and_set(memory_order_acquire))
-#define RELEASE_LOCK(N) ATO_OF(N).clear(memory_order_release);
+  while (_sumMin[N].flag.test_and_set(memory_order_acquire)) { this_thread::yield(); }
+#define IF_NOT_LOCK(N) if (_sumMin[N].flag.test_and_set(memory_order_acquire))
+#define RELEASE_LOCK(N) _sumMin[N].flag.clear(memory_order_release);
 
 Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMin *_sumMin) {
   RM_RES lFalse = {false, {0, 0}, {0, 0}, 0};
@@ -129,41 +138,41 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMi
   uint32_t lParentIndex  = lNode->parent;
 
   IF_NOT_LOCK(lSiblingIndex) {
-    ATO_OF(_node).clear(memory_order_release);
+    RELEASE_LOCK(_node);
     return lFalse;
   }
   BVHNode *lSibling = _bvh.patchNode(lSiblingIndex);
 
   IF_NOT_LOCK(lParentIndex) {
-    ATO_OF(_node).clear(memory_order_release);
-    ATO_OF(lSiblingIndex).clear(memory_order_release);
+    RELEASE_LOCK(_node);
+    RELEASE_LOCK(lSiblingIndex);
     return lFalse;
   }
   BVHNode *lParent           = _bvh.patchNode(lParentIndex);
   uint32_t lGrandParentIndex = lParent->parent;
 
   IF_NOT_LOCK(lGrandParentIndex) {
-    ATO_OF(_node).clear(memory_order_release);
-    ATO_OF(lSiblingIndex).clear(memory_order_release);
-    ATO_OF(lParentIndex).clear(memory_order_release);
+    RELEASE_LOCK(_node);
+    RELEASE_LOCK(lSiblingIndex);
+    RELEASE_LOCK(lParentIndex);
     return lFalse;
   }
   BVHNode *lGrandParent = _bvh.patchNode(lGrandParentIndex);
 
   IF_NOT_LOCK(lNode->left) {
-    ATO_OF(_node).clear(memory_order_release);
-    ATO_OF(lSiblingIndex).clear(memory_order_release);
-    ATO_OF(lParentIndex).clear(memory_order_release);
-    ATO_OF(lGrandParentIndex).clear(memory_order_release);
+    RELEASE_LOCK(_node);
+    RELEASE_LOCK(lSiblingIndex);
+    RELEASE_LOCK(lParentIndex);
+    RELEASE_LOCK(lGrandParentIndex);
     return lFalse;
   }
 
   IF_NOT_LOCK(lNode->right) {
-    ATO_OF(_node).clear(memory_order_release);
-    ATO_OF(lSiblingIndex).clear(memory_order_release);
-    ATO_OF(lParentIndex).clear(memory_order_release);
-    ATO_OF(lGrandParentIndex).clear(memory_order_release);
-    ATO_OF(lNode->left).clear(memory_order_release);
+    RELEASE_LOCK(_node);
+    RELEASE_LOCK(lSiblingIndex);
+    RELEASE_LOCK(lParentIndex);
+    RELEASE_LOCK(lGrandParentIndex);
+    RELEASE_LOCK(lNode->left);
     return lFalse;
   }
 
@@ -225,7 +234,7 @@ bool Bittner13Par::reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool 
 
   if (lRootPatchIndex == UINT32_MAX) {
     IF_NOT_LOCK(lRootIndex) {
-      ATO_OF(lBestIndex).clear(memory_order_release);
+      RELEASE_LOCK(lBestIndex);
       return false;
     }
     lRoot = _bvh.patchNode(lRootIndex);
@@ -383,7 +392,7 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
 #pragma omp parallel for
   for (uint32_t i = 0; i < lTodoList.size(); ++i) {
     lTodoList[i] = {i, 0.0f};
-    ATO_OF(i).clear(memory_order_release);
+    RELEASE_LOCK(i);
   }
 
   random_device                      lRD;
@@ -472,12 +481,12 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
           lSkipp[k] = true;
 
           // Unlock Nodes
-          ATO_OF(lNodeIndex).clear(memory_order_release);
-          ATO_OF(l1stIndex).clear(memory_order_release);
-          ATO_OF(l2ndIndex).clear(memory_order_release);
-          ATO_OF(lU1).clear(memory_order_release);
-          ATO_OF(lU2).clear(memory_order_release);
-          ATO_OF(lGP).clear(memory_order_release);
+          RELEASE_LOCK(lNodeIndex);
+          RELEASE_LOCK(l1stIndex);
+          RELEASE_LOCK(l2ndIndex);
+          RELEASE_LOCK(lU1);
+          RELEASE_LOCK(lU2);
+          RELEASE_LOCK(lGP);
           continue;
         }
 
@@ -502,7 +511,7 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
         // Reset locks
         for (uint32_t l = 0; l < 10; ++l) {
           if (l >= lPatches[k].size()) { break; }
-          ATO_OF(lPatches[k].getPatchedNodeIndex(l)).clear(memory_order_release);
+          RELEASE_LOCK(lPatches[k].getPatchedNodeIndex(l));
         }
 
         if (lSkipp[k]) { continue; }

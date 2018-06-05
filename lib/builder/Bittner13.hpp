@@ -23,15 +23,31 @@ namespace BVHTest::builder {
 
 class Bittner13 final : public OptimizerBase {
  public:
-  typedef std::tuple<float, float>                                                         SumMin;
-  typedef std::tuple<bool, std::tuple<uint32_t, uint32_t>, std::tuple<uint32_t, uint32_t>> RM_RES;
+  struct SumMin {
+    float sum;
+    float min;
+  };
+
+  struct RM_RES {
+    struct NodePair {
+      uint32_t n1;
+      uint32_t n2;
+    };
+
+    bool     res;
+    NodePair toInsert;
+    NodePair unused;
+  };
+
+  static const size_t QUEUE_SIZE = 512;
 
  private:
-  uint32_t vMaxNumStepps     = 500;
-  float    vBatchPercent     = 1.0f;
-  bool     vRandom           = false;
-  bool     vSortBatch        = true;
-  bool     vStrictSequential = false;
+  uint32_t vMaxNumStepps       = 500;
+  float    vBatchPercent       = 1.0f;
+  uint32_t vQueuePruneInterval = 32;
+  bool     vRandom             = false;
+  bool     vSortBatch          = true;
+  bool     vStrictSequential   = false;
 
   std::vector<SumMin> vSumAndMin;
 

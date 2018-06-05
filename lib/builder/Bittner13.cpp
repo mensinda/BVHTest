@@ -19,7 +19,6 @@
 #include <algorithm>
 #include <chrono>
 #include <fmt/format.h>
-#include <queue>
 #include <random>
 #include <thread>
 
@@ -32,8 +31,8 @@ using namespace BVHTest::misc;
 
 
 // Quality of life defines
-#define SUM_OF(x) get<0>(vSumAndMin[x])
-#define MIN_OF(x) get<1>(vSumAndMin[x])
+#define SUM_OF(x) vSumAndMin[x].sum
+#define MIN_OF(x) vSumAndMin[x].min
 
 #define NODE _bvh[lNode]
 #define PARENT _bvh[NODE.parent]
@@ -64,22 +63,28 @@ json Bittner13::toJSON() const {
   return lJSON;
 }
 
+struct FindNodeStruct {
+  uint32_t node;
+  float    cost;
+
+  inline bool operator<(FindNodeStruct const &_b) const noexcept { return cost > _b.cost; }
+};
 
 uint32_t Bittner13::findNodeForReinsertion(uint32_t _n, BVH &_bvh) {
-  typedef tuple<uint32_t, float> T1;
+  float                             lBestCost      = numeric_limits<float>::infinity();
+  uint32_t                          lBestNodeIndex = 0;
+  BVHNode const &                   lNode          = _bvh[_n];
+  float                             lSArea         = lNode.surfaceArea;
+  uint32_t                          lSize          = 1;
+  array<FindNodeStruct, QUEUE_SIZE> lPQ;
+  auto                              lBegin = begin(lPQ);
 
-  float          lBestCost      = numeric_limits<float>::infinity();
-  uint32_t       lBestNodeIndex = 0;
-  BVHNode const &lNode          = _bvh[_n];
-  float          lSArea         = lNode.surfaceArea;
-  auto           lComp          = [](T1 const &_l, T1 const &_r) -> bool { return get<1>(_l) > get<1>(_r); };
-  priority_queue<T1, vector<T1>, decltype(lComp)> lPQ(lComp);
-
-  lPQ.push({_bvh.root(), 0.0f});
-  while (!lPQ.empty()) {
-    auto [lCurrNodeIndex, lCurrCost] = lPQ.top();
+  lPQ[0] = {_bvh.root(), 0.0f};
+  while (lSize > 0) {
+    auto [lCurrNodeIndex, lCurrCost] = lPQ[0];
     BVHNode const &lCurrNode         = _bvh[lCurrNodeIndex];
-    lPQ.pop();
+    pop_heap(lBegin, lBegin + lSize);
+    lSize--;
 
     if ((lCurrCost + lSArea) >= lBestCost) {
       // Early termination - not possible to further optimize
@@ -97,8 +102,11 @@ uint32_t Bittner13::findNodeForReinsertion(uint32_t _n, BVH &_bvh) {
     float lNewInduced = lTotalCost - lCurrNode.surfaceArea;
     if ((lNewInduced + lSArea) < lBestCost) {
       if (!lCurrNode.isLeaf()) {
-        lPQ.push({lCurrNode.left, lNewInduced});
-        lPQ.push({lCurrNode.right, lNewInduced});
+        lPQ[lSize + 0] = {lCurrNode.left, lNewInduced};
+        lPQ[lSize + 1] = {lCurrNode.right, lNewInduced};
+        push_heap(lBegin, lBegin + lSize + 1);
+        push_heap(lBegin, lBegin + lSize + 2);
+        lSize += 2;
       }
     }
   }
@@ -246,13 +254,13 @@ void Bittner13::initSumAndMin(BVH &_bvh) {
     }
 
     // Leaf
-    vSumAndMin[lNode] = {NODE.surfaceArea * getCostTri(), NODE.surfaceArea};
+    vSumAndMin[lNode] = {NODE.surfaceArea * (float)getCostTri(), NODE.surfaceArea};
 
     // Backtrack if left and right children are processed
     while ((lBitStack & 1) == 0) {
       if (lBitStack == 0 && lNode == lRoot) { return; } // We are done
       lNode             = NODE.parent;
-      vSumAndMin[lNode] = {SUM_OF(NODE.left) + SUM_OF(NODE.right) + NODE.surfaceArea * getCostInner(),
+      vSumAndMin[lNode] = {SUM_OF(NODE.left) + SUM_OF(NODE.right) + NODE.surfaceArea * (float)getCostInner(),
                            min(MIN_OF(NODE.left), MIN_OF(NODE.right))};
       lBitStack >>= 1;
     }
