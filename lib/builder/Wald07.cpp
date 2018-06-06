@@ -122,7 +122,7 @@ BuilderBase::ITER Wald07::split(ITER _begin, ITER _end, uint32_t) {
 ErrorCode Wald07::runImpl(State &_state) {
   vector<Triangle> lResVec;
   lResVec.reserve(_state.mesh.faces.size());
-  _state.bvh.reserve(_state.mesh.faces.size() * 2); // Assuming perfect binary tree
+  _state.bvh.reserve(_state.mesh.faces.size() * 2 - 1); // Assuming perfect binary tree
 
   auto lAABBs = boundingVolumesFromMesh(_state.mesh);
   build(begin(lAABBs), end(lAABBs), _state.bvh, lResVec);

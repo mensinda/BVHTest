@@ -67,7 +67,7 @@ class BVHPatch final {
 
   inline BVHNode *get(uint32_t _node) {
     uint32_t lIndex = patchIndex(_node);
-    if (lIndex == UINT32_MAX) { return &vBVH->get(_node); }
+    if (lIndex == UINT32_MAX) { return vBVH->get(_node); }
     assert(lIndex < vSize);
     return &vNodes[lIndex];
   }
@@ -81,7 +81,7 @@ class BVHPatch final {
   inline BVHNode *patchNode(uint32_t _node) {
     assert(vSize < NNode);
     vPatch[vSize]  = _node;
-    vNodes[vSize]  = vBVH->get(_node);
+    vNodes[vSize]  = *vBVH->get(_node);
     BVHNode *lNode = &vNodes[vSize];
     vSize++;
     return lNode;
@@ -97,7 +97,7 @@ class BVHPatch final {
   inline void apply() {
     for (uint32_t i = 0; i < NNode; ++i) {
       if (i >= vSize) { break; }
-      vBVH->get(vPatch[i]) = vNodes[i];
+      *vBVH->get(vPatch[i]) = vNodes[i];
     }
     vBVH->setNewRoot(vRootIndex);
   }

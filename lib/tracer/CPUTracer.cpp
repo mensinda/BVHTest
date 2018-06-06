@@ -77,7 +77,7 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &_bvh) {
 #endif
 
   __int128_t     lBitStack = 0;
-  BVHNode const *lNode     = &_bvh.rootNode();
+  BVHNode const *lNode     = _bvh.rootNode();
 
   Triangle lClosest = {0, 0, 0};
   float    lNearest = lInfinity;
@@ -91,8 +91,8 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &_bvh) {
   while (true) {
     if (!lNode->isLeaf()) {
       lRes.intCount++;
-      BVHNode const *lLeft     = &_bvh[lNode->left];
-      BVHNode const *lRight    = &_bvh[lNode->right];
+      BVHNode const *lLeft     = _bvh[lNode->left];
+      BVHNode const *lRight    = _bvh[lNode->right];
       bool           lLeftHit  = lLeft->bbox.intersect(_ray, 0.01f, lNearest + 0.01f, lMinLeft, lTemp);
       bool           lRightHit = lRight->bbox.intersect(_ray, 0.01f, lNearest + 0.01f, lMinRight, lTemp);
 
@@ -130,11 +130,11 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &_bvh) {
     // Backtrac
     while ((lBitStack & 1) == 0) {
       if (lBitStack == 0) { goto LABEL_END; } // I know, I know...
-      lNode = &_bvh[lNode->parent];
+      lNode = _bvh[lNode->parent];
       lBitStack >>= 1;
     }
 
-    lNode = &_bvh.siblingNode(*lNode);
+    lNode = _bvh.siblingNode(lNode);
     lBitStack ^= 1;
   }
 

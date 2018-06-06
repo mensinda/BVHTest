@@ -156,14 +156,14 @@ vec3 genColor(uint32_t _level, uint32_t _maxLevel) {
 }
 
 uint32_t processNode(BVH &_bvh, uint32_t _node, uint32_t _next, vector<VBOData> &_vert, vector<Line> &_ind) {
-  BVHNode const &lNode = _bvh[_node];
+  BVHNode const *lNode = _bvh[_node];
 
-  addAABB(lNode.bbox, _next++, genColor(lNode.level, _bvh.maxLevel()), _vert, _ind);
+  addAABB(lNode->bbox, _next++, genColor(lNode->level, _bvh.maxLevel()), _vert, _ind);
 
-  if (lNode.isLeaf()) { return _next; }
+  if (lNode->isLeaf()) { return _next; }
 
-  if (lNode.left != UINT32_MAX) { _next = processNode(_bvh, lNode.left, _next, _vert, _ind); }
-  if (lNode.right != UINT32_MAX) { _next = processNode(_bvh, lNode.right, _next, _vert, _ind); }
+  if (lNode->left != UINT32_MAX) { _next = processNode(_bvh, lNode->left, _next, _vert, _ind); }
+  if (lNode->right != UINT32_MAX) { _next = processNode(_bvh, lNode->right, _next, _vert, _ind); }
 
   return _next;
 }

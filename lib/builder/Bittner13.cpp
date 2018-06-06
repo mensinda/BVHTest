@@ -35,9 +35,9 @@ using namespace BVHTest::misc;
 #define MIN_OF(x) vSumAndMin[x].min
 
 #define NODE _bvh[lNode]
-#define PARENT _bvh[NODE.parent]
-#define LEFT _bvh[NODE.left]
-#define RIGHT _bvh[NODE.right]
+#define PARENT _bvh[NODE->parent]
+#define LEFT _bvh[NODE->left]
+#define RIGHT _bvh[NODE->right]
 
 Bittner13::~Bittner13() {}
 
@@ -73,8 +73,8 @@ struct FindNodeStruct {
 uint32_t Bittner13::findNodeForReinsertion(uint32_t _n, BVH &_bvh) {
   float                             lBestCost      = numeric_limits<float>::infinity();
   uint32_t                          lBestNodeIndex = 0;
-  BVHNode const &                   lNode          = _bvh[_n];
-  float                             lSArea         = lNode.surfaceArea;
+  BVHNode const *                   lNode          = _bvh[_n];
+  float                             lSArea         = lNode->surfaceArea;
   uint32_t                          lSize          = 1;
   array<FindNodeStruct, QUEUE_SIZE> lPQ;
   auto                              lBegin = begin(lPQ);
@@ -82,7 +82,7 @@ uint32_t Bittner13::findNodeForReinsertion(uint32_t _n, BVH &_bvh) {
   lPQ[0] = {_bvh.root(), 0.0f};
   while (lSize > 0) {
     auto [lCurrNodeIndex, lCurrCost] = lPQ[0];
-    BVHNode const &lCurrNode         = _bvh[lCurrNodeIndex];
+    BVHNode const *lCurrNode         = _bvh[lCurrNodeIndex];
     pop_heap(lBegin, lBegin + lSize);
     lSize--;
 
@@ -99,11 +99,11 @@ uint32_t Bittner13::findNodeForReinsertion(uint32_t _n, BVH &_bvh) {
       lBestNodeIndex = lCurrNodeIndex;
     }
 
-    float lNewInduced = lTotalCost - lCurrNode.surfaceArea;
+    float lNewInduced = lTotalCost - lCurrNode->surfaceArea;
     if ((lNewInduced + lSArea) < lBestCost) {
-      if (!lCurrNode.isLeaf()) {
-        lPQ[lSize + 0] = {lCurrNode.left, lNewInduced};
-        lPQ[lSize + 1] = {lCurrNode.right, lNewInduced};
+      if (!lCurrNode->isLeaf()) {
+        lPQ[lSize + 0] = {lCurrNode->left, lNewInduced};
+        lPQ[lSize + 1] = {lCurrNode->right, lNewInduced};
         push_heap(lBegin, lBegin + lSize + 1);
         push_heap(lBegin, lBegin + lSize + 2);
         lSize += 2;
@@ -115,47 +115,47 @@ uint32_t Bittner13::findNodeForReinsertion(uint32_t _n, BVH &_bvh) {
 }
 
 Bittner13::RM_RES Bittner13::removeNode(uint32_t _node, BVH &_bvh) {
-  if (_bvh[_node].isLeaf() || _node == _bvh.root()) { return {false, {0, 0}, {0, 0}}; }
+  if (_bvh[_node]->isLeaf() || _node == _bvh.root()) { return {false, {0, 0}, {0, 0}}; }
 
-  BVHNode &lNode             = _bvh[_node];
+  BVHNode *lNode             = _bvh[_node];
   uint32_t lSiblingIndex     = _bvh.sibling(lNode);
-  BVHNode &lSibling          = _bvh[lSiblingIndex];
-  uint32_t lParentIndex      = lNode.parent;
-  BVHNode &lParent           = _bvh[lParentIndex];
-  uint32_t lGrandParentIndex = lParent.parent;
-  BVHNode &lGrandParent      = _bvh[lGrandParentIndex];
+  BVHNode *lSibling          = _bvh[lSiblingIndex];
+  uint32_t lParentIndex      = lNode->parent;
+  BVHNode *lParent           = _bvh[lParentIndex];
+  uint32_t lGrandParentIndex = lParent->parent;
+  BVHNode *lGrandParent      = _bvh[lGrandParentIndex];
 
-  BVHNode &lLeft  = _bvh[lNode.left];
-  BVHNode &lRight = _bvh[lNode.right];
+  BVHNode *lLeft  = _bvh[lNode->left];
+  BVHNode *lRight = _bvh[lNode->right];
 
   // FREE LIST:    lNode, lParent
   // INSERT LIST:  lLeft, lRight
   // CHANGED LIST: lGrandParent, lSibling
 
-  float lLeftSA  = lLeft.surfaceArea;
-  float lRightSA = lRight.surfaceArea;
+  float lLeftSA  = lLeft->surfaceArea;
+  float lRightSA = lRight->surfaceArea;
 
 
   if (lParentIndex == _bvh.root()) { return {false, {0, 0}, {0, 0}}; } // Can not remove node with this algorithm
 
   // Remove nodes
-  if (lParent.isLeftChild()) {
-    lGrandParent.left = lSiblingIndex;
-    lSibling.isLeft   = TRUE;
-    lSibling.parent   = lGrandParentIndex;
+  if (lParent->isLeftChild()) {
+    lGrandParent->left = lSiblingIndex;
+    lSibling->isLeft   = TRUE;
+    lSibling->parent   = lGrandParentIndex;
   } else {
-    lGrandParent.right = lSiblingIndex;
-    lSibling.isLeft    = FALSE;
-    lSibling.parent    = lGrandParentIndex;
+    lGrandParent->right = lSiblingIndex;
+    lSibling->isLeft    = FALSE;
+    lSibling->parent    = lGrandParentIndex;
   }
 
   // update Bounding Boxes
   fixTree(lGrandParentIndex, _bvh);
 
   if (lLeftSA > lRightSA) {
-    return {true, {lNode.left, lNode.right}, {_node, lParentIndex}};
+    return {true, {lNode->left, lNode->right}, {_node, lParentIndex}};
   } else {
-    return {true, {lNode.right, lNode.left}, {_node, lParentIndex}};
+    return {true, {lNode->right, lNode->left}, {_node, lParentIndex}};
   }
 }
 
@@ -163,11 +163,11 @@ Bittner13::RM_RES Bittner13::removeNode(uint32_t _node, BVH &_bvh) {
 void Bittner13::reinsert(uint32_t _node, uint32_t _unused, BVH &_bvh) {
   uint32_t lBestIndex = findNodeForReinsertion(_node, _bvh);
 
-  BVHNode &lNode      = _bvh[_node];
-  BVHNode &lBest      = _bvh[lBestIndex];
-  BVHNode &lUnused    = _bvh[_unused];
-  uint32_t lRootIndex = lBest.parent;
-  BVHNode &lRoot      = _bvh[lRootIndex];
+  BVHNode *lNode      = _bvh[_node];
+  BVHNode *lBest      = _bvh[lBestIndex];
+  BVHNode *lUnused    = _bvh[_unused];
+  uint32_t lRootIndex = lBest->parent;
+  BVHNode *lRoot      = _bvh[lRootIndex];
 
   if (lBestIndex == _bvh.root()) {
     // Adjust root if needed
@@ -175,24 +175,24 @@ void Bittner13::reinsert(uint32_t _node, uint32_t _unused, BVH &_bvh) {
     lRootIndex = _unused;
   } else {
     // Insert the unused node
-    if (lBest.isLeftChild()) {
-      lRoot.left     = _unused;
-      lUnused.isLeft = TRUE;
+    if (lBest->isLeftChild()) {
+      lRoot->left     = _unused;
+      lUnused->isLeft = TRUE;
     } else {
-      lRoot.right    = _unused;
-      lUnused.isLeft = FALSE;
+      lRoot->right    = _unused;
+      lUnused->isLeft = FALSE;
     }
   }
 
   // Insert the other nodes
-  lUnused.parent = lRootIndex;
-  lUnused.left   = lBestIndex;
-  lUnused.right  = _node;
+  lUnused->parent = lRootIndex;
+  lUnused->left   = lBestIndex;
+  lUnused->right  = _node;
 
-  lBest.parent = _unused;
-  lBest.isLeft = TRUE;
-  lNode.parent = _unused;
-  lNode.isLeft = FALSE;
+  lBest->parent = _unused;
+  lBest->isLeft = TRUE;
+  lNode->parent = _unused;
+  lNode->isLeft = FALSE;
 
   fixTree(_unused, _bvh);
 }
@@ -200,13 +200,13 @@ void Bittner13::reinsert(uint32_t _node, uint32_t _unused, BVH &_bvh) {
 void Bittner13::fixTree(uint32_t _node, BVH &_bvh) {
   uint32_t lNode = _node;
 
-  uint32_t lLastIndex        = NODE.left;
-  BVHNode *lLast             = &_bvh[lLastIndex];
+  uint32_t lLastIndex        = NODE->left;
+  BVHNode *lLast             = _bvh[lLastIndex];
   bool     lLastWasLeft      = true;
   uint32_t lCurrSiblingIndex = 0;
   BVHNode *lCurrSibling      = nullptr;
 
-  AABB  lBBox = LEFT.bbox;
+  AABB  lBBox = LEFT->bbox;
   float lSum  = SUM_OF(lLastIndex);
   float lMin  = MIN_OF(lLastIndex);
   float lNum  = lLast->numChildren;
@@ -215,26 +215,26 @@ void Bittner13::fixTree(uint32_t _node, BVH &_bvh) {
 
 
   while (true) {
-    lCurrSiblingIndex = lLastWasLeft ? NODE.right : NODE.left;
-    lCurrSibling      = &_bvh[lCurrSiblingIndex];
+    lCurrSiblingIndex = lLastWasLeft ? NODE->right : NODE->left;
+    lCurrSibling      = _bvh[lCurrSiblingIndex];
 
     lBBox.mergeWith(lCurrSibling->bbox);
-    lSArea           = lBBox.surfaceArea();
-    NODE.bbox        = lBBox;
-    NODE.surfaceArea = lSArea;
+    lSArea            = lBBox.surfaceArea();
+    NODE->bbox        = lBBox;
+    NODE->surfaceArea = lSArea;
 
     lSum              = lSum + SUM_OF(lCurrSiblingIndex) + lSArea * getCostInner();
     lMin              = min(lMin, MIN_OF(lCurrSiblingIndex));
     lNum              = lNum + lCurrSibling->numChildren + 2;
     vSumAndMin[lNode] = {lSum, lMin};
-    NODE.numChildren  = lNum;
+    NODE->numChildren = lNum;
 
     if (lNode == _bvh.root()) { return; } // We processed the root ==> everything is done
 
-    lLastWasLeft = NODE.isLeftChild();
+    lLastWasLeft = NODE->isLeftChild();
     lLastIndex   = lNode;
-    lLast        = &_bvh[lLastIndex];
-    lNode        = NODE.parent;
+    lLast        = _bvh[lLastIndex];
+    lNode        = NODE->parent;
   }
 }
 
@@ -247,25 +247,25 @@ void Bittner13::initSumAndMin(BVH &_bvh) {
   uint32_t    lRoot     = lNode;
 
   while (true) {
-    while (!NODE.isLeaf()) {
+    while (!NODE->isLeaf()) {
       lBitStack <<= 1;
       lBitStack |= 1;
-      lNode = NODE.left;
+      lNode = NODE->left;
     }
 
     // Leaf
-    vSumAndMin[lNode] = {NODE.surfaceArea * (float)getCostTri(), NODE.surfaceArea};
+    vSumAndMin[lNode] = {NODE->surfaceArea * (float)getCostTri(), NODE->surfaceArea};
 
     // Backtrack if left and right children are processed
     while ((lBitStack & 1) == 0) {
       if (lBitStack == 0 && lNode == lRoot) { return; } // We are done
-      lNode             = NODE.parent;
-      vSumAndMin[lNode] = {SUM_OF(NODE.left) + SUM_OF(NODE.right) + NODE.surfaceArea * (float)getCostInner(),
-                           min(MIN_OF(NODE.left), MIN_OF(NODE.right))};
+      lNode             = NODE->parent;
+      vSumAndMin[lNode] = {SUM_OF(NODE->left) + SUM_OF(NODE->right) + NODE->surfaceArea * (float)getCostInner(),
+                           min(MIN_OF(NODE->left), MIN_OF(NODE->right))};
       lBitStack >>= 1;
     }
 
-    lNode = PARENT.right;
+    lNode = PARENT->right;
     lBitStack ^= 1;
   }
 }
@@ -304,14 +304,14 @@ ErrorCode Bittner13::runMetric(State &_state) {
     // Select nodes to reinsert
 #pragma omp parallel for reduction(maxValF : lWorstNode)
     for (uint32_t j = 0; j < _state.bvh.size(); ++j) {
-      BVHNode const &lNode = _state.bvh[j];
-      float          lSA   = lNode.surfaceArea;
+      BVHNode const *lNode = _state.bvh[j];
+      float          lSA   = lNode->surfaceArea;
 
       bool lIsRoot       = j == _state.bvh.root();
-      bool lParentIsRoot = lNode.parent == _state.bvh.root();
-      bool lCanRemove    = !lIsRoot && !lParentIsRoot && !lNode.isLeaf();
+      bool lParentIsRoot = lNode->parent == _state.bvh.root();
+      bool lCanRemove    = !lIsRoot && !lParentIsRoot && !lNode->isLeaf();
 
-      float lCost  = lCanRemove ? ((lSA * lSA * lSA * (float)lNode.numChildren) / (SUM_OF(j) * MIN_OF(j))) : 0.0f;
+      float lCost  = lCanRemove ? ((lSA * lSA * lSA * (float)lNode->numChildren) / (SUM_OF(j) * MIN_OF(j))) : 0.0f;
       lTodoList[j] = {j, lCost};
 
       if (lCost > lWorstNode.val) {

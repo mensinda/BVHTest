@@ -21,11 +21,11 @@ using namespace BVHTest;
 using namespace BVHTest::base;
 
 float BVH::calcSAH(float _cInner, float _cLeaf) {
-  if (bvh.empty()) { return 0.0f; }
+  if (empty()) { return -1.0f; }
   float lSAH = 0.0f;
 
 #pragma omp parallel for reduction(+ : lSAH)
-  for (size_t i = 0; i < bvh.size(); ++i) {
+  for (size_t i = 0; i < size(); ++i) {
     if (i == root()) { continue; }
 
     float lCost = bvh[i].surfaceArea;
@@ -33,15 +33,15 @@ float BVH::calcSAH(float _cInner, float _cLeaf) {
     lSAH = lSAH + lCost;
   }
 
-  return (1.0f / rootNode().surfaceArea) * lSAH;
+  return (1.0f / rootNode()->surfaceArea) * lSAH;
 }
 
 void BVH::fixLevels() {
-  if (bvh.empty()) { return; }
+  if (empty()) { return; }
 
   __uint128_t lBitStack = 0;
   uint16_t    lLevel    = 0;
-  BVHNode *   lNode     = &rootNode();
+  BVHNode *   lNode     = rootNode();
 
   vMaxLevel = 0;
 
@@ -72,5 +72,5 @@ void BVH::fixLevels() {
 void BVH::fixSurfaceAreas() {
 
 #pragma omp parallel for
-  for (size_t i = 0; i < bvh.size(); ++i) { bvh[i].surfaceArea = bvh[i].bbox.surfaceArea(); }
+  for (size_t i = 0; i < size(); ++i) { bvh[i].surfaceArea = bvh[i].bbox.surfaceArea(); }
 }

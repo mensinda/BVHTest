@@ -36,9 +36,9 @@ using namespace BVHTest::misc;
 #define MIN_OF(x) _sumMin[x].min
 
 #define NODE _bvh[lNode]
-#define PARENT _bvh[NODE.parent]
-#define LEFT _bvh[NODE.left]
-#define RIGHT _bvh[NODE.right]
+#define PARENT _bvh[NODE->parent]
+#define LEFT _bvh[NODE->left]
+#define RIGHT _bvh[NODE->right]
 
 Bittner13Par::~Bittner13Par() {}
 
@@ -276,15 +276,15 @@ void Bittner13Par::fixTree(uint32_t _node, BVH &_bvh, SumMin *_sumMin) {
   uint32_t lNode = _node;
 
   SPINN_LOCK(lNode);
-  uint32_t lLastIndex = NODE.left;
+  uint32_t lLastIndex = NODE->left;
 
   SPINN_LOCK(lLastIndex);
-  BVHNode *lLast             = &_bvh[lLastIndex];
+  BVHNode *lLast             = _bvh[lLastIndex];
   bool     lLastWasLeft      = true;
   uint32_t lCurrSiblingIndex = 0;
   BVHNode *lCurrSibling      = nullptr;
 
-  AABB  lBBox = LEFT.bbox;
+  AABB  lBBox = LEFT->bbox;
   float lSum  = SUM_OF(lLastIndex);
   float lMin  = MIN_OF(lLastIndex);
   float lNum  = lLast->numChildren;
@@ -293,31 +293,31 @@ void Bittner13Par::fixTree(uint32_t _node, BVH &_bvh, SumMin *_sumMin) {
   RELEASE_LOCK(lLastIndex);
 
   while (true) {
-    lCurrSiblingIndex = lLastWasLeft ? NODE.right : NODE.left;
+    lCurrSiblingIndex = lLastWasLeft ? NODE->right : NODE->left;
     SPINN_LOCK(lCurrSiblingIndex);
 
-    lCurrSibling = &_bvh[lCurrSiblingIndex];
+    lCurrSibling = _bvh[lCurrSiblingIndex];
 
     lBBox.mergeWith(lCurrSibling->bbox);
-    lSArea           = lBBox.surfaceArea();
-    NODE.bbox        = lBBox;
-    NODE.surfaceArea = lSArea;
+    lSArea            = lBBox.surfaceArea();
+    NODE->bbox        = lBBox;
+    NODE->surfaceArea = lSArea;
 
-    lSum             = lSum + SUM_OF(lCurrSiblingIndex) + lSArea * getCostInner();
-    lMin             = min(lMin, MIN_OF(lCurrSiblingIndex));
-    lNum             = lNum + lCurrSibling->numChildren + 2;
-    SUM_OF(lNode)    = lSum;
-    MIN_OF(lNode)    = lMin;
-    NODE.numChildren = lNum;
+    lSum              = lSum + SUM_OF(lCurrSiblingIndex) + lSArea * getCostInner();
+    lMin              = min(lMin, MIN_OF(lCurrSiblingIndex));
+    lNum              = lNum + lCurrSibling->numChildren + 2;
+    SUM_OF(lNode)     = lSum;
+    MIN_OF(lNode)     = lMin;
+    NODE->numChildren = lNum;
 
     RELEASE_LOCK(lCurrSiblingIndex);
 
     if (lNode == _bvh.root()) { break; } // We processed the root ==> everything is done
 
-    lLastWasLeft = NODE.isLeftChild();
+    lLastWasLeft = NODE->isLeftChild();
     lLastIndex   = lNode;
-    lLast        = &_bvh[lLastIndex];
-    lNode        = NODE.parent;
+    lLast        = _bvh[lLastIndex];
+    lNode        = NODE->parent;
 
     RELEASE_LOCK(lLastIndex);
     SPINN_LOCK(lNode);
@@ -334,33 +334,33 @@ void Bittner13Par::initSumAndMin(BVH &_bvh, SumMin *_sumMin) {
   uint32_t    lRoot     = lNode;
 
   while (true) {
-    while (!NODE.isLeaf()) {
+    while (!NODE->isLeaf()) {
       lBitStack <<= 1;
       lBitStack |= 1;
-      lNode = NODE.left;
+      lNode = NODE->left;
     }
 
     // Leaf
-    SUM_OF(lNode) = NODE.surfaceArea * getCostTri();
-    MIN_OF(lNode) = NODE.surfaceArea;
+    SUM_OF(lNode) = NODE->surfaceArea * getCostTri();
+    MIN_OF(lNode) = NODE->surfaceArea;
 
     // Backtrack if left and right children are processed
     while ((lBitStack & 1) == 0) {
       if (lBitStack == 0 && lNode == lRoot) { return; } // We are done
-      lNode = NODE.parent;
+      lNode = NODE->parent;
 
-      AABB lBBox = LEFT.bbox;
-      lBBox.mergeWith(RIGHT.bbox);
-      float lSArea     = lBBox.surfaceArea();
-      NODE.bbox        = lBBox;
-      NODE.surfaceArea = lSArea;
-      NODE.numChildren = LEFT.numChildren + RIGHT.numChildren + 2;
-      SUM_OF(lNode)    = SUM_OF(NODE.left) + SUM_OF(NODE.right) + (lSArea * getCostInner());
-      MIN_OF(lNode)    = min(MIN_OF(NODE.left), MIN_OF(NODE.right));
+      AABB lBBox = LEFT->bbox;
+      lBBox.mergeWith(RIGHT->bbox);
+      float lSArea      = lBBox.surfaceArea();
+      NODE->bbox        = lBBox;
+      NODE->surfaceArea = lSArea;
+      NODE->numChildren = LEFT->numChildren + RIGHT->numChildren + 2;
+      SUM_OF(lNode)     = SUM_OF(NODE->left) + SUM_OF(NODE->right) + (lSArea * getCostInner());
+      MIN_OF(lNode)     = min(MIN_OF(NODE->left), MIN_OF(NODE->right));
       lBitStack >>= 1;
     }
 
-    lNode = PARENT.right;
+    lNode = PARENT->right;
     lBitStack ^= 1;
   }
 }
@@ -435,14 +435,14 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
       // === Metric selction ===
 #pragma omp parallel for
       for (uint32_t j = 0; j < _state.bvh.size(); ++j) {
-        BVHNode const &lNode = _state.bvh[j];
-        float          lSA   = lNode.surfaceArea;
+        BVHNode const *lNode = _state.bvh[j];
+        float          lSA   = lNode->surfaceArea;
 
         bool lIsRoot       = j == _state.bvh.root();
-        bool lParentIsRoot = lNode.parent == _state.bvh.root();
-        bool lCanRemove    = !lIsRoot && !lParentIsRoot && !lNode.isLeaf();
+        bool lParentIsRoot = lNode->parent == _state.bvh.root();
+        bool lCanRemove    = !lIsRoot && !lParentIsRoot && !lNode->isLeaf();
 
-        float lCost  = lCanRemove ? ((lSA * lSA * lSA * (float)lNode.numChildren) / (SUM_OF(j) * MIN_OF(j))) : 0.0f;
+        float lCost  = lCanRemove ? ((lSA * lSA * lSA * (float)lNode->numChildren) / (SUM_OF(j) * MIN_OF(j))) : 0.0f;
         lTodoList[j] = {j, lCost};
       }
 

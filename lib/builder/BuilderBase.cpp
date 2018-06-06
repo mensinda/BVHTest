@@ -103,18 +103,18 @@ BuilderBase::BuildRes BuilderBase::build(BuilderBase::ITER _begin,
 
     // Reserve node -- fill content later
     _bvh.addInner({}, _parent, UINT32_MAX, UINT32_MAX, UINT32_MAX, _isLeftChild);
-    auto &lNode = _bvh[lNewNode];
+    BVHNode *lNode = _bvh[lNewNode];
 
     auto [lID1, lBBOX1] = build(_begin, lSplitAt, _bvh, _tris, lNewNode, true, _level + 1); // Left
     auto [lID2, lBBOX2] = build(lSplitAt, _end, _bvh, _tris, lNewNode, false, _level + 1);  // Right
 
     lNodeBBox = lBBOX1;
     lNodeBBox.mergeWith(lBBOX2);
-    lNode.bbox        = lNodeBBox;
-    lNode.numChildren = 2 + _bvh[lID1].numChildren + _bvh[lID2].numChildren;
-    lNode.left        = lID1;
-    lNode.right       = lID2;
-    lNode.surfaceArea = lNodeBBox.surfaceArea();
+    lNode->bbox        = lNodeBBox;
+    lNode->numChildren = 2 + _bvh[lID1]->numChildren + _bvh[lID2]->numChildren;
+    lNode->left        = lID1;
+    lNode->right       = lID2;
+    lNode->surfaceArea = lNodeBBox.surfaceArea();
   }
 
   return {lNewNode, lNodeBBox};
