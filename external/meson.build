@@ -10,7 +10,7 @@ extLibSrc = files([
 #  'fmt/src/posix.cc'
 ])
 
-externalsLib = library('externalsLib', extLibSrc,
+externalsLib = static_library('externalsLib', extLibSrc,
   include_directories: incDirs,
   install: true,
   dependencies: baseDeps + [GL, dl]

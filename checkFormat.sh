@@ -8,7 +8,7 @@
 
 CLANG_FORMAT_VERSIONS=( "6.0.0" "6.0.1" )
 CALNG_FORMAT_DEFAULT_CMD="clang-format"
-EXTENSIONS=( cpp hpp )
+EXTENSIONS=( cpp hpp cu )
 SOURCE_DIRS=( src test lib )
 
 ########################

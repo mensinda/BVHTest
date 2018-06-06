@@ -19,7 +19,6 @@
 #include "base/BVHPatch.hpp"
 #include "OptimizerBase.hpp"
 #include <atomic>
-#include <tuple>
 
 namespace BVHTest::builder {
 

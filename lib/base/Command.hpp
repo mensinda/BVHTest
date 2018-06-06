@@ -37,6 +37,7 @@ enum class ErrorCode {
   PARSE_ERROR,  // Paring a file failed
   BVH_ERROR,    // Something is wrong with the BVH
   GL_ERROR,     // OpenGL error
+  CUDA_ERROR,   // CUDA error
   GENERIC_ERROR // Something went wrong
 };
 

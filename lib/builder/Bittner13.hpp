@@ -17,7 +17,6 @@
 #pragma once
 
 #include "OptimizerBase.hpp"
-#include <tuple>
 
 namespace BVHTest::builder {
 

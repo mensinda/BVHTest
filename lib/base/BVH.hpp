@@ -22,7 +22,8 @@
 #include "Ray.hpp"
 #include <vector>
 
-namespace BVHTest::base {
+namespace BVHTest {
+namespace base {
 
 struct Triangle final {
   uint32_t v1;
@@ -189,4 +190,5 @@ class BVH {
   void  fixSurfaceAreas();
 };
 
-} // namespace BVHTest::base
+} // namespace base
+} // namespace BVHTest

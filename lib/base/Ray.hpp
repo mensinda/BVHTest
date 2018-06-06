@@ -20,7 +20,18 @@
 
 #include <glm/vec3.hpp>
 
-namespace BVHTest::base {
+#ifdef __CUDACC__
+#  ifndef CUDA_CALL
+#    define CUDA_CALL __host__ __device__
+#  endif
+#else
+#  ifndef CUDA_CALL
+#    define CUDA_CALL
+#  endif
+#endif
+
+namespace BVHTest {
+namespace base {
 
 using glm::vec3;
 
@@ -42,19 +53,20 @@ class alignas(16) Ray final {
   uint32_t vPY = UINT32_MAX;
 
  public:
-  Ray() {}
-  Ray(vec3 _pos, vec3 _dir) : Ray(_pos, _dir, UINT32_MAX, UINT32_MAX) {}
-  Ray(vec3 _pos, vec3 _dir, uint32_t _x, uint32_t _y) : vPos(_pos), vDir(_dir), vPX(_x), vPY(_y) {
+  CUDA_CALL Ray() {}
+  CUDA_CALL Ray(vec3 _pos, vec3 _dir) : Ray(_pos, _dir, UINT32_MAX, UINT32_MAX) {}
+  CUDA_CALL Ray(vec3 _pos, vec3 _dir, uint32_t _x, uint32_t _y) : vPos(_pos), vDir(_dir), vPX(_x), vPY(_y) {
     vInvDir = 1.0f / vDir;
     vSign.x = vInvDir.x < 0 ? 1 : 0;
     vSign.y = vInvDir.y < 0 ? 1 : 0;
     vSign.z = vInvDir.z < 0 ? 1 : 0;
   }
 
-  inline vec3 const &getOrigin() const { return vPos; }
-  inline vec3 const &getDirection() const { return vDir; }
-  inline vec3 const &getInverseDirection() const { return vInvDir; }
-  inline Sign const &getSign() const { return vSign; }
+  CUDA_CALL inline vec3 const &getOrigin() const { return vPos; }
+  CUDA_CALL inline vec3 const &getDirection() const { return vDir; }
+  CUDA_CALL inline vec3 const &getInverseDirection() const { return vInvDir; }
+  CUDA_CALL inline Sign const &getSign() const { return vSign; }
 };
 
-} // namespace BVHTest::base
+} // namespace base
+} // namespace BVHTest

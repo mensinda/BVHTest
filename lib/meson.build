@@ -116,6 +116,16 @@ viewerInc = files([
 ])
 
 
+# CUDA lib
+cudaSrc = files([
+  'cuda/CopyToGPU.cpp'
+])
+
+cudaCU = files([
+  'cuda/cudaFN.cu'
+])
+
+
 #################################
 #### Generate Enum2Str class ####
 #################################
@@ -138,48 +148,67 @@ enum2Str = custom_target('Enum2Str',
 #### Build libs ####
 ####################
 
-enum2StrLib = library('enum2Str', enum2Str,
+cuInclude  = []
+
+foreach i : incDirsRaw
+  cuInclude += '-I' + i
+endforeach
+
+enum2StrLib = static_library('enum2Str', enum2Str,
   include_directories: incDirs,
   install: true,
   dependencies: baseDeps,
 )
 
-baseLib = library('base', baseSrc,
+baseLib = static_library('base', baseSrc,
   include_directories: incDirs,
   install: true,
   link_with: [enum2StrLib, externalsLib],
   dependencies: baseDeps,
 )
 
-miscLib = library('misc', miscSrc,
+miscLib = static_library('misc', miscSrc,
   include_directories: incDirs,
   install: true,
   link_with: [baseLib, enum2StrLib, externalsLib],
   dependencies: baseDeps,
 )
 
-builderLib = library('builder', builderSrc,
+
+cudaCuda = []
+foreach i : cudaCU
+  cudaCuda += nvccCompiler.process(i, extra_args: ['--std=c++14'] + cuInclude)
+endforeach
+
+cudaLib = static_library('cuda', cudaSrc + cudaCuda,
   include_directories: incDirs,
   install: true,
   link_with: [baseLib, miscLib, enum2StrLib, externalsLib],
   dependencies: baseDeps,
 )
 
-tracerLib = library('tracer', tracerSrc,
+builderLib = static_library('builder', builderSrc,
   include_directories: incDirs,
   install: true,
   link_with: [baseLib, miscLib, enum2StrLib, externalsLib],
   dependencies: baseDeps,
 )
 
-ioLib = library('io', ioSrc,
+tracerLib = static_library('tracer', tracerSrc,
+  include_directories: incDirs,
+  install: true,
+  link_with: [baseLib, miscLib, enum2StrLib, externalsLib],
+  dependencies: baseDeps,
+)
+
+ioLib = static_library('io', ioSrc,
   include_directories: incDirs,
   install: true,
   link_with: [baseLib, miscLib, enum2StrLib, externalsLib],
   dependencies: baseDeps + [assimp],
 )
 
-viewerLib = library('viewer', viewerSrc,
+viewerLib = static_library('viewer', viewerSrc,
   include_directories: incDirs,
   install: true,
   link_with: [baseLib, miscLib, tracerLib, enum2StrLib, externalsLib],

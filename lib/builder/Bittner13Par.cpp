@@ -68,23 +68,23 @@ json Bittner13Par::toJSON() const {
   return lJSON;
 }
 
-struct FindNodeStruct {
+struct HelperStruct {
   uint32_t node;
   float    cost;
   uint32_t level;
 
-  inline bool operator<(FindNodeStruct const &_b) const noexcept { return cost > _b.cost; }
+  inline bool operator<(HelperStruct const &_b) const noexcept { return cost > _b.cost; }
 };
 
 pair<uint32_t, uint32_t> Bittner13Par::findNodeForReinsertion(uint32_t _n, PATCH &_bvh) {
-  float                             lBestCost      = numeric_limits<float>::infinity();
-  pair<uint32_t, uint32_t>          lBestNodeIndex = {0, 0};
-  BVHNode const *                   lNode          = _bvh[_n];
-  AABB const &                      lNodeBBox      = lNode->bbox;
-  float                             lSArea         = lNode->surfaceArea;
-  uint32_t                          lSize          = 1;
-  array<FindNodeStruct, QUEUE_SIZE> lPQ;
-  auto                              lBegin = begin(lPQ);
+  float                           lBestCost      = numeric_limits<float>::infinity();
+  pair<uint32_t, uint32_t>        lBestNodeIndex = {0, 0};
+  BVHNode const *                 lNode          = _bvh[_n];
+  AABB const &                    lNodeBBox      = lNode->bbox;
+  float                           lSArea         = lNode->surfaceArea;
+  uint32_t                        lSize          = 1;
+  array<HelperStruct, QUEUE_SIZE> lPQ;
+  auto                            lBegin = begin(lPQ);
 
   lPQ[0] = {_bvh.root(), 0.0f, 0};
   while (lSize > 0) {

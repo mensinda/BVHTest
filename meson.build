@@ -10,7 +10,14 @@ project( 'BVHTest', ['cpp', 'c'],
   version : '0.0.1',
   license : 'Apache 2')
 
-incDirs = include_directories('external', 'external/fmt', 'external/spdlog/include', 'lib', '.', './lib')
+incDirsBase = ['external', 'external/fmt', 'external/spdlog/include', 'lib', '.', './lib']
+incDirsRaw  = []
+
+foreach i : incDirsBase
+  incDirsRaw += meson.current_source_dir() + '/' + i
+endforeach
+
+incDirs = include_directories(incDirsBase)
 assimp  = dependency('assimp',  required: true, version: '>=4.1.0')
 glfw    = dependency('glfw3',   required: true, version: '>=3.1.0')
 GL      = dependency('GL',      required: true, version: '>=3.3')
@@ -29,7 +36,12 @@ cfgData  = configuration_data()
 cfgData.set_quoted('BVHTEST_VERSION', meson.project_version())
 cfgData.set_quoted('LOGGER_NAME',     meson.project_name())
 
-baseDeps = [threads, OpenMP, compiler.find_library('stdc++fs', required: true)]
+baseDeps = [
+  threads,
+  OpenMP,
+  compiler.find_library('stdc++fs', required: true),
+  compiler.find_library('cudart', required: true, dirs: ['/usr/lib', '/usr/local/lib/', '/opt/cuda/lib64'])
+]
 
 if not compiler.has_header('filesystem') and not compiler.has_header('experimental/filesystem')
   error('Unable to find C++17 filesystem')
@@ -48,7 +60,22 @@ configure_file(
 fullLibDirPath = get_option('prefix') + '/' + get_option('libdir')
 
 enumGen = find_program(['external/enumGen/enumGen.py', 'enumGen.py', '/usr/bin/enumGen.py', '/bin/enumGen.py'], required : true)
-enumParser = generator(enumGen, output: '@BASENAME@.json', arguments: ['-d', '@BUILD_DIR@', 'parse', '@INPUT@'])
+nvcc    = find_program(['nvcc'], required : true)
+enumParser   = generator(enumGen, output: '@BASENAME@.json', arguments: ['-d', '@BUILD_DIR@', 'parse', '@INPUT@'])
+
+nvccCompiler = generator(
+  nvcc,
+  output: '@BASENAME@.o',
+  arguments: [
+    '@EXTRA_ARGS@',
+    '-gencode=arch=compute_50,code=sm_50',
+    '-gencode=arch=compute_52,code=sm_52',
+    '-gencode=arch=compute_60,code=sm_60',
+    '-gencode=arch=compute_61,code=sm_61',
+    '-gencode=arch=compute_70,code=sm_70',
+    '-gencode=arch=compute_70,code=compute_70',
+    '-c', '@INPUT@', '-o', '@OUTPUT@',
+])
 
 # Build
 subdir('external')

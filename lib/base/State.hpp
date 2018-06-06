@@ -34,6 +34,8 @@ enum class CommandType {
   BVH_BUILD = (1 << 4),
   BVH_OPT1  = (1 << 5),
   BVH_OPT2  = (1 << 6),
+  CUDA_INIT = (1 << 8),
+  CUDA_DONE = (1 << 7),
   RAY_TRACE = (1 << 16),
   EXPORT    = (1 << 24), // Data was exported
   SUMMARY   = (1 << 28),
@@ -59,6 +61,13 @@ struct State final {
     Image            img  = {{}, 0, 0, "IMG"};
     nanoseconds      time = nanoseconds(0);
   };
+
+  struct CudaMemory final {
+    BVHNode * bvh  = nullptr;
+    vec3 *    vert = nullptr;
+    vec3 *    norm = nullptr;
+    Triangle *tris = nullptr;
+  } cudaMem;
 
   std::vector<CMD> commands;
 
