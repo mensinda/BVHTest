@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "CopyToGPU.hpp"
+#include "CopyToHost.hpp"
 #include "cudaFN.hpp"
 
 using namespace std;
@@ -22,13 +22,13 @@ using namespace BVHTest;
 using namespace BVHTest::base;
 using namespace BVHTest::cuda;
 
-CopyToGPU::~CopyToGPU() {}
+CopyToHost::~CopyToHost() {}
 
-void CopyToGPU::fromJSON(const json &_j) { (void)_j; }
-json CopyToGPU::toJSON() const { return json::object(); }
+void CopyToHost::fromJSON(const json &_j) { (void)_j; }
+json CopyToHost::toJSON() const { return json::object(); }
 
-ErrorCode CopyToGPU::runImpl(State &_state) {
-  if (!copyBVHToGPU(&_state.bvh, &_state.cudaMem.bvh)) { return ErrorCode::CUDA_ERROR; }
-  if (!copyMeshToGPU(&_state.mesh, &_state.cudaMem.rawMesh)) { return ErrorCode::CUDA_ERROR; }
+ErrorCode CopyToHost::runImpl(State &_state) {
+  if (!copyBVHToHost(&_state.cudaMem.bvh, &_state.bvh)) { return ErrorCode::CUDA_ERROR; }
+  if (!copyMeshToHost(&_state.cudaMem.rawMesh, &_state.mesh)) { return ErrorCode::CUDA_ERROR; }
   return ErrorCode::OK;
 }

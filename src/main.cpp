@@ -23,6 +23,7 @@
 #include "builder/Median.hpp"
 #include "builder/Wald07.hpp"
 #include "cuda/CopyToGPU.hpp"
+#include "cuda/CopyToHost.hpp"
 #include "io/BVHExport.hpp"
 #include "io/BVHImport.hpp"
 #include "io/CameraExport.hpp"
@@ -58,6 +59,7 @@ const vector<string> gCommandList = {"import",
                                      "camImport",
                                      "writeImg",
                                      "copyToGPU",
+                                     "copyToHost",
                                      "median",
                                      "wald07",
                                      "bittner13",
@@ -80,6 +82,7 @@ Config::CMD_PTR fromString(string _s) {
     case "camImport"_h: return make_shared<IO::CameraImport>();
     case "writeImg"_h: return make_shared<IO::WriteImage>();
     case "copyToGPU"_h: return make_shared<cuda::CopyToGPU>();
+    case "copyToHost"_h: return make_shared<cuda::CopyToHost>();
     case "median"_h: return make_shared<builder::Median>();
     case "wald07"_h: return make_shared<builder::Wald07>();
     case "bittner13"_h: return make_shared<builder::Bittner13>();

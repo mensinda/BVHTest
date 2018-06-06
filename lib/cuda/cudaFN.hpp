@@ -21,6 +21,11 @@
 namespace BVHTest {
 namespace cuda {
 
-extern "C" bool copyBVHToGPU(base::BVH &_bvh);
-}
+extern "C" bool copyBVHToGPU(base::BVH *_bvh, base::BVH **_ptr);
+extern "C" bool copyMeshToGPU(base::Mesh *_mesh, base::MeshRaw *_meshOut);
+
+extern "C" bool copyBVHToHost(base::BVH **_bvh, base::BVH *_ptr);
+extern "C" bool copyMeshToHost(base::MeshRaw *_mesh, base::Mesh *_meshOut);
+
+} // namespace cuda
 } // namespace BVHTest

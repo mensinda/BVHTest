@@ -47,6 +47,15 @@ struct Mesh final {
   std::vector<Triangle>  faces;
 };
 
+struct MeshRaw final {
+  glm::vec3 *vert     = nullptr;
+  glm::vec3 *norm     = nullptr;
+  Triangle * faces    = nullptr;
+  uint32_t   numVert  = 0;
+  uint32_t   numNorm  = 0;
+  uint32_t   numFaces = 0;
+};
+
 struct AABB {
   glm::vec3 min;
   glm::vec3 max;
@@ -57,12 +66,12 @@ struct AABB {
   }
 
   CUDA_CALL inline void mergeWith(AABB const &_bbox) {
-    min.x = std::min(min.x, _bbox.min.x);
-    min.y = std::min(min.y, _bbox.min.y);
-    min.z = std::min(min.z, _bbox.min.z);
-    max.x = std::max(max.x, _bbox.max.x);
-    max.y = std::max(max.y, _bbox.max.y);
-    max.z = std::max(max.z, _bbox.max.z);
+    min.x = min.x < _bbox.min.x ? min.x : _bbox.min.x;
+    min.y = min.y < _bbox.min.y ? min.y : _bbox.min.y;
+    min.z = min.z < _bbox.min.z ? min.z : _bbox.min.z;
+    max.x = max.x > _bbox.max.x ? max.x : _bbox.max.x;
+    max.y = max.y > _bbox.max.y ? max.y : _bbox.max.y;
+    max.z = max.z > _bbox.max.z ? max.z : _bbox.max.z;
   }
 
   // Source: http://www.cs.utah.edu/~awilliam/box/
@@ -183,7 +192,7 @@ class BVH final {
     assert(vSize < vCapacity);
 
     uint16_t lLevel = empty() ? 0 : bvh[_parent].level + 1;
-    vMaxLevel       = std::max(vMaxLevel, lLevel);
+    vMaxLevel       = lLevel > vMaxLevel ? lLevel : vMaxLevel;
     bvh[vSize]      = {
         _bbox,                  // bbox
         _parent,                // parent
@@ -203,7 +212,7 @@ class BVH final {
     assert(vSize < vCapacity);
 
     uint16_t lLevel = empty() ? 0 : bvh[_parent].level + 1;
-    vMaxLevel       = std::max(vMaxLevel, lLevel);
+    vMaxLevel       = lLevel > vMaxLevel ? lLevel : vMaxLevel;
     bvh[vSize]      = {
         _bbox,                  // bbox
         _parent,                // parent

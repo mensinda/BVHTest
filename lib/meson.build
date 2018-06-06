@@ -118,7 +118,8 @@ viewerInc = files([
 
 # CUDA lib
 cudaSrc = files([
-  'cuda/CopyToGPU.cpp'
+  'cuda/CopyToGPU.cpp',
+  'cuda/CopyToHost.cpp'
 ])
 
 cudaCU = files([
