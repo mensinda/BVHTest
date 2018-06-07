@@ -6,10 +6,11 @@ Source code for my Bachelor thesis
 
   - meson
   - ninja
-  - assimp v4.1
-  - OpenGL 3.3
-  - GLFW   3.1
-  - glm
+  - assimp >= 4.1
+  - OpenGL >= 3.3
+  - GLFW   >= 3.1
+  - glm    >= 0.9.9
+  - CUDA   >= 9.1
   - a C++17 compiler
 
 ## Building
