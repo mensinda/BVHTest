@@ -74,7 +74,7 @@ nvccCompiler = generator(
     '-gencode=arch=compute_61,code=sm_61',
     '-gencode=arch=compute_70,code=sm_70',
     '-gencode=arch=compute_70,code=compute_70',
-    '-O2',
+    '-O3',
     '-c', '@INPUT@', '-o', '@OUTPUT@',
 ])
 

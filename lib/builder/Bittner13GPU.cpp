@@ -108,6 +108,8 @@ ErrorCode Bittner13GPU::runImpl(State &_state) {
     /*                | |   | |                                                                         */
     /*                |_|   |_|                                                                         */
 
+    calculateCost(&lMem, &_state.cudaMem.bvh, vCUDABlockSize);
+
 
     // Separate the batch into chunks
     for (uint32_t j = 0; j < vNumChunks; ++j) {

@@ -20,10 +20,7 @@
 #include "base/BVHPatch.hpp"
 #include <cstdint>
 
-namespace BVHTest {
-namespace builder {
-
-typedef base::BVHPatch<10, 2, 128> PATCH;
+typedef BVHTest::base::BVHPatch<10, 2, 128> PATCH;
 
 struct SumMinCUDA {
   float *   sums  = nullptr;
@@ -42,19 +39,20 @@ struct GPUWorkingMemory {
   bool       result;
   SumMinCUDA sumMin;
   TodoStruct todoNodes;
+  TodoStruct todoSorted;
 
-  uint32_t *leafNodes    = nullptr;
-  PATCH *   patches      = nullptr;
-  uint32_t  numLeafNodes = 0;
-  uint32_t  numPatches   = 0;
+  uint32_t *leafNodes              = nullptr;
+  PATCH *   patches                = nullptr;
+  void *    cubSortTempStorage     = nullptr;
+  uint32_t  numLeafNodes           = 0;
+  uint32_t  numPatches             = 0;
+  size_t    cubSortTempStorageSize = 0;
 };
 
-extern "C" GPUWorkingMemory allocateMemory(base::CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize, uint32_t _numFaces);
-extern "C" void             freeMemory(GPUWorkingMemory *_data);
+GPUWorkingMemory allocateMemory(BVHTest::base::CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize, uint32_t _numFaces);
+void             freeMemory(GPUWorkingMemory *_data);
 
-extern "C" void initData(GPUWorkingMemory *_data, base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
-extern "C" void fixTree(GPUWorkingMemory *_data, base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
-extern "C" void resetLocks(GPUWorkingMemory *_data, uint32_t _blockSize);
-
-} // namespace builder
-} // namespace BVHTest
+void initData(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
+void fixTree(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
+void resetLocks(GPUWorkingMemory *_data, uint32_t _blockSize);
+void calculateCost(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
