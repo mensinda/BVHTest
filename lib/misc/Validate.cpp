@@ -59,6 +59,8 @@ bool Validate::checkTree(State &_state) {
   vector<uint16_t> lTraversed;
   lTraversed.resize(lBVH.size(), 0);
 
+  REQUIRE(lNode == NODE->parent, lWrongParentErrors); // Loop at root
+
   while (true) {
     lTraversed[lNode] = 1;
     REQUIRE(NODE->level == lLevel, lLevelErrors);
@@ -191,7 +193,7 @@ bool Validate::checkSurfaceArea(State &_state) {
 
 #pragma omp parallel for
   for (uint32_t lNode = 0; lNode < lBVH.size(); ++lNode) {
-    REQUIRE(NODE->surfaceArea == NODE->bbox.surfaceArea(), lTotalErros);
+    REQUIRE(fabs(NODE->surfaceArea - NODE->bbox.surfaceArea()) < 0.000001f, lTotalErros);
   }
 
   ERROR_IF(lTotalErros, "{:<3} wrong pre-calculated surface areas");

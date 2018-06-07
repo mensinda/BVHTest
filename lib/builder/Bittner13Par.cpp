@@ -303,7 +303,7 @@ void Bittner13Par::fixTree(uint32_t _node, BVH &_bvh, SumMin *_sumMin) {
     NODE->bbox        = lBBox;
     NODE->surfaceArea = lSArea;
 
-    lSum              = lSum + SUM_OF(lCurrSiblingIndex) + lSArea * getCostInner();
+    lSum              = lSum + SUM_OF(lCurrSiblingIndex) + lSArea;
     lMin              = min(lMin, MIN_OF(lCurrSiblingIndex));
     lNum              = lNum + lCurrSibling->numChildren + 2;
     SUM_OF(lNode)     = lSum;
@@ -341,7 +341,7 @@ void Bittner13Par::initSumAndMin(BVH &_bvh, SumMin *_sumMin) {
     }
 
     // Leaf
-    SUM_OF(lNode) = NODE->surfaceArea * getCostTri();
+    SUM_OF(lNode) = NODE->surfaceArea;
     MIN_OF(lNode) = NODE->surfaceArea;
 
     // Backtrack if left and right children are processed
@@ -355,7 +355,7 @@ void Bittner13Par::initSumAndMin(BVH &_bvh, SumMin *_sumMin) {
       NODE->bbox        = lBBox;
       NODE->surfaceArea = lSArea;
       NODE->numChildren = LEFT->numChildren + RIGHT->numChildren + 2;
-      SUM_OF(lNode)     = SUM_OF(NODE->left) + SUM_OF(NODE->right) + (lSArea * getCostInner());
+      SUM_OF(lNode)     = SUM_OF(NODE->left) + SUM_OF(NODE->right) + lSArea;
       MIN_OF(lNode)     = min(MIN_OF(NODE->left), MIN_OF(NODE->right));
       lBitStack >>= 1;
     }

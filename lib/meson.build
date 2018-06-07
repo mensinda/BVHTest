@@ -31,6 +31,7 @@ baseInc = files([
 builderSrc = files([
   'builder/Bittner13.cpp',
   'builder/Bittner13Par.cpp',
+  'builder/Bittner13GPU.cpp',
   'builder/BuilderBase.cpp',
   'builder/Median.cpp',
   'builder/OptimizerBase.cpp',
@@ -38,9 +39,15 @@ builderSrc = files([
 ])
 
 
+builderCU = files([
+  'builder/Bittner13CUDA.cu'
+])
+
+
 builderInc = files([
   'builder/Bittner13.hpp',
   'builder/Bittner13Par.hpp',
+  'builder/Bittner13GPU.hpp',
   'builder/BuilderBase.hpp',
   'builder/Median.hpp',
   'builder/OptimizerBase.hpp',
@@ -51,11 +58,13 @@ builderInc = files([
 # Camera lib
 miscSrc = files([
   'misc/Camera.cpp',
+  'misc/Sleep.cpp',
   'misc/Validate.cpp'
 ])
 
 miscInc = files([
   'misc/Camera.hpp',
+  'misc/Sleep.hpp',
   'misc/Validate.hpp'
 ])
 
@@ -188,7 +197,12 @@ cudaLib = static_library('cuda', cudaSrc + cudaCuda,
   dependencies: baseDeps,
 )
 
-builderLib = static_library('builder', builderSrc,
+builderCuda = []
+foreach i : builderCU
+  builderCuda += nvccCompiler.process(i, extra_args: ['--std=c++14'] + cuInclude)
+endforeach
+
+builderLib = static_library('builder', builderSrc + builderCuda,
   include_directories: incDirs,
   install: true,
   link_with: [baseLib, miscLib, enum2StrLib, externalsLib],

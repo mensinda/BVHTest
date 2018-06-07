@@ -63,8 +63,8 @@ struct State final {
   };
 
   struct CudaMemory final {
-    BVH *   bvh = nullptr;
-    MeshRaw rawMesh;
+    CUDAMemoryBVHPointer bvh;
+    MeshRaw              rawMesh;
   } cudaMem;
 
   std::vector<CMD> commands;

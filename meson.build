@@ -10,7 +10,7 @@ project( 'BVHTest', ['cpp', 'c'],
   version : '0.0.1',
   license : 'Apache 2')
 
-incDirsBase = ['external', 'external/fmt', 'external/spdlog/include', 'lib', '.', './lib']
+incDirsBase = ['external',  'external/fmt', 'external/cub', 'external/spdlog/include', 'lib', '.', './lib']
 incDirsRaw  = []
 
 foreach i : incDirsBase
@@ -74,6 +74,7 @@ nvccCompiler = generator(
     '-gencode=arch=compute_61,code=sm_61',
     '-gencode=arch=compute_70,code=sm_70',
     '-gencode=arch=compute_70,code=compute_70',
+    '-O2',
     '-c', '@INPUT@', '-o', '@OUTPUT@',
 ])
 

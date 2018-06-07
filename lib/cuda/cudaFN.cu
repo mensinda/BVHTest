@@ -27,35 +27,40 @@ using namespace BVHTest::cuda;
   lRes = call;                                                                                                         \
   if (lRes != cudaSuccess) { goto error; }
 
-extern "C" bool copyBVHToGPU(BVH *_bvh, BVH **_ptr) {
-  if (!_bvh) { return false; }
+extern "C" bool copyBVHToGPU(BVH *_bvh, CUDAMemoryBVHPointer *_ptr) {
+  if (!_bvh || !_ptr) { return false; }
 
-  BVHNode *   lData = nullptr;
   size_t      lSize = _bvh->size() * sizeof(BVHNode);
   BVH         lTempBVH;
   cudaError_t lRes;
 
-  CUDA_RUN(cudaMalloc(&lData, lSize));
-  CUDA_RUN(cudaMemcpy(lData, _bvh->data(), lSize, cudaMemcpyHostToDevice));
+  _ptr->numNodes = _bvh->size();
+
+  CUDA_RUN(cudaMalloc(&_ptr->nodes, lSize));
+  CUDA_RUN(cudaMemcpy(_ptr->nodes, _bvh->data(), lSize, cudaMemcpyHostToDevice));
 
   lTempBVH.setNewRoot(_bvh->root());
   lTempBVH.setMaxLevel(_bvh->maxLevel());
-  lTempBVH.setMemory(lData, _bvh->size(), _bvh->size());
+  lTempBVH.setMemory(_ptr->nodes, _bvh->size(), _bvh->size());
 
-  CUDA_RUN(cudaMalloc(_ptr, sizeof(BVH)));
-  CUDA_RUN(cudaMemcpy(*_ptr, &lTempBVH, sizeof(BVH), cudaMemcpyHostToDevice));
+  CUDA_RUN(cudaMalloc(&_ptr->bvh, sizeof(BVH)));
+  CUDA_RUN(cudaMemcpy(_ptr->bvh, &lTempBVH, sizeof(BVH), cudaMemcpyHostToDevice));
 
   lTempBVH.setMemory(nullptr, 0, 0); // Avoid destructor segfault
 
   return true;
 
 error:
-  if (lData) { cudaFree(lData); }
-  if (*_ptr) { cudaFree(*_ptr); }
+  cout << "CUDA ERROR: " << cudaGetErrorString(lRes) << endl;
+
+  cudaFree(_ptr->nodes);
+  cudaFree(_ptr->bvh);
 
   lTempBVH.setMemory(nullptr, 0, 0); // Avoid destructor segfault
 
-  *_ptr = nullptr;
+  _ptr->bvh      = nullptr;
+  _ptr->nodes    = nullptr;
+  _ptr->numNodes = 0;
   return false;
 }
 
@@ -82,6 +87,8 @@ extern "C" bool copyMeshToGPU(Mesh *_mesh, MeshRaw *_meshOut) {
   return true;
 
 error:
+  cout << "CUDA ERROR: " << cudaGetErrorString(lRes) << endl;
+
   if (_meshOut->vert) { cudaFree(_meshOut->vert); }
   if (_meshOut->norm) { cudaFree(_meshOut->norm); }
   if (_meshOut->faces) { cudaFree(_meshOut->faces); }
@@ -94,31 +101,36 @@ error:
 
 
 
-extern "C" bool copyBVHToHost(base::BVH **_bvh, base::BVH *_ptr) {
-  if (!_bvh || !*_bvh || !_ptr) { return false; }
+extern "C" bool copyBVHToHost(CUDAMemoryBVHPointer *_bvh, base::BVH *_ptr) {
+  if (!_bvh->bvh || !_bvh->nodes || !_ptr) { return false; }
 
   cudaError_t lRes;
   BVH         lTempBVH;
   uint32_t    lSize   = 0;
   BVHNode *   lSource = nullptr;
 
-  CUDA_RUN(cudaMemcpy(&lTempBVH, *_bvh, sizeof(BVH), cudaMemcpyDeviceToHost));
+  CUDA_RUN(cudaMemcpy(&lTempBVH, _bvh->bvh, sizeof(BVH), cudaMemcpyDeviceToHost));
 
   _ptr->setNewRoot(lTempBVH.root());
   _ptr->setMaxLevel(lTempBVH.maxLevel());
   _ptr->resize(lTempBVH.size());
 
-  lSize   = lTempBVH.size() * sizeof(BVHNode);
-  lSource = lTempBVH.data();
+  lSize       = lTempBVH.size() * sizeof(BVHNode);
+  _bvh->nodes = lTempBVH.data();
 
-  CUDA_RUN(cudaMemcpy(_ptr->data(), lSource, lSize, cudaMemcpyDeviceToHost));
+  CUDA_RUN(cudaMemcpy(_ptr->data(), _bvh->nodes, lSize, cudaMemcpyDeviceToHost));
 
 error:
-  cudaFree(_ptr);
-  cudaFree(lSource);
+  if (lRes != cudaSuccess) { cout << "CUDA ERROR: " << cudaGetErrorString(lRes) << endl; }
+
+  cudaFree(_bvh->nodes);
+  cudaFree(_bvh->bvh);
 
   lTempBVH.setMemory(nullptr, 0, 0); // Avoid destructor segfault
-  *_bvh = nullptr;
+
+  _bvh->bvh      = nullptr;
+  _bvh->nodes    = nullptr;
+  _bvh->numNodes = 0;
 
   return lRes == cudaSuccess;
 }
@@ -142,6 +154,8 @@ extern "C" bool copyMeshToHost(base::MeshRaw *_mesh, base::Mesh *_meshOut) {
   CUDA_RUN(cudaMemcpy(_meshOut->faces.data(), _mesh->faces, lFacesSize, cudaMemcpyDeviceToHost));
 
 error:
+  if (lRes != cudaSuccess) { cout << "CUDA ERROR: " << cudaGetErrorString(lRes) << endl; }
+
   cudaFree(_mesh->vert);
   cudaFree(_mesh->norm);
   cudaFree(_mesh->faces);

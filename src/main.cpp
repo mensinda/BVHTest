@@ -19,6 +19,7 @@
 #include "base/StatusDump.hpp"
 #include "base/StringHash.hpp"
 #include "builder/Bittner13.hpp"
+#include "builder/Bittner13GPU.hpp"
 #include "builder/Bittner13Par.hpp"
 #include "builder/Median.hpp"
 #include "builder/Wald07.hpp"
@@ -32,6 +33,7 @@
 #include "io/ImportMesh.hpp"
 #include "io/Load.hpp"
 #include "io/WriteImage.hpp"
+#include "misc/Sleep.hpp"
 #include "misc/Validate.hpp"
 #include "tracer/BruteForceTracer.hpp"
 #include "tracer/CPUTracer.hpp"
@@ -50,25 +52,10 @@ using namespace fmt;
 using namespace Enum2Str;
 using namespace nlohmann;
 
-const vector<string> gCommandList = {"import",
-                                     "load",
-                                     "export",
-                                     "BVHExport",
-                                     "BVHImport",
-                                     "camExport",
-                                     "camImport",
-                                     "writeImg",
-                                     "copyToGPU",
-                                     "copyToHost",
-                                     "median",
-                                     "wald07",
-                                     "bittner13",
-                                     "bittner13Par",
-                                     "CPUTracer",
-                                     "bruteForce",
-                                     "status",
-                                     "validate",
-                                     "viewer"};
+const vector<string> gCommandList = {
+    "import",       "load",      "export",     "BVHExport", "BVHImport", "camExport", "camImport",
+    "writeImg",     "copyToGPU", "copyToHost", "median",    "wald07",    "bittner13", "bittner13Par",
+    "bittner13GPU", "CPUTracer", "bruteForce", "status",    "validate",  "sleep",     "viewer"};
 
 // String command to object
 Config::CMD_PTR fromString(string _s) {
@@ -87,10 +74,12 @@ Config::CMD_PTR fromString(string _s) {
     case "wald07"_h: return make_shared<builder::Wald07>();
     case "bittner13"_h: return make_shared<builder::Bittner13>();
     case "bittner13Par"_h: return make_shared<builder::Bittner13Par>();
+    case "bittner13GPU"_h: return make_shared<builder::Bittner13GPU>();
     case "CPUTracer"_h: return make_shared<tracer::CPUTracer>();
     case "bruteForce"_h: return make_shared<tracer::BruteForceTracer>();
     case "status"_h: return make_shared<base::StatusDump>();
     case "validate"_h: return make_shared<misc::Validate>();
+    case "sleep"_h: return make_shared<misc::Sleep>();
     case "viewer"_h: return make_shared<view::Viewer>();
   }
   return nullptr;

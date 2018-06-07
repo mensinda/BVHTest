@@ -48,9 +48,9 @@ struct Mesh final {
 };
 
 struct MeshRaw final {
-  glm::vec3 *vert     = nullptr;
-  glm::vec3 *norm     = nullptr;
-  Triangle * faces    = nullptr;
+  glm::vec3 *vert     = nullptr; // CUDA device only memory
+  glm::vec3 *norm     = nullptr; // CUDA device only memory
+  Triangle * faces    = nullptr; // CUDA device only memory
   uint32_t   numVert  = 0;
   uint32_t   numNorm  = 0;
   uint32_t   numFaces = 0;
@@ -231,6 +231,12 @@ class BVH final {
   float calcSAH(float _cInner = 1.2f, float _cLeaf = 1.0f);
   void  fixLevels();
   void  fixSurfaceAreas();
+};
+
+struct CUDAMemoryBVHPointer {
+  BVH *    bvh      = nullptr; // CUDA device only memory
+  BVHNode *nodes    = nullptr; // CUDA device only memory
+  uint32_t numNodes = 0;
 };
 
 } // namespace base

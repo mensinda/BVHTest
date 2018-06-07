@@ -14,18 +14,20 @@
  * limitations under the License.
  */
 
-#pragma once
+#include "Sleep.hpp"
+#include <thread>
 
-#include "base/BVH.hpp"
+using namespace std;
+using namespace std::chrono;
+using namespace BVHTest::base;
+using namespace BVHTest::misc;
 
-namespace BVHTest {
-namespace cuda {
+Sleep::~Sleep() {}
 
-extern "C" bool copyBVHToGPU(base::BVH *_bvh, base::CUDAMemoryBVHPointer *_ptr);
-extern "C" bool copyMeshToGPU(base::Mesh *_mesh, base::MeshRaw *_meshOut);
+void Sleep::fromJSON(const json &_j) { vSleepTime = milliseconds(_j.value("durationMS", vSleepTime.count())); }
+json Sleep::toJSON() const { return {{"durationMS", (uint64_t)vSleepTime.count()}}; }
 
-extern "C" bool copyBVHToHost(base::CUDAMemoryBVHPointer *_bvh, base::BVH *_ptr);
-extern "C" bool copyMeshToHost(base::MeshRaw *_mesh, base::Mesh *_meshOut);
-
-} // namespace cuda
-} // namespace BVHTest
+ErrorCode Sleep::runImpl(base::State &) {
+  this_thread::sleep_for(vSleepTime);
+  return ErrorCode::OK;
+}
