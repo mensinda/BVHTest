@@ -10,7 +10,7 @@ project( 'BVHTest', ['cpp', 'c'],
   version : '0.0.1',
   license : 'Apache 2')
 
-incDirsBase = ['external',  'external/fmt', 'external/cub', 'external/spdlog/include', 'lib', '.', './lib']
+incDirsBase = ['external',  'external/fmt', 'external/cub', 'external/glm', 'external/spdlog/include', 'lib', '.', './lib']
 incDirsRaw  = []
 
 foreach i : incDirsBase
@@ -18,10 +18,9 @@ foreach i : incDirsBase
 endforeach
 
 incDirs = include_directories(incDirsBase)
-assimp  = dependency('assimp',  required: true, version: '>=4.1.0')
+assimp  = dependency('assimp',  required: true, version: '>=3.3.1')
 glfw    = dependency('glfw3',   required: true, version: '>=3.1.0')
 GL      = dependency('GL',      required: true, version: '>=3.3')
-glm     = dependency('glm',     required: true, version: '>=0.9.9')
 OpenMP  = dependency('openmp',  required: true)
 dl      = meson.get_compiler('c').find_library('dl', required : true)
 threads = dependency('threads', required: true)

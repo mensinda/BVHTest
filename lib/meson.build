@@ -227,5 +227,5 @@ viewerLib = static_library('viewer', viewerSrc,
   include_directories: incDirs,
   install: true,
   link_with: [baseLib, miscLib, tracerLib, enum2StrLib, externalsLib],
-  dependencies: baseDeps + [GL, glfw, dl, glm],
+  dependencies: baseDeps + [GL, glfw, dl],
 )
