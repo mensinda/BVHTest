@@ -16,6 +16,7 @@
 
 #include "Bittner13.hpp"
 #include "misc/OMPReductions.hpp"
+#include "CUDAHeap.hpp"
 #include <algorithm>
 #include <chrono>
 #include <fmt/format.h>
@@ -71,32 +72,32 @@ struct FindNodeStruct {
 };
 
 uint32_t Bittner13::findNodeForReinsertion(uint32_t _n, BVH &_bvh) {
-  float                             lBestCost      = numeric_limits<float>::infinity();
-  uint32_t                          lBestNodeIndex = 0;
-  BVHNode const *                   lNode          = _bvh[_n];
-  float                             lSArea         = lNode->surfaceArea;
-  uint32_t                          lSize          = 1;
-  array<FindNodeStruct, QUEUE_SIZE> lPQ;
-  auto                              lBegin = begin(lPQ);
+  float           lBestCost      = numeric_limits<float>::infinity();
+  uint32_t        lBestNodeIndex = 0;
+  BVHNode const * lNode          = _bvh[_n];
+  float           lSArea         = lNode->surfaceArea;
+  uint32_t        lSize          = 1;
+  FindNodeStruct  lPQ[QUEUE_SIZE];
+  FindNodeStruct *lBegin = lPQ;
 
   lPQ[0] = {_bvh.root(), 0.0f};
   while (lSize > 0) {
-    auto [lCurrNodeIndex, lCurrCost] = lPQ[0];
-    BVHNode const *lCurrNode         = _bvh[lCurrNodeIndex];
-    pop_heap(lBegin, lBegin + lSize);
+    FindNodeStruct lCurr     = lPQ[0];
+    BVHNode const *lCurrNode = _bvh[lCurr.node];
+    CUDA_pop_heap(lBegin, lBegin + lSize);
     lSize--;
 
-    if ((lCurrCost + lSArea) >= lBestCost) {
+    if ((lCurr.cost + lSArea) >= lBestCost) {
       // Early termination - not possible to further optimize
       break;
     }
 
     float lDirectCost = directCost(lNode, lCurrNode);
-    float lTotalCost  = lCurrCost + lDirectCost;
+    float lTotalCost  = lCurr.cost + lDirectCost;
     if (lTotalCost < lBestCost) {
       // Merging here improves the total SAH cost
       lBestCost      = lTotalCost;
-      lBestNodeIndex = lCurrNodeIndex;
+      lBestNodeIndex = lCurr.node;
     }
 
     float lNewInduced = lTotalCost - lCurrNode->surfaceArea;
@@ -104,8 +105,8 @@ uint32_t Bittner13::findNodeForReinsertion(uint32_t _n, BVH &_bvh) {
       if (!lCurrNode->isLeaf()) {
         lPQ[lSize + 0] = {lCurrNode->left, lNewInduced};
         lPQ[lSize + 1] = {lCurrNode->right, lNewInduced};
-        push_heap(lBegin, lBegin + lSize + 1);
-        push_heap(lBegin, lBegin + lSize + 2);
+        CUDA_push_heap(lBegin, lBegin + lSize + 1);
+        CUDA_push_heap(lBegin, lBegin + lSize + 2);
         lSize += 2;
       }
     }

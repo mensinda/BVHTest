@@ -17,47 +17,55 @@
 #pragma once
 
 #include "BVH.hpp"
-#include <array>
-#include <tuple>
-#include <utility>
 
 namespace BVHTest {
 namespace base {
 
 template <size_t NNode, size_t NPath, size_t NAABB>
-class BVHPatch final {
+class alignas(16) BVHPatch final {
+ public:
+  struct BBox {
+    AABB  box;
+    float sarea;
+  };
+
+  struct NodePair {
+    uint32_t first;
+    uint32_t second;
+  };
+
  private:
   BVH *    vBVH;
   uint32_t vSize     = 0;
   uint32_t vNumPaths = 0;
 
-  std::array<uint32_t, NNode> vPatch;
-  std::array<BVHNode, NNode>  vNodes;
+  uint32_t vPatch[NNode];
+  BVHNode  vNodes[NNode];
 
   struct AABBPath {
-    std::array<uint32_t, NAABB>               vAABBPath;
-    std::array<std::pair<AABB, float>, NAABB> vAABBs;
-    uint32_t                                  vNumAABBs = 0;
+    uint32_t vAABBPath[NAABB];
+    BBox     vAABBs[NAABB];
+    uint32_t vNumAABBs = 0;
   };
 
-  std::array<AABBPath, NPath> vPaths;
+  AABBPath vPaths[NPath];
 
  public:
   BVHPatch() = delete;
-  BVHPatch(BVH *_bvh) : vBVH(_bvh) { clear(); }
+  CUDA_CALL BVHPatch(BVH *_bvh) : vBVH(_bvh) { clear(); }
 
-  CUDA_CALL inline uint32_t sibling(uint32_t _node) {
+  CUDA_CALL uint32_t sibling(uint32_t _node) {
     return get(_node)->isRightChild() ? get(get(_node)->parent)->left : get(get(_node)->parent)->right;
   }
 
-  CUDA_CALL inline uint32_t sibling(BVHNode const &_node) {
+  CUDA_CALL uint32_t sibling(BVHNode const &_node) {
     return _node.isRightChild() ? get(_node.parent)->left : get(_node.parent)->right;
   }
 
-  CUDA_CALL inline BVHNode &siblingNode(uint32_t _node) { return get(sibling(_node)); }
-  CUDA_CALL inline BVHNode &siblingNode(BVHNode const &_node) { return get(sibling(_node)); }
+  CUDA_CALL BVHNode &siblingNode(uint32_t _node) { return get(sibling(_node)); }
+  CUDA_CALL BVHNode &siblingNode(BVHNode const &_node) { return get(sibling(_node)); }
 
-  CUDA_CALL inline uint32_t patchIndex(uint32_t _node) const noexcept {
+  CUDA_CALL uint32_t patchIndex(uint32_t _node) const noexcept {
     for (uint32_t i = 0; i < NNode; ++i) {
       if (i >= vSize) { break; }
       if (vPatch[i] == _node) { return i; }
@@ -65,20 +73,20 @@ class BVHPatch final {
     return UINT32_MAX;
   }
 
-  CUDA_CALL inline BVHNode *get(uint32_t _node) {
+  CUDA_CALL BVHNode *get(uint32_t _node) {
     uint32_t lIndex = patchIndex(_node);
     if (lIndex == UINT32_MAX) { return vBVH->get(_node); }
     assert(lIndex < vSize);
     return &vNodes[lIndex];
   }
 
-  CUDA_CALL inline BVHNode *getPatchedNode(uint32_t _patchIndex) { return &vNodes[_patchIndex]; }
-  CUDA_CALL inline uint32_t getPatchedNodeIndex(uint32_t _patchIndex) { return vPatch[_patchIndex]; }
+  CUDA_CALL BVHNode *getPatchedNode(uint32_t _patchIndex) { return &vNodes[_patchIndex]; }
+  CUDA_CALL uint32_t getPatchedNodeIndex(uint32_t _patchIndex) { return vPatch[_patchIndex]; }
 
-  CUDA_CALL inline BVHNode *rootNode() { return get(vBVH->root()); }
-  CUDA_CALL inline BVHNode *operator[](uint32_t _node) { return get(_node); }
+  CUDA_CALL BVHNode *rootNode() { return get(vBVH->root()); }
+  CUDA_CALL BVHNode *operator[](uint32_t _node) { return get(_node); }
 
-  CUDA_CALL inline BVHNode *patchNode(uint32_t _node) {
+  CUDA_CALL BVHNode *patchNode(uint32_t _node) {
     assert(vSize < NNode);
     vPatch[vSize]  = _node;
     vNodes[vSize]  = *vBVH->get(_node);
@@ -87,13 +95,13 @@ class BVHPatch final {
     return lNode;
   }
 
-  CUDA_CALL inline void clear() {
+  CUDA_CALL void clear() {
     vSize     = 0;
     vNumPaths = 0;
     for (uint32_t i = 0; i < NPath; ++i) { vPaths[i].vNumAABBs = 0; }
   }
 
-  CUDA_CALL inline void apply() {
+  CUDA_CALL void apply() {
     for (uint32_t i = 0; i < NNode; ++i) {
       if (i >= vSize) { break; }
       *vBVH->get(vPatch[i]) = vNodes[i];
@@ -103,14 +111,14 @@ class BVHPatch final {
   /*!
    * \brief Fix the AABBs starting at _node in a path to the root
    */
-  CUDA_CALL inline void patchAABBFrom(uint32_t _node) {
+  CUDA_CALL void patchAABBFrom(uint32_t _node) {
     uint32_t lNodeIndex = _node;
     BVHNode *lStart     = get(lNodeIndex);
     BVHNode *lNode      = lStart;
 
     // Pair: sibling node (= the node we need to fetch) , current Node index
-    std::array<std::pair<uint32_t, uint32_t>, NAABB> lNodePairs;
-    uint32_t                                         lNumNodes = 0;
+    NodePair lNodePairs[NAABB];
+    uint32_t lNumNodes = 0;
 
     bool lLastWasLeft = true; // Always remember if we have to fetch the left or right childs bbox
 
@@ -137,17 +145,17 @@ class BVHPatch final {
     for (uint32_t i = 0; i < lNumNodes; ++i) {
       // Merge with the sibling of the last processed Node
       auto lNewAABB = getAABB(lNodePairs[i].first, lNumNodes - i - 1);
-      lAABB.first.mergeWith(lNewAABB.first);
+      lAABB.box.mergeWith(lNewAABB.box);
 
       vPaths[vNumPaths].vAABBPath[lNumNodes - i - 1] = lNodePairs[i].second;
-      vPaths[vNumPaths].vAABBs[lNumNodes - i - 1]    = {lAABB.first, lAABB.first.surfaceArea()};
+      vPaths[vNumPaths].vAABBs[lNumNodes - i - 1]    = {lAABB.box, lAABB.box.surfaceArea()};
     }
 
     vPaths[vNumPaths].vNumAABBs = lNumNodes;
     vNumPaths++;
   }
 
-  CUDA_CALL inline std::pair<AABB, float> getAABB(uint32_t _node, uint32_t _level) {
+  CUDA_CALL BBox getAABB(uint32_t _node, uint32_t _level) {
     for (int32_t i = NPath - 1; i >= 0; --i) {
       if (_level < vPaths[i].vNumAABBs && vPaths[i].vAABBPath[_level] == _node) { return vPaths[i].vAABBs[_level]; }
     }
@@ -156,7 +164,7 @@ class BVHPatch final {
   }
 
   // Handle case when node is inserted in the stored AABB path
-  CUDA_CALL inline void nodeUpdated(uint32_t _node, uint32_t _level) {
+  CUDA_CALL void nodeUpdated(uint32_t _node, uint32_t _level) {
     for (uint32_t i = 0; i < NPath; ++i) {
       if (_level < vPaths[i].vNumAABBs && vPaths[i].vAABBPath[_level] == _node) {
         uint32_t lOld = vNumPaths;
@@ -168,9 +176,9 @@ class BVHPatch final {
     }
   }
 
-  CUDA_CALL inline size_t   size() const noexcept { return vSize; }
-  CUDA_CALL inline bool     empty() const noexcept { return vSize == 0; }
-  CUDA_CALL inline uint32_t root() const noexcept { return vBVH->root(); }
+  CUDA_CALL size_t size() const noexcept { return vSize; }
+  CUDA_CALL bool   empty() const noexcept { return vSize == 0; }
+  CUDA_CALL uint32_t root() const noexcept { return vBVH->root(); }
 };
 
 } // namespace base

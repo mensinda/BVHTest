@@ -20,11 +20,11 @@
 
 #ifdef __CUDACC__
 #  ifndef CUDA_CALL
-#    define CUDA_CALL __host__ __device__
+#    define CUDA_CALL __host__ __device__ __forceinline__
 #  endif
 #else
 #  ifndef CUDA_CALL
-#    define CUDA_CALL
+#    define CUDA_CALL inline
 #  endif
 #endif
 
@@ -60,12 +60,12 @@ struct AABB {
   glm::vec3 min;
   glm::vec3 max;
 
-  CUDA_CALL inline float surfaceArea() const noexcept {
+  CUDA_CALL float surfaceArea() const noexcept {
     glm::vec3 d = max - min;
     return 2.0f * (d.x * d.y + d.x * d.z + d.y * d.z);
   }
 
-  CUDA_CALL inline void mergeWith(AABB const &_bbox) {
+  CUDA_CALL void mergeWith(AABB const &_bbox) {
     min.x = min.x < _bbox.min.x ? min.x : _bbox.min.x;
     min.y = min.y < _bbox.min.y ? min.y : _bbox.min.y;
     min.z = min.z < _bbox.min.z ? min.z : _bbox.min.z;
@@ -75,7 +75,7 @@ struct AABB {
   }
 
   // Source: http://www.cs.utah.edu/~awilliam/box/
-  CUDA_CALL inline bool intersect(Ray const &_r, float t0, float t1, float &tmin, float &tmax) const {
+  CUDA_CALL bool intersect(Ray const &_r, float t0, float t1, float &tmin, float &tmax) const {
     glm::vec3 const &lOrigin = _r.getOrigin();
     glm::vec3 const &lInvDir = _r.getInverseDirection();
     Ray::Sign const &lSign   = _r.getSign();
@@ -127,11 +127,11 @@ struct alignas(16) BVHNode {
 
   float surfaceArea; // TODO: Find a better use for these 4 Byte
 
-  CUDA_CALL inline bool     isLeaf() const noexcept { return numChildren == 0; }
-  CUDA_CALL inline uint32_t beginFaces() const noexcept { return left; }
-  CUDA_CALL inline uint32_t numFaces() const noexcept { return right; }
-  CUDA_CALL inline bool     isLeftChild() const noexcept { return isLeft != 0; }
-  CUDA_CALL inline bool     isRightChild() const noexcept { return isLeft == 0; }
+  CUDA_CALL bool isLeaf() const noexcept { return numChildren == 0; }
+  CUDA_CALL uint32_t beginFaces() const noexcept { return left; }
+  CUDA_CALL uint32_t numFaces() const noexcept { return right; }
+  CUDA_CALL bool     isLeftChild() const noexcept { return isLeft != 0; }
+  CUDA_CALL bool     isRightChild() const noexcept { return isLeft == 0; }
 };
 
 class BVH final {
@@ -143,31 +143,31 @@ class BVH final {
   uint16_t vMaxLevel  = 0;
 
  public:
-  CUDA_CALL inline ~BVH() { free(bvh); }
+  CUDA_CALL ~BVH() { free(bvh); }
 
-  CUDA_CALL inline uint32_t sibling(uint32_t _node) const {
+  CUDA_CALL uint32_t sibling(uint32_t _node) const {
     return bvh[_node].isRightChild() ? bvh[bvh[_node].parent].left : bvh[bvh[_node].parent].right;
   }
 
-  CUDA_CALL inline uint32_t sibling(BVHNode const *_node) const {
+  CUDA_CALL uint32_t sibling(BVHNode const *_node) const {
     return _node->isRightChild() ? bvh[_node->parent].left : bvh[_node->parent].right;
   }
 
-  CUDA_CALL inline BVHNode *siblingNode(uint32_t _node) { return bvh + sibling(_node); }
-  CUDA_CALL inline BVHNode *siblingNode(BVHNode const *_node) { return bvh + sibling(_node); }
+  CUDA_CALL BVHNode *siblingNode(uint32_t _node) { return bvh + sibling(_node); }
+  CUDA_CALL BVHNode *siblingNode(BVHNode const *_node) { return bvh + sibling(_node); }
 
-  CUDA_CALL inline size_t   size() const noexcept { return vSize; }
-  CUDA_CALL inline bool     empty() const noexcept { return vSize == 0; }
-  CUDA_CALL inline BVHNode *data() { return bvh; }
-  CUDA_CALL inline char *   dataBin() { return reinterpret_cast<char *>(bvh); }
-  CUDA_CALL inline uint32_t root() const noexcept { return vRootIndex; }
-  CUDA_CALL inline BVHNode *rootNode() { return bvh + vRootIndex; }
-  CUDA_CALL inline BVHNode *get(uint32_t _node) { return bvh + _node; }
-  CUDA_CALL inline BVHNode *operator[](uint32_t _node) { return bvh + _node; }
-  CUDA_CALL inline uint32_t nextNodeIndex() const noexcept { return static_cast<uint32_t>(vSize); }
-  CUDA_CALL inline uint16_t maxLevel() const noexcept { return vMaxLevel; }
-  CUDA_CALL inline void     setMaxLevel(uint16_t _level) noexcept { vMaxLevel = _level; }
-  CUDA_CALL inline void     setNewRoot(uint32_t _root) noexcept { vRootIndex = _root; }
+  CUDA_CALL size_t size() const noexcept { return vSize; }
+  CUDA_CALL bool   empty() const noexcept { return vSize == 0; }
+  CUDA_CALL BVHNode *data() { return bvh; }
+  CUDA_CALL char *   dataBin() { return reinterpret_cast<char *>(bvh); }
+  CUDA_CALL uint32_t root() const noexcept { return vRootIndex; }
+  CUDA_CALL BVHNode *rootNode() { return bvh + vRootIndex; }
+  CUDA_CALL BVHNode *get(uint32_t _node) { return bvh + _node; }
+  CUDA_CALL BVHNode *operator[](uint32_t _node) { return bvh + _node; }
+  CUDA_CALL uint32_t nextNodeIndex() const noexcept { return static_cast<uint32_t>(vSize); }
+  CUDA_CALL uint16_t maxLevel() const noexcept { return vMaxLevel; }
+  CUDA_CALL void     setMaxLevel(uint16_t _level) noexcept { vMaxLevel = _level; }
+  CUDA_CALL void     setNewRoot(uint32_t _root) noexcept { vRootIndex = _root; }
 
   inline void resize(size_t _size) {
     vSize = _size;
@@ -181,14 +181,14 @@ class BVH final {
     }
   }
 
-  CUDA_CALL inline void setMemory(BVHNode *_mem, size_t _numNodes, size_t _capacity) {
+  CUDA_CALL void setMemory(BVHNode *_mem, size_t _numNodes, size_t _capacity) {
     bvh       = _mem;
     vSize     = _numNodes;
     vCapacity = _capacity;
   }
 
-  CUDA_CALL inline uint32_t addLeaf(
-      AABB const &_bbox, uint32_t _parent, uint32_t _firstFace, uint32_t _numFaces, bool _isLeft) {
+  CUDA_CALL uint32_t
+            addLeaf(AABB const &_bbox, uint32_t _parent, uint32_t _firstFace, uint32_t _numFaces, bool _isLeft) {
     assert(vSize < vCapacity);
 
     uint16_t lLevel = empty() ? 0 : bvh[_parent].level + 1;
@@ -207,8 +207,8 @@ class BVH final {
     return vSize++;
   }
 
-  CUDA_CALL inline uint32_t addInner(
-      AABB const &_bbox, uint32_t _parent, uint32_t _numChildren, uint32_t _left, uint32_t _right, bool _isLeft) {
+  CUDA_CALL uint32_t
+            addInner(AABB const &_bbox, uint32_t _parent, uint32_t _numChildren, uint32_t _left, uint32_t _right, bool _isLeft) {
     assert(vSize < vCapacity);
 
     uint16_t lLevel = empty() ? 0 : bvh[_parent].level + 1;

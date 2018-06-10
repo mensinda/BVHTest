@@ -22,11 +22,11 @@
 
 #ifdef __CUDACC__
 #  ifndef CUDA_CALL
-#    define CUDA_CALL __host__ __device__
+#    define CUDA_CALL __host__ __device__ __forceinline__
 #  endif
 #else
 #  ifndef CUDA_CALL
-#    define CUDA_CALL
+#    define CUDA_CALL inline
 #  endif
 #endif
 
@@ -62,10 +62,10 @@ class alignas(16) Ray final {
     vSign.z = vInvDir.z < 0 ? 1 : 0;
   }
 
-  CUDA_CALL inline vec3 const &getOrigin() const { return vPos; }
-  CUDA_CALL inline vec3 const &getDirection() const { return vDir; }
-  CUDA_CALL inline vec3 const &getInverseDirection() const { return vInvDir; }
-  CUDA_CALL inline Sign const &getSign() const { return vSign; }
+  CUDA_CALL vec3 const &getOrigin() const { return vPos; }
+  CUDA_CALL vec3 const &getDirection() const { return vDir; }
+  CUDA_CALL vec3 const &getInverseDirection() const { return vInvDir; }
+  CUDA_CALL Sign const &getSign() const { return vSign; }
 };
 
 } // namespace base

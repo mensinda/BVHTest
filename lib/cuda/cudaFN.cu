@@ -106,8 +106,7 @@ extern "C" bool copyBVHToHost(CUDAMemoryBVHPointer *_bvh, base::BVH *_ptr) {
 
   cudaError_t lRes;
   BVH         lTempBVH;
-  uint32_t    lSize   = 0;
-  BVHNode *   lSource = nullptr;
+  uint32_t    lSize = 0;
 
   CUDA_RUN(cudaMemcpy(&lTempBVH, _bvh->bvh, sizeof(BVH), cudaMemcpyDeviceToHost));
 

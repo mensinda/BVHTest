@@ -17,6 +17,7 @@
 #include "BVHTestCfg.hpp"
 #include "Bittner13Par.hpp"
 #include "misc/OMPReductions.hpp"
+#include "CUDAHeap.hpp"
 #include <algorithm>
 #include <chrono>
 #include <fmt/format.h>
@@ -76,46 +77,47 @@ struct HelperStruct {
   inline bool operator<(HelperStruct const &_b) const noexcept { return cost > _b.cost; }
 };
 
-pair<uint32_t, uint32_t> Bittner13Par::findNodeForReinsertion(uint32_t _n, PATCH &_bvh) {
-  float                           lBestCost      = numeric_limits<float>::infinity();
-  pair<uint32_t, uint32_t>        lBestNodeIndex = {0, 0};
-  BVHNode const *                 lNode          = _bvh[_n];
-  AABB const &                    lNodeBBox      = lNode->bbox;
-  float                           lSArea         = lNode->surfaceArea;
-  uint32_t                        lSize          = 1;
-  array<HelperStruct, QUEUE_SIZE> lPQ;
-  auto                            lBegin = begin(lPQ);
+
+Bittner13Par::NodeLevel Bittner13Par::findNodeForReinsertion(uint32_t _n, PATCH &_bvh) {
+  float          lBestCost      = numeric_limits<float>::infinity();
+  NodeLevel      lBestNodeIndex = {0, 0};
+  BVHNode const *lNode          = _bvh[_n];
+  AABB const &   lNodeBBox      = lNode->bbox;
+  float          lSArea         = lNode->surfaceArea;
+  uint32_t       lSize          = 1;
+  HelperStruct   lPQ[QUEUE_SIZE];
+  HelperStruct * lBegin = lPQ;
 
   lPQ[0] = {_bvh.root(), 0.0f, 0};
   while (lSize > 0) {
-    auto [lCurrNodeIndex, lCurrCost, lLevel] = lPQ[0];
-    BVHNode *lCurrNode                       = _bvh[lCurrNodeIndex];
-    auto [lAABB, lCurrSArea]                 = _bvh.getAABB(lCurrNodeIndex, lLevel);
-    pop_heap(lBegin, lBegin + lSize);
+    HelperStruct lCurr     = lPQ[0];
+    BVHNode *    lCurrNode = _bvh[lCurr.node];
+    auto         lBBox     = _bvh.getAABB(lCurr.node, lCurr.level);
+    CUDA_pop_heap(lBegin, lBegin + lSize);
     lSize--;
 
-    if ((lCurrCost + lSArea) >= lBestCost) {
+    if ((lCurr.cost + lSArea) >= lBestCost) {
       // Early termination - not possible to further optimize
       break;
     }
 
-    lAABB.mergeWith(lNodeBBox);
-    float lDirectCost = lAABB.surfaceArea();
-    float lTotalCost  = lCurrCost + lDirectCost;
+    lBBox.box.mergeWith(lNodeBBox);
+    float lDirectCost = lBBox.box.surfaceArea();
+    float lTotalCost  = lCurr.cost + lDirectCost;
     if (lTotalCost < lBestCost) {
       // Merging here improves the total SAH cost
       lBestCost      = lTotalCost;
-      lBestNodeIndex = {lCurrNodeIndex, lLevel};
+      lBestNodeIndex = {lCurr.node, lCurr.level};
     }
 
-    float lNewInduced = lTotalCost - lCurrSArea;
+    float lNewInduced = lTotalCost - lBBox.sarea;
     if ((lNewInduced + lSArea) < lBestCost) {
       if (!lCurrNode->isLeaf()) {
         assert(lSize + 2 < QUEUE_SIZE);
-        lPQ[lSize + 0] = {lCurrNode->left, lNewInduced, lLevel + 1};
-        lPQ[lSize + 1] = {lCurrNode->right, lNewInduced, lLevel + 1};
-        push_heap(lBegin, lBegin + lSize + 1);
-        push_heap(lBegin, lBegin + lSize + 2);
+        lPQ[lSize + 0] = {lCurrNode->left, lNewInduced, lCurr.level + 1};
+        lPQ[lSize + 1] = {lCurrNode->right, lNewInduced, lCurr.level + 1};
+        CUDA_push_heap(lBegin, lBegin + lSize + 1);
+        CUDA_push_heap(lBegin, lBegin + lSize + 2);
         lSize += 2;
       }
     }

@@ -44,6 +44,11 @@ class Bittner13Par final : public OptimizerBase {
     uint32_t grandParent;
   };
 
+  struct NodeLevel {
+    uint32_t node;
+    uint32_t level;
+  };
+
   static const size_t QUEUE_SIZE = 512;
 
  private:
@@ -55,7 +60,7 @@ class Bittner13Par final : public OptimizerBase {
   bool     vOffsetAccess = false;
   bool     vShuffleList  = true;
 
-  std::pair<uint32_t, uint32_t> findNodeForReinsertion(uint32_t _n, PATCH &_bvh);
+  NodeLevel findNodeForReinsertion(uint32_t _n, PATCH &_bvh);
 
   RM_RES removeNode(uint32_t _node, PATCH &_bvh, SumMin *_sumMin);
   bool   reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, SumMin *_sumMin);

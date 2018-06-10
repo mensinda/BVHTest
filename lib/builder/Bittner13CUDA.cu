@@ -16,6 +16,8 @@
 
 #include "cuda/cudaFN.hpp"
 #include "Bittner13CUDA.hpp"
+#include "CUDAHeap.hpp"
+#include <cmath>
 #include <cub/cub.cuh>
 #include <iostream>
 
@@ -52,11 +54,13 @@ __global__ void kResetTodoData(uint32_t *_nodes, uint32_t _num) {
   for (uint32_t i = index; i < _num; i += stride) { _nodes[i] = i; }
 }
 
-__global__ void kResetLocks(uint32_t *_locks, uint32_t _num) {
+__global__ void kInitPatches(PATCH *_patches, BVH *_bvh, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
-  for (uint32_t i = index; i < _num; i += stride) { _locks[i] = 0; }
+  //   for (uint32_t i = index; i < _num; i += stride) { _patches[i].cudaInit(_bvh); }
+  for (uint32_t i = index; i < _num; i += stride) { new (_patches + i) PATCH(_bvh); }
 }
+
 
 
 /*  ___  ___      _         _                        _       */
@@ -126,6 +130,239 @@ __global__ void kCalcCost(float *_sum, float *_min, BVHNode *_BVHNode, float *_c
 }
 
 
+
+
+struct CUDAHelperStruct {
+  uint32_t node;
+  float    cost;
+  uint32_t level;
+
+  __device__ __forceinline__ bool operator<(CUDAHelperStruct const &_b) const noexcept { return cost > _b.cost; }
+};
+
+struct CUDANodeLevel {
+  uint32_t node;
+  uint32_t level;
+};
+
+struct CUDA_RM_RES {
+  struct NodePair {
+    uint32_t n1;
+    uint32_t n2;
+  };
+
+  bool     res;
+  NodePair toInsert;
+  NodePair unused;
+  uint32_t grandParent;
+};
+
+__device__ CUDANodeLevel findNodeForReinsertion(uint32_t _n, PATCH &_bvh) {
+  float             lBestCost      = HUGE_VALF;
+  CUDANodeLevel     lBestNodeIndex = {0, 0};
+  BVHNode const *   lNode          = _bvh[_n];
+  AABB const &      lNodeBBox      = lNode->bbox;
+  float             lSArea         = lNode->surfaceArea;
+  uint32_t          lSize          = 1;
+  CUDAHelperStruct  lPQ[CUDA_QUEUE_SIZE];
+  CUDAHelperStruct *lBegin = lPQ;
+
+  lPQ[0] = {_bvh.root(), 0.0f, 0};
+  while (lSize > 0) {
+    CUDAHelperStruct lCurr     = lPQ[0];
+    BVHNode *        lCurrNode = _bvh[lCurr.node];
+    auto             lBBox     = _bvh.getAABB(lCurr.node, lCurr.level);
+    CUDA_pop_heap(lBegin, lBegin + lSize);
+    lSize--;
+
+    if ((lCurr.cost + lSArea) >= lBestCost) {
+      // Early termination - not possible to further optimize
+      break;
+    }
+
+    lBBox.box.mergeWith(lNodeBBox);
+    float lDirectCost = lBBox.box.surfaceArea();
+    float lTotalCost  = lCurr.cost + lDirectCost;
+    if (lTotalCost < lBestCost) {
+      // Merging here improves the total SAH cost
+      lBestCost      = lTotalCost;
+      lBestNodeIndex = {lCurr.node, lCurr.level};
+    }
+
+    float lNewInduced = lTotalCost - lBBox.sarea;
+    if ((lNewInduced + lSArea) < lBestCost) {
+      if (!lCurrNode->isLeaf()) {
+        assert(lSize + 2 < CUDA_QUEUE_SIZE);
+        lPQ[lSize + 0] = {lCurrNode->left, lNewInduced, lCurr.level + 1};
+        lPQ[lSize + 1] = {lCurrNode->right, lNewInduced, lCurr.level + 1};
+        CUDA_push_heap(lBegin, lBegin + lSize + 1);
+        CUDA_push_heap(lBegin, lBegin + lSize + 2);
+        lSize += 2;
+      }
+    }
+  }
+
+  return lBestNodeIndex;
+}
+
+#define SPINN_LOCK(N)                                                                                                  \
+  while (_sumMin[N].flag.test_and_set(memory_order_acquire)) { this_thread::yield(); }
+#define IF_NOT_LOCK(N) if (_sumMin[N].flag.test_and_set(memory_order_acquire))
+#define RELEASE_LOCK(N) _sumMin[N].flag.clear(memory_order_release);
+
+/*
+__device__ CUDA_RM_RES removeNode(uint32_t _node, PATCH &_bvh, SumMin *_sumMin) {
+  RM_RES lFalse = {false, {0, 0}, {0, 0}, 0};
+  if (_bvh[_node]->isLeaf() || _node == _bvh.root()) { return lFalse; }
+
+  IF_NOT_LOCK(_node) { return lFalse; }
+
+  BVHNode *lNode         = _bvh.patchNode(_node);
+  uint32_t lSiblingIndex = _bvh.sibling(*lNode);
+  uint32_t lParentIndex  = lNode->parent;
+
+  IF_NOT_LOCK(lSiblingIndex) {
+    RELEASE_LOCK(_node);
+    return lFalse;
+  }
+  BVHNode *lSibling = _bvh.patchNode(lSiblingIndex);
+
+  IF_NOT_LOCK(lParentIndex) {
+    RELEASE_LOCK(_node);
+    RELEASE_LOCK(lSiblingIndex);
+    return lFalse;
+  }
+  BVHNode *lParent           = _bvh.patchNode(lParentIndex);
+  uint32_t lGrandParentIndex = lParent->parent;
+
+  IF_NOT_LOCK(lGrandParentIndex) {
+    RELEASE_LOCK(_node);
+    RELEASE_LOCK(lSiblingIndex);
+    RELEASE_LOCK(lParentIndex);
+    return lFalse;
+  }
+  BVHNode *lGrandParent = _bvh.patchNode(lGrandParentIndex);
+
+  IF_NOT_LOCK(lNode->left) {
+    RELEASE_LOCK(_node);
+    RELEASE_LOCK(lSiblingIndex);
+    RELEASE_LOCK(lParentIndex);
+    RELEASE_LOCK(lGrandParentIndex);
+    return lFalse;
+  }
+
+  IF_NOT_LOCK(lNode->right) {
+    RELEASE_LOCK(_node);
+    RELEASE_LOCK(lSiblingIndex);
+    RELEASE_LOCK(lParentIndex);
+    RELEASE_LOCK(lGrandParentIndex);
+    RELEASE_LOCK(lNode->left);
+    return lFalse;
+  }
+
+  BVHNode *lLeft  = _bvh.patchNode(lNode->left);
+  BVHNode *lRight = _bvh.patchNode(lNode->right);
+
+  // FREE LIST:   lNode, lParent
+  // INSERT LIST: lLeft, lRight
+
+  float lLeftSA  = lLeft->surfaceArea;
+  float lRightSA = lRight->surfaceArea;
+
+
+  if (lParentIndex == _bvh.root()) { return lFalse; } // Can not remove node with this algorithm
+
+  // Remove nodes
+  if (lParent->isLeftChild()) {
+    lGrandParent->left = lSiblingIndex;
+    lSibling->isLeft   = TRUE;
+    lSibling->parent   = lGrandParentIndex;
+  } else {
+    lGrandParent->right = lSiblingIndex;
+    lSibling->isLeft    = FALSE;
+    lSibling->parent    = lGrandParentIndex;
+  }
+
+  // update Bounding Boxes (temporary)
+  _bvh.patchAABBFrom(lGrandParentIndex);
+
+  if (lLeftSA > lRightSA) {
+    return {true, {lNode->left, lNode->right}, {_node, lParentIndex}, lGrandParentIndex};
+  } else {
+    return {true, {lNode->right, lNode->left}, {_node, lParentIndex}, lGrandParentIndex};
+  }
+}
+
+
+bool Bittner13Par::reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, SumMin *_sumMin) {
+  auto [lBestIndex, lLevelOfBest] = findNodeForReinsertion(_node, _bvh);
+  if (lBestIndex == _bvh.root()) { return false; }
+
+  uint32_t lBestPatchIndex = _bvh.patchIndex(lBestIndex); // Check if node is already patched
+  BVHNode *lBest           = nullptr;
+
+  if (lBestPatchIndex == UINT32_MAX) {
+    // Node is not patched ==> try to lock it
+    IF_NOT_LOCK(lBestIndex) { return false; }
+    lBest = _bvh.patchNode(lBestIndex);
+  } else {
+    // Node is already owned by this thread ==> no need to lock it
+    lBest = _bvh.getPatchedNode(lBestPatchIndex);
+  }
+
+  BVHNode *lNode           = _bvh[_node];
+  BVHNode *lUnused         = _bvh[_unused];
+  uint32_t lRootIndex      = lBest->parent;
+  uint32_t lRootPatchIndex = _bvh.patchIndex(lRootIndex);
+  BVHNode *lRoot           = nullptr;
+
+  if (lRootPatchIndex == UINT32_MAX) {
+    IF_NOT_LOCK(lRootIndex) {
+      RELEASE_LOCK(lBestIndex);
+      return false;
+    }
+    lRoot = _bvh.patchNode(lRootIndex);
+  } else {
+    lRoot = _bvh.getPatchedNode(lRootPatchIndex);
+  }
+
+  // Insert the unused node
+  if (lBest->isLeftChild()) {
+    lRoot->left     = _unused;
+    lUnused->isLeft = TRUE;
+  } else {
+    lRoot->right    = _unused;
+    lUnused->isLeft = FALSE;
+  }
+
+
+  // Insert the other nodes
+  lUnused->parent = lRootIndex;
+  lUnused->left   = lBestIndex;
+  lUnused->right  = _node;
+
+  lBest->parent = _unused;
+  lBest->isLeft = TRUE;
+  lNode->parent = _unused;
+  lNode->isLeft = FALSE;
+
+  if (_update) {
+    _bvh.nodeUpdated(lBestIndex, lLevelOfBest);
+    _bvh.patchAABBFrom(_unused);
+  }
+
+  return true;
+}
+*/
+
+
+__global__ void kRemoveAndReinsert(PATCH *_patches, uint32_t *_skip, uint32_t _num) {
+  uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t stride = blockDim.x * gridDim.x;
+  for (uint32_t i = index; i < _num; i += stride) {}
+}
+
+
 /*  ___  ___                                                                                              _     */
 /*  |  \/  |                                                                                             | |    */
 /*  | .  . | ___ _ __ ___   ___  _ __ _   _   _ __ ___   __ _ _ __   __ _  __ _  ___ _ __ ___   ___ _ __ | |_   */
@@ -147,6 +384,7 @@ GPUWorkingMemory allocateMemory(CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize,
   lMem.todoSorted.num = _bvh->numNodes;
   lMem.numLeafNodes   = _numFaces;
   lMem.numPatches     = _batchSize;
+  lMem.numSkipped     = _batchSize;
 
   ALLOCATE(&lMem.sumMin.sums, lMem.sumMin.num, float);
   ALLOCATE(&lMem.sumMin.mins, lMem.sumMin.num, float);
@@ -157,6 +395,7 @@ GPUWorkingMemory allocateMemory(CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize,
   ALLOCATE(&lMem.todoSorted.costs, lMem.todoSorted.num, float);
   ALLOCATE(&lMem.leafNodes, lMem.numLeafNodes, uint32_t);
   ALLOCATE(&lMem.patches, lMem.numPatches, PATCH);
+  ALLOCATE(&lMem.skipped, lMem.numSkipped, uint32_t);
 
   // This only calculates the memory requirements
   CUDA_RUN(cub::DeviceRadixSort::SortPairsDescending(lMem.cubSortTempStorage,
@@ -183,6 +422,7 @@ error:
   FREE(lMem.todoSorted.costs, lMem.todoNodes.num);
   FREE(lMem.leafNodes, lMem.numLeafNodes);
   FREE(lMem.patches, lMem.numPatches);
+  FREE(lMem.skipped, lMem.numSkipped);
   FREE(lMem.cubSortTempStorage, lMem.cubSortTempStorageSize);
 
   return lMem;
@@ -200,6 +440,7 @@ void freeMemory(GPUWorkingMemory *_data) {
   FREE(_data->todoSorted.costs, _data->todoSorted.num);
   FREE(_data->leafNodes, _data->numLeafNodes);
   FREE(_data->patches, _data->numPatches);
+  FREE(_data->skipped, _data->numSkipped);
   FREE(_data->cubSortTempStorage, _data->cubSortTempStorageSize);
 }
 
@@ -207,16 +448,22 @@ void freeMemory(GPUWorkingMemory *_data) {
 void initData(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize) {
   if (!_data || !_GPUbvh) { return; }
 
-  uint32_t lNumBlocks = (_data->todoNodes.num + _blockSize - 1) / _blockSize;
-  kResetTodoData<<<lNumBlocks, _blockSize>>>(_data->todoNodes.nodes, _data->todoNodes.num);
-
-  resetLocks(_data, _blockSize);
-
   cudaError_t   lRes;
+  uint32_t      lNumBlocksAll     = (_data->todoNodes.num + _blockSize - 1) / _blockSize;
+  uint32_t      lNumBlocksPatches = (_data->numPatches + _blockSize - 1) / _blockSize;
+  void *        lTempStorage      = nullptr;
+  int *         lNumSelected      = nullptr;
+  size_t        lTempStorageSize  = 0;
   CUBLeafSelect lSelector(_GPUbvh->nodes);
-  void *        lTempStorage     = nullptr;
-  int *         lNumSelected     = nullptr;
-  size_t        lTempStorageSize = 0;
+
+  kResetTodoData<<<lNumBlocksAll, _blockSize>>>(_data->todoNodes.nodes, _data->todoNodes.num);
+  CUDA_RUN(cudaPeekAtLastError());
+  kInitPatches<<<lNumBlocksPatches, _blockSize>>>(_data->patches, _GPUbvh->bvh, _data->numPatches);
+  CUDA_RUN(cudaPeekAtLastError());
+  CUDA_RUN(cudaDeviceSynchronize());
+
+  CUDA_RUN(cudaMemset(_data->sumMin.flags, 0, _data->sumMin.num * sizeof(uint32_t)));
+  CUDA_RUN(cudaMemset(_data->skipped, 0, _data->numSkipped * sizeof(uint32_t)));
 
   ALLOCATE(&lNumSelected, 1, int);
 
@@ -244,14 +491,6 @@ error:
 }
 
 
-void resetLocks(GPUWorkingMemory *_data, uint32_t _blockSize) {
-  if (!_data) { return; }
-
-  uint32_t lNumBlocks = (_data->sumMin.num + _blockSize - 1) / _blockSize;
-  kResetLocks<<<lNumBlocks, _blockSize>>>(_data->sumMin.flags, _data->sumMin.num);
-}
-
-
 /*    ___  _                  _ _   _                  __                  _   _                   */
 /*   / _ \| |                (_) | | |                / _|                | | (_)                  */
 /*  / /_\ \ | __ _  ___  _ __ _| |_| |__  _ __ ___   | |_ _   _ _ __   ___| |_ _  ___  _ __  ___   */
@@ -273,15 +512,30 @@ void fixTree(GPUWorkingMemory *_data, base::CUDAMemoryBVHPointer *_GPUbvh, uint3
                                        _data->sumMin.flags,
                                        _data->numLeafNodes);
 
-  resetLocks(_data, _blockSize);
+  cudaMemset(_data->sumMin.flags, 0, _data->sumMin.num * sizeof(uint32_t));
 }
 
-void calculateCost(GPUWorkingMemory *_data, base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize) {
+void doAlgorithmStep(GPUWorkingMemory *    _data,
+                     CUDAMemoryBVHPointer *_GPUbvh,
+                     uint32_t              _numChunks,
+                     uint32_t              _chunkSize,
+                     uint32_t              _blockSize) {
   if (!_data || !_GPUbvh) { return; }
 
   cudaError_t lRes;
-  uint32_t    lNumBlocks = (_data->sumMin.num + _blockSize - 1) / _blockSize;
-  kCalcCost<<<lNumBlocks, _blockSize>>>(
+  uint32_t    lNumBlocksAll   = (_data->sumMin.num + _blockSize - 1) / _blockSize;
+  uint32_t    lNumBlocksChunk = (_chunkSize + _blockSize - 1) / _blockSize;
+
+  /*   _____       _            _       _         _____           _     */
+  /*  /  __ \     | |          | |     | |       /  __ \         | |    */
+  /*  | /  \/ __ _| | ___ _   _| | __ _| |_ ___  | /  \/ ___  ___| |_   */
+  /*  | |    / _` | |/ __| | | | |/ _` | __/ _ \ | |    / _ \/ __| __|  */
+  /*  | \__/\ (_| | | (__| |_| | | (_| | ||  __/ | \__/\ (_) \__ \ |_   */
+  /*   \____/\__,_|_|\___|\__,_|_|\__,_|\__\___|  \____/\___/|___/\__|  */
+  /*                                                                    */
+  /*                                                                    */
+
+  kCalcCost<<<lNumBlocksAll, _blockSize>>>(
       _data->sumMin.sums, _data->sumMin.mins, _GPUbvh->nodes, _data->todoNodes.costs, _data->sumMin.num);
 
   CUDA_RUN(cub::DeviceRadixSort::SortPairsDescending(_data->cubSortTempStorage,
@@ -291,6 +545,18 @@ void calculateCost(GPUWorkingMemory *_data, base::CUDAMemoryBVHPointer *_GPUbvh,
                                                      _data->todoNodes.nodes,
                                                      _data->todoSorted.nodes,
                                                      _data->todoNodes.num));
+
+
+  /*  ______ _        _                   */
+  /*  |  ___(_)      | |                  */
+  /*  | |_   ___  __ | |_ _ __ ___  ___   */
+  /*  |  _| | \ \/ / | __| '__/ _ \/ _ \  */
+  /*  | |   | |>  <  | |_| | |  __/  __/  */
+  /*  \_|   |_/_/\_\  \__|_|  \___|\___|  */
+  /*                                      */
+  /*                                      */
+
+  fixTree(_data, _GPUbvh, _blockSize);
 
 error:
   return;

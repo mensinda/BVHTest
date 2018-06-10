@@ -21,6 +21,7 @@
 #include <cstdint>
 
 typedef BVHTest::base::BVHPatch<10, 2, 128> PATCH;
+constexpr size_t                            CUDA_QUEUE_SIZE = 512;
 
 struct SumMinCUDA {
   float *   sums  = nullptr;
@@ -43,9 +44,11 @@ struct GPUWorkingMemory {
 
   uint32_t *leafNodes              = nullptr;
   PATCH *   patches                = nullptr;
+  uint32_t *skipped                = nullptr;
   void *    cubSortTempStorage     = nullptr;
   uint32_t  numLeafNodes           = 0;
   uint32_t  numPatches             = 0;
+  uint32_t  numSkipped             = 0;
   size_t    cubSortTempStorageSize = 0;
 };
 
@@ -54,5 +57,9 @@ void             freeMemory(GPUWorkingMemory *_data);
 
 void initData(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
 void fixTree(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
-void resetLocks(GPUWorkingMemory *_data, uint32_t _blockSize);
-void calculateCost(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
+
+void doAlgorithmStep(GPUWorkingMemory *                   _data,
+                     BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh,
+                     uint32_t                             _numChunks,
+                     uint32_t                             _chunkSize,
+                     uint32_t                             _blockSize);
