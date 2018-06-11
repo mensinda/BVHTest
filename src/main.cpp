@@ -176,8 +176,10 @@ bool run(string _file) {
       lState.basePath = lCfg.getBasePath();
       lState.name     = lCfg.getName();
 
-      for (auto &j : lCommands)
-        if (j->run(lState) != ErrorCode::OK) break;
+      for (auto &j : lCommands) {
+        auto lRes = j->run(lState);
+        if (lRes != ErrorCode::OK && lRes != ErrorCode::WARNING) { break; }
+      }
     }
 
   } catch (detail::exception &e) {

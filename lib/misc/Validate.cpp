@@ -274,5 +274,5 @@ ErrorCode Validate::runImpl(State &_state) {
   if (!checkSurfaceArea(_state)) { lErrors++; }
   if (!checkTris(_state)) { lErrors++; }
 
-  return lErrors == 0 ? ErrorCode::OK : ErrorCode::BVH_ERROR;
+  return lErrors == 0 ? ErrorCode::OK : ErrorCode::WARNING;
 }

@@ -33,6 +33,7 @@ namespace BVHTest::base {
 
 enum class ErrorCode {
   OK,           // Everything went fine
+  WARNING,      // Warning -- non fatal error
   IO_ERROR,     // Failed to read / write a file
   PARSE_ERROR,  // Paring a file failed
   BVH_ERROR,    // Something is wrong with the BVH

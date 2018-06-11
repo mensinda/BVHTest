@@ -49,9 +49,10 @@ ErrorCode Command::run(State &_state) {
 
   PROGRESS_DONE;
 
-  if (lRet != ErrorCode::OK) {
-    lLogger->error("Command {} returned {}", lName, toStr(lRet));
-    return lRet;
+  switch (lRet) {
+    case ErrorCode::OK: break;
+    case ErrorCode::WARNING: lLogger->warn("Command {} returned a warning", lName); break;
+    default: lLogger->error("Command {} returned {}", lName, toStr(lRet)); return lRet;
   }
 
   _state.commandsRun |= static_cast<uint64_t>(getType());
