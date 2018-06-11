@@ -24,11 +24,12 @@ using namespace BVHTest::cuda;
 
 CopyToHost::~CopyToHost() {}
 
-void CopyToHost::fromJSON(const json &_j) { (void)_j; }
-json CopyToHost::toJSON() const { return json::object(); }
+void CopyToHost::fromJSON(const json &_j) { vFixLevels = _j.value("fixLevels", vFixLevels); }
+json CopyToHost::toJSON() const { return {{"fixLevels", vFixLevels}}; }
 
 ErrorCode CopyToHost::runImpl(State &_state) {
   if (!copyBVHToHost(&_state.cudaMem.bvh, &_state.bvh)) { return ErrorCode::CUDA_ERROR; }
   if (!copyMeshToHost(&_state.cudaMem.rawMesh, &_state.mesh)) { return ErrorCode::CUDA_ERROR; }
+  if (vFixLevels) { _state.bvh.fixLevels(); }
   return ErrorCode::OK;
 }

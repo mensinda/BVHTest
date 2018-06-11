@@ -21,6 +21,9 @@
 namespace BVHTest::cuda {
 
 class CopyToHost final : public base::Command {
+ private:
+  bool vFixLevels = true;
+
  public:
   CopyToHost() = default;
   virtual ~CopyToHost();

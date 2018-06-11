@@ -64,3 +64,5 @@ void doAlgorithmStep(GPUWorkingMemory *                   _data,
                      uint32_t                             _chunkSize,
                      uint32_t                             _blockSize,
                      bool                                 _offsetAccess);
+
+uint32_t calcNumSkipped(GPUWorkingMemory *_data);

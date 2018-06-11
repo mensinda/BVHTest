@@ -86,14 +86,14 @@ ErrorCode Bittner13GPU::runImpl(State &_state) {
 
 
   for (uint32_t i = 0; i < vMaxNumStepps; ++i) {
-#if ENABLE_PROGRESS_BAR
-//     progress(fmt::format("Stepp {:<3}; SAH: {:<6.5}", i, _state.bvh.calcSAH()), i, vMaxNumStepps - 1);
-#endif
+    progress(fmt::format("Stepp {:<3}; SAH: ?", i), i, vMaxNumStepps - 1);
 
     doAlgorithmStep(&lMem, &_state.cudaMem.bvh, vNumChunks, lChunkSize, vCUDABlockSize, vOffsetAccess);
   }
 
-  //   PROGRESS_DONE;
+  PROGRESS_DONE;
+
+  lSkipped = calcNumSkipped(&lMem);
 
   freeMemory(&lMem);
 

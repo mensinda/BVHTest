@@ -40,6 +40,10 @@ using namespace BVHTest::cuda;
   ptr = nullptr;                                                                                                       \
   num = 0;
 
+#define FREE2(ptr)                                                                                                     \
+  cudaFree(ptr);                                                                                                       \
+  ptr = nullptr;
+
 // #define SPINN_LOCK(N)
 #define IF_NOT_LOCK(N) if (atomicCAS(_flags + N, 0, 1) != 0)
 #define RELEASE_LOCK(N) atomicExch(_flags + N, 0u);
@@ -482,15 +486,6 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
   uint32_t    lNumBlocksAll   = (_data->sumMin.num + _blockSize - 1) / _blockSize;
   uint32_t    lNumBlocksChunk = (_chunkSize + _blockSize - 1) / _blockSize;
 
-  /*   _____       _            _       _         _____           _     */
-  /*  /  __ \     | |          | |     | |       /  __ \         | |    */
-  /*  | /  \/ __ _| | ___ _   _| | __ _| |_ ___  | /  \/ ___  ___| |_   */
-  /*  | |    / _` | |/ __| | | | |/ _` | __/ _ \ | |    / _ \/ __| __|  */
-  /*  | \__/\ (_| | | (__| |_| | | (_| | ||  __/ | \__/\ (_) \__ \ |_   */
-  /*   \____/\__,_|_|\___|\__,_|_|\__,_|\__\___|  \____/\___/|___/\__|  */
-  /*                                                                    */
-  /*                                                                    */
-
   kCalcCost<<<lNumBlocksAll, _blockSize>>>(
       _data->sumMin.sums, _data->sumMin.mins, _GPUbvh->nodes, _data->todoNodes.costs, _data->sumMin.num);
 
@@ -501,6 +496,7 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
                                                      _data->todoNodes.nodes,
                                                      _data->todoSorted.nodes,
                                                      _data->todoNodes.num));
+
 
   for (uint32_t i = 0; i < _numChunks; ++i) {
     kRemoveAndReinsert<<<lNumBlocksChunk, _blockSize>>>(_data->todoSorted.nodes,
@@ -522,6 +518,23 @@ error:
 }
 
 
+uint32_t calcNumSkipped(GPUWorkingMemory *_data) {
+  cudaError_t lRes;
+  uint32_t    lSkipped    = 0;
+  uint32_t *  lDevSkipped = nullptr;
+
+  ALLOCATE(&lDevSkipped, 1, uint32_t);
+
+  CUDA_RUN(cub::DeviceReduce::Sum(
+      _data->cubSortTempStorage, _data->cubSortTempStorageSize, _data->skipped, lDevSkipped, _data->numSkipped));
+
+  CUDA_RUN(cudaMemcpy(&lSkipped, lDevSkipped, sizeof(uint32_t), cudaMemcpyDeviceToHost));
+
+error:
+  FREE2(lDevSkipped);
+  return lSkipped;
+}
+
 
 
 /*  ___  ___                                                                                              _     */
@@ -539,6 +552,9 @@ GPUWorkingMemory allocateMemory(CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize,
 
   lMem.result = true;
   cudaError_t lRes;
+  size_t      lCubTempStorage1 = 0;
+  size_t      lCubTempStorage2 = 0;
+  uint32_t *  lTemp            = nullptr;
 
   lMem.sumMin.num     = _bvh->numNodes;
   lMem.todoNodes.num  = _bvh->numNodes;
@@ -558,14 +574,20 @@ GPUWorkingMemory allocateMemory(CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize,
   ALLOCATE(&lMem.patches, lMem.numPatches, PATCH);
   ALLOCATE(&lMem.skipped, lMem.numSkipped, uint32_t);
 
+
+
   // This only calculates the memory requirements
   CUDA_RUN(cub::DeviceRadixSort::SortPairsDescending(lMem.cubSortTempStorage,
-                                                     lMem.cubSortTempStorageSize,
+                                                     lCubTempStorage1,
                                                      lMem.todoNodes.costs,
                                                      lMem.todoSorted.costs,
                                                      lMem.todoNodes.nodes,
                                                      lMem.todoSorted.nodes,
                                                      lMem.todoNodes.num));
+
+  CUDA_RUN(cub::DeviceReduce::Sum(lMem.cubSortTempStorage, lCubTempStorage2, lMem.skipped, lTemp, lMem.numSkipped));
+
+  lMem.cubSortTempStorageSize = lCubTempStorage1 > lCubTempStorage2 ? lCubTempStorage1 : lCubTempStorage2;
 
   ALLOCATE(&lMem.cubSortTempStorage, lMem.cubSortTempStorageSize, uint8_t);
 

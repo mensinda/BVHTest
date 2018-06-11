@@ -6,6 +6,7 @@ Makefile
 cmake_install.cmake
 install_manifest.txt
 /build*/
+*.nvvp
 
 # ---> C++
 # Compiled Object files
