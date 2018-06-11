@@ -41,7 +41,13 @@ class Bittner13Par final : public OptimizerBase {
     bool     res;
     NodePair toInsert;
     NodePair unused;
-    uint32_t grandParent;
+    NodePair etc;
+  };
+
+  struct INS_RES {
+    bool     res;
+    uint32_t best;
+    uint32_t root;
   };
 
   struct NodeLevel {
@@ -62,10 +68,10 @@ class Bittner13Par final : public OptimizerBase {
 
   NodeLevel findNodeForReinsertion(uint32_t _n, PATCH &_bvh);
 
-  RM_RES removeNode(uint32_t _node, PATCH &_bvh, SumMin *_sumMin);
-  bool   reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, SumMin *_sumMin);
-  void   fixTree(uint32_t _node, base::BVH &_bvh, SumMin *_sumMin);
-  void   initSumAndMin(base::BVH &_bvh, SumMin *_sumMin);
+  RM_RES  removeNode(uint32_t _node, PATCH &_bvh, SumMin *_sumMin);
+  INS_RES reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, SumMin *_sumMin);
+  void    fixTree(uint32_t _node, base::BVH &_bvh, SumMin *_sumMin);
+  void    initSumAndMin(base::BVH &_bvh, SumMin *_sumMin);
 
  public:
   Bittner13Par() = default;

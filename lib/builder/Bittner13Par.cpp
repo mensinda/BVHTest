@@ -132,7 +132,7 @@ Bittner13Par::NodeLevel Bittner13Par::findNodeForReinsertion(uint32_t _n, PATCH 
 #define RELEASE_LOCK(N) _sumMin[N].flag.clear(memory_order_release);
 
 Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMin *_sumMin) {
-  RM_RES lFalse = {false, {0, 0}, {0, 0}, 0};
+  RM_RES lFalse = {false, {0, 0}, {0, 0}, {0, 0}};
   if (_bvh[_node]->isLeaf() || _node == _bvh.root()) { return lFalse; }
 
   IF_NOT_LOCK(_node) { return lFalse; }
@@ -140,6 +140,12 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMi
   BVHNode *lNode         = _bvh.patchNode(_node);
   uint32_t lSiblingIndex = _bvh.sibling(*lNode);
   uint32_t lParentIndex  = lNode->parent;
+
+  if (lParentIndex == _bvh.root()) {
+    RELEASE_LOCK(_node);
+    return lFalse;
+  } // Can not remove node with this algorithm
+
 
   IF_NOT_LOCK(lSiblingIndex) {
     RELEASE_LOCK(_node);
@@ -189,9 +195,6 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMi
   float lLeftSA  = lLeft->surfaceArea;
   float lRightSA = lRight->surfaceArea;
 
-
-  if (lParentIndex == _bvh.root()) { return lFalse; } // Can not remove node with this algorithm
-
   // Remove nodes
   if (lParent->isLeftChild()) {
     lGrandParent->left = lSiblingIndex;
@@ -207,23 +210,24 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMi
   _bvh.patchAABBFrom(lGrandParentIndex);
 
   if (lLeftSA > lRightSA) {
-    return {true, {lNode->left, lNode->right}, {_node, lParentIndex}, lGrandParentIndex};
+    return {true, {lNode->left, lNode->right}, {_node, lParentIndex}, {lGrandParentIndex, lSiblingIndex}};
   } else {
-    return {true, {lNode->right, lNode->left}, {_node, lParentIndex}, lGrandParentIndex};
+    return {true, {lNode->right, lNode->left}, {_node, lParentIndex}, {lGrandParentIndex, lSiblingIndex}};
   }
 }
 
 
-bool Bittner13Par::reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, SumMin *_sumMin) {
+Bittner13Par::INS_RES Bittner13Par::reinsert(
+    uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, SumMin *_sumMin) {
   auto [lBestIndex, lLevelOfBest] = findNodeForReinsertion(_node, _bvh);
-  if (lBestIndex == _bvh.root()) { return false; }
+  if (lBestIndex == _bvh.root()) { return {false, 0, 0}; }
 
   uint32_t lBestPatchIndex = _bvh.patchIndex(lBestIndex); // Check if node is already patched
   BVHNode *lBest           = nullptr;
 
   if (lBestPatchIndex == UINT32_MAX) {
     // Node is not patched ==> try to lock it
-    IF_NOT_LOCK(lBestIndex) { return false; }
+    IF_NOT_LOCK(lBestIndex) { return {false, 0, 0}; }
     lBest = _bvh.patchNode(lBestIndex);
   } else {
     // Node is already owned by this thread ==> no need to lock it
@@ -239,7 +243,7 @@ bool Bittner13Par::reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool 
   if (lRootPatchIndex == UINT32_MAX) {
     IF_NOT_LOCK(lRootIndex) {
       RELEASE_LOCK(lBestIndex);
-      return false;
+      return {false, 0, 0};
     }
     lRoot = _bvh.patchNode(lRootIndex);
   } else {
@@ -271,7 +275,7 @@ bool Bittner13Par::reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool 
     _bvh.patchAABBFrom(_unused);
   }
 
-  return true;
+  return {true, lBestIndex, lRootIndex};
 }
 
 void Bittner13Par::fixTree(uint32_t _node, BVH &_bvh, SumMin *_sumMin) {
@@ -470,28 +474,38 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
 #pragma omp parallel for schedule(dynamic, 128)
       for (uint32_t k = 0; k < lChunkSize; ++k) {
         lPatches[k].clear();
-        auto [lNodeIndex, _]                 = lTodoList[vOffsetAccess ? k * vNumChunks + j : j * lChunkSize + k];
-        auto [lRes, lTInsert, lTUnused, lGP] = removeNode(lNodeIndex, lPatches[k], _sumMin);
-        auto [l1stIndex, l2ndIndex]          = lTInsert;
-        auto [lU1, lU2]                      = lTUnused;
+
+        auto [lNodeIndex, _]                  = lTodoList[vOffsetAccess ? k * vNumChunks + j : j * lChunkSize + k];
+        auto [lRes, lTInsert, lTUnused, lETC] = removeNode(lNodeIndex, lPatches[k], _sumMin);
+        auto [l1stIndex, l2ndIndex]           = lTInsert;
+        auto [lU1, lU2]                       = lTUnused;
+        auto [lGP, lSIB]                      = lETC;
 
         if (!lRes) {
           lSkipp[k] = true;
           continue;
         }
 
-        bool lR1 = reinsert(l1stIndex, lU1, lPatches[k], true, _sumMin);
-        bool lR2 = reinsert(l2ndIndex, lU2, lPatches[k], false, _sumMin);
-        if (!lR1 || !lR2) {
+        INS_RES lR1 = reinsert(l1stIndex, lU1, lPatches[k], true, _sumMin);
+        INS_RES lR2 = reinsert(l2ndIndex, lU2, lPatches[k], false, _sumMin);
+        if (!lR1.res || !lR2.res) {
           lSkipp[k] = true;
 
           // Unlock Nodes
-          RELEASE_LOCK(lNodeIndex);
           RELEASE_LOCK(l1stIndex);
           RELEASE_LOCK(l2ndIndex);
           RELEASE_LOCK(lU1);
           RELEASE_LOCK(lU2);
           RELEASE_LOCK(lGP);
+          RELEASE_LOCK(lSIB);
+          if (lR1.res) {
+            RELEASE_LOCK(lR1.best);
+            RELEASE_LOCK(lR1.root);
+          }
+          if (lR2.res) {
+            RELEASE_LOCK(lR2.best);
+            RELEASE_LOCK(lR2.root);
+          }
           continue;
         }
 
@@ -513,13 +527,14 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
 
 #pragma omp parallel for
       for (uint32_t k = 0; k < lChunkSize; ++k) {
+        if (lSkipp[k]) { continue; }
+
         // Reset locks
         for (uint32_t l = 0; l < 10; ++l) {
           if (l >= lPatches[k].size()) { break; }
           RELEASE_LOCK(lPatches[k].getPatchedNodeIndex(l));
         }
 
-        if (lSkipp[k]) { continue; }
         lPatches[k].apply();
       }
 
