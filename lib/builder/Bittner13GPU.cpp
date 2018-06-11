@@ -90,7 +90,7 @@ ErrorCode Bittner13GPU::runImpl(State &_state) {
 //     progress(fmt::format("Stepp {:<3}; SAH: {:<6.5}", i, _state.bvh.calcSAH()), i, vMaxNumStepps - 1);
 #endif
 
-    doAlgorithmStep(&lMem, &_state.cudaMem.bvh, vNumChunks, lChunkSize, vCUDABlockSize);
+    doAlgorithmStep(&lMem, &_state.cudaMem.bvh, vNumChunks, lChunkSize, vCUDABlockSize, vOffsetAccess);
   }
 
   //   PROGRESS_DONE;

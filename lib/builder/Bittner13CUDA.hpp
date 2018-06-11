@@ -62,4 +62,5 @@ void doAlgorithmStep(GPUWorkingMemory *                   _data,
                      BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh,
                      uint32_t                             _numChunks,
                      uint32_t                             _chunkSize,
-                     uint32_t                             _blockSize);
+                     uint32_t                             _blockSize,
+                     bool                                 _offsetAccess);
