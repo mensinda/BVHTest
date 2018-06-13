@@ -17,6 +17,7 @@
 #pragma once
 
 #include "base/BVHPatch.hpp"
+#include "Bittner13CUDA.hpp"
 #include "OptimizerBase.hpp"
 #include <atomic>
 
@@ -36,6 +37,8 @@ class Bittner13GPU final : public OptimizerBase {
   bool     vOffsetAccess  = false;
   bool     vShuffleList   = true;
 
+  GPUWorkingMemory vWorkingMemory;
+
  public:
   Bittner13GPU() = default;
   virtual ~Bittner13GPU();
@@ -47,7 +50,9 @@ class Bittner13GPU final : public OptimizerBase {
     return static_cast<uint64_t>(base::CommandType::BVH_BUILD) | static_cast<uint64_t>(base::CommandType::CUDA_INIT);
   }
 
+  base::ErrorCode setup(base::State &_state) override;
   base::ErrorCode runImpl(base::State &_state) override;
+  void            teardown(base::State &_state) override;
 
   void fromJSON(const json &_j) override;
   json toJSON() const override;

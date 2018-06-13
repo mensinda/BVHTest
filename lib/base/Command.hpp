@@ -44,7 +44,9 @@ enum class ErrorCode {
 
 class Command : public Configurable {
  protected:
+  virtual ErrorCode setup(State &) { return ErrorCode::OK; }
   virtual ErrorCode runImpl(State &_state) = 0;
+  virtual void      teardown(State &) {}
 
   void progress(std::string _str, float _val);
   void progress(std::string _str, uint32_t _curr, uint32_t _max);

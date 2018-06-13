@@ -71,36 +71,43 @@ json Bittner13GPU::toJSON() const {
   return lJSON;
 }
 
+ErrorCode Bittner13GPU::setup(State &_state) {
+  uint32_t lNumNodes  = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
+  uint32_t lChunkSize = lNumNodes / vNumChunks;
+  vWorkingMemory      = allocateMemory(&_state.cudaMem.bvh, lChunkSize, _state.cudaMem.rawMesh.numFaces);
+
+  if (!vWorkingMemory.result) { return ErrorCode::CUDA_ERROR; }
+  return ErrorCode::OK;
+}
 
 ErrorCode Bittner13GPU::runImpl(State &_state) {
-  uint32_t lNumNodes        = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
-  uint32_t lChunkSize       = lNumNodes / vNumChunks;
-  lNumNodes                 = lChunkSize * vNumChunks;
-  uint32_t         lSkipped = 0;
-  GPUWorkingMemory lMem     = allocateMemory(&_state.cudaMem.bvh, lChunkSize, _state.cudaMem.rawMesh.numFaces);
+  uint32_t lNumNodes  = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
+  uint32_t lChunkSize = lNumNodes / vNumChunks;
+  lNumNodes           = lChunkSize * vNumChunks;
 
-  if (!lMem.result) { return ErrorCode::CUDA_ERROR; }
-
-  initData(&lMem, &_state.cudaMem.bvh, vCUDABlockSize);
-  fixTree(&lMem, &_state.cudaMem.bvh, vCUDABlockSize);
-
+  initData(&vWorkingMemory, &_state.cudaMem.bvh, vCUDABlockSize);
+  fixTree(&vWorkingMemory, &_state.cudaMem.bvh, vCUDABlockSize);
 
   for (uint32_t i = 0; i < vMaxNumStepps; ++i) {
-    progress(fmt::format("Stepp {:<3}; SAH: ?", i), i, vMaxNumStepps - 1);
+    progress(fmt::format("Stepp {:<3}; SAH: ?", i), i, vMaxNumStepps);
 
-    doAlgorithmStep(&lMem, &_state.cudaMem.bvh, vNumChunks, lChunkSize, vCUDABlockSize, vOffsetAccess);
+    doAlgorithmStep(&vWorkingMemory, &_state.cudaMem.bvh, vNumChunks, lChunkSize, vCUDABlockSize, vOffsetAccess);
   }
 
-  PROGRESS_DONE;
+  return ErrorCode::OK;
+}
 
-  lSkipped = calcNumSkipped(&lMem);
+void Bittner13GPU::teardown(State &_state) {
+  uint32_t lNumNodes  = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
+  uint32_t lChunkSize = lNumNodes / vNumChunks;
+  lNumNodes           = lChunkSize * vNumChunks;
 
-  freeMemory(&lMem);
+  uint32_t lSkipped = calcNumSkipped(&vWorkingMemory);
 
   getLogger()->info("Skipped {:<8} of {:<8} -- {}%",
                     lSkipped,
                     lNumNodes * vMaxNumStepps,
                     (int)(((float)lSkipped / (float)(lNumNodes * vMaxNumStepps)) * 100));
 
-  return ErrorCode::OK;
+  freeMemory(&vWorkingMemory);
 }

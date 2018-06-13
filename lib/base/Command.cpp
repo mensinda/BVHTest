@@ -43,11 +43,19 @@ ErrorCode Command::run(State &_state) {
     lLogger->error("  - Already executed: {}", base_ErrorCode_toStr(_state.commandsRun));
   }
 
-  auto      lStart = high_resolution_clock::now();
-  ErrorCode lRet   = runImpl(_state);
-  auto      lEnd   = high_resolution_clock::now();
+  ErrorCode lRet = setup(_state);
+  if (lRet != ErrorCode::OK) {
+    lLogger->error("Setup function of command {} returned {}", lName, toStr(lRet));
+    return lRet;
+  }
+
+  auto lStart = high_resolution_clock::now();
+  lRet        = runImpl(_state);
+  auto lEnd   = high_resolution_clock::now();
 
   PROGRESS_DONE;
+
+  teardown(_state);
 
   switch (lRet) {
     case ErrorCode::OK: break;
