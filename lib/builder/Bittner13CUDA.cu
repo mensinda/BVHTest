@@ -19,6 +19,7 @@
 #include "CUDAHeap.hpp"
 #include <cmath>
 #include <cub/cub.cuh>
+#include <cuda_profiler_api.h>
 #include <iostream>
 
 using namespace glm;
@@ -101,7 +102,7 @@ struct CUDA_RM_RES {
   bool     res;
   NodePair toInsert;
   NodePair unused;
-  NodePair etc;
+  NodePair grandParentAndSibling;
 };
 
 struct CUDA_INS_RES {
@@ -277,7 +278,6 @@ __device__ CUDA_INS_RES reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, 
     IF_NOT_LOCK(lRootIndex) {
       RELEASE_LOCK(lRes.node);
       return {false, 0, 0};
-      ;
     }
     lRoot = _bvh.patchNode(lRootIndex);
   } else {
@@ -387,26 +387,32 @@ __global__ void kRemoveAndReinsert(uint32_t *_todoList,
                                    PATCH *   _patches,
                                    uint32_t *_flags,
                                    uint32_t *_skip,
+                                   uint32_t *_toFix,
                                    bool      _offsetAccess,
                                    uint32_t  _chunk,
                                    uint32_t  _numChunks,
                                    uint32_t  _chunkSize) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
+  bool     retry  = true;
   for (uint32_t k = index; k < _chunkSize; k += stride) {
     uint32_t    lNodeIndex = _todoList[_offsetAccess ? k * _numChunks + _chunk : _chunk * _chunkSize + k];
     CUDA_RM_RES lRmRes     = removeNode(lNodeIndex, _patches[k], _flags);
 
     if (!lRmRes.res) {
-      _skip[k] += 1;
       _patches[k].clear();
+      if (retry) {
+        k -= stride;
+        retry = false;
+      } else {
+        _skip[k] += 1;
+      }
       continue;
     }
 
     CUDA_INS_RES lR1 = reinsert(lRmRes.toInsert.n1, lRmRes.unused.n1, _patches[k], true, _flags);
     CUDA_INS_RES lR2 = reinsert(lRmRes.toInsert.n2, lRmRes.unused.n2, _patches[k], false, _flags);
     if (!lR1.res || !lR2.res) {
-      _skip[k] += 1;
       _patches[k].clear();
 
       // Unlock Nodes
@@ -414,8 +420,8 @@ __global__ void kRemoveAndReinsert(uint32_t *_todoList,
       RELEASE_LOCK(lRmRes.toInsert.n2);
       RELEASE_LOCK(lRmRes.unused.n1);
       RELEASE_LOCK(lRmRes.unused.n2);
-      RELEASE_LOCK(lRmRes.etc.n1);
-      RELEASE_LOCK(lRmRes.etc.n2);
+      RELEASE_LOCK(lRmRes.grandParentAndSibling.n1);
+      RELEASE_LOCK(lRmRes.grandParentAndSibling.n2);
       if (lR1.res) {
         RELEASE_LOCK(lR1.best);
         RELEASE_LOCK(lR1.root);
@@ -424,8 +430,19 @@ __global__ void kRemoveAndReinsert(uint32_t *_todoList,
         RELEASE_LOCK(lR2.best);
         RELEASE_LOCK(lR2.root);
       }
+
+      if (retry) {
+        k -= stride;
+        retry = false;
+      } else {
+        _skip[k] += 1;
+      }
       continue;
     }
+
+    _toFix[k * 3 + 0] = lRmRes.grandParentAndSibling.n1;
+    _toFix[k * 3 + 1] = lRmRes.unused.n1;
+    _toFix[k * 3 + 2] = lRmRes.unused.n2;
   }
 }
 
@@ -503,6 +520,7 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
                                                         _data->patches,
                                                         _data->sumMin.flags,
                                                         _data->skipped,
+                                                        _data->nodesToFix,
                                                         _offsetAccess,
                                                         i,
                                                         _numChunks,
@@ -548,6 +566,7 @@ error:
 
 
 GPUWorkingMemory allocateMemory(CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize, uint32_t _numFaces) {
+  cudaProfilerStart();
   GPUWorkingMemory lMem;
 
   lMem.result = true;
@@ -562,6 +581,7 @@ GPUWorkingMemory allocateMemory(CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize,
   lMem.numLeafNodes   = _numFaces;
   lMem.numPatches     = _batchSize;
   lMem.numSkipped     = _batchSize;
+  lMem.numNodesToFix  = _batchSize * 3;
 
   ALLOCATE(&lMem.sumMin.sums, lMem.sumMin.num, float);
   ALLOCATE(&lMem.sumMin.mins, lMem.sumMin.num, float);
@@ -573,6 +593,7 @@ GPUWorkingMemory allocateMemory(CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize,
   ALLOCATE(&lMem.leafNodes, lMem.numLeafNodes, uint32_t);
   ALLOCATE(&lMem.patches, lMem.numPatches, PATCH);
   ALLOCATE(&lMem.skipped, lMem.numSkipped, uint32_t);
+  ALLOCATE(&lMem.nodesToFix, lMem.numNodesToFix, uint32_t);
 
 
 
@@ -606,6 +627,7 @@ error:
   FREE(lMem.leafNodes, lMem.numLeafNodes);
   FREE(lMem.patches, lMem.numPatches);
   FREE(lMem.skipped, lMem.numSkipped);
+  FREE(lMem.nodesToFix, lMem.numNodesToFix);
   FREE(lMem.cubSortTempStorage, lMem.cubSortTempStorageSize);
 
   return lMem;
@@ -624,7 +646,9 @@ void freeMemory(GPUWorkingMemory *_data) {
   FREE(_data->leafNodes, _data->numLeafNodes);
   FREE(_data->patches, _data->numPatches);
   FREE(_data->skipped, _data->numSkipped);
+  FREE(_data->nodesToFix, _data->numNodesToFix);
   FREE(_data->cubSortTempStorage, _data->cubSortTempStorageSize);
+  cudaProfilerStop();
 }
 
 

@@ -45,10 +45,12 @@ struct GPUWorkingMemory {
   uint32_t *leafNodes              = nullptr;
   PATCH *   patches                = nullptr;
   uint32_t *skipped                = nullptr;
+  uint32_t *nodesToFix             = nullptr;
   void *    cubSortTempStorage     = nullptr;
   uint32_t  numLeafNodes           = 0;
   uint32_t  numPatches             = 0;
   uint32_t  numSkipped             = 0;
+  uint32_t  numNodesToFix          = 0;
   size_t    cubSortTempStorageSize = 0;
 };
 
