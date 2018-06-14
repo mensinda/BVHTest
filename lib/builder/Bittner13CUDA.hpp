@@ -59,12 +59,16 @@ void             freeMemory(GPUWorkingMemory *_data);
 
 void initData(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
 void fixTree(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
+void fixTree2(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
 
 void doAlgorithmStep(GPUWorkingMemory *                   _data,
                      BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh,
                      uint32_t                             _numChunks,
                      uint32_t                             _chunkSize,
                      uint32_t                             _blockSize,
-                     bool                                 _offsetAccess);
+                     bool                                 _offsetAccess,
+                     bool                                 _retry);
+
+void doCudaDevSync();
 
 uint32_t calcNumSkipped(GPUWorkingMemory *_data);

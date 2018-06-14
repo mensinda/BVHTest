@@ -51,8 +51,8 @@ void Bittner13GPU::fromJSON(const json &_j) {
   vBatchPercent  = _j.value("batchPercent", vBatchPercent);
   vRandom        = _j.value("random", vRandom);
   vSortBatch     = _j.value("sort", vSortBatch);
-  vShuffleList   = _j.value("shuffle", vShuffleList);
   vOffsetAccess  = _j.value("offsetAccess", vOffsetAccess);
+  vRetryLocking  = _j.value("retryLocking", vRetryLocking);
 
   if (vBatchPercent <= 0.01f) vBatchPercent = 0.01f;
   if (vBatchPercent >= 75.0f) vBatchPercent = 75.0f;
@@ -66,8 +66,8 @@ json Bittner13GPU::toJSON() const {
   lJSON["batchPercent"]  = vBatchPercent;
   lJSON["random"]        = vRandom;
   lJSON["sort"]          = vSortBatch;
-  lJSON["shuffle"]       = vShuffleList;
   lJSON["offsetAccess"]  = vOffsetAccess;
+  lJSON["retryLocking"]  = vRetryLocking;
   return lJSON;
 }
 
@@ -89,11 +89,14 @@ ErrorCode Bittner13GPU::runImpl(State &_state) {
   fixTree(&vWorkingMemory, &_state.cudaMem.bvh, vCUDABlockSize);
 
   for (uint32_t i = 0; i < vMaxNumStepps; ++i) {
-    progress(fmt::format("Stepp {:<3}; SAH: ?", i), i, vMaxNumStepps);
+    PROGRESS(fmt::format("Stepp {:<3}; SAH: ?", i), i, vMaxNumStepps);
 
-    doAlgorithmStep(&vWorkingMemory, &_state.cudaMem.bvh, vNumChunks, lChunkSize, vCUDABlockSize, vOffsetAccess);
+    doAlgorithmStep(
+        &vWorkingMemory, &_state.cudaMem.bvh, vNumChunks, lChunkSize, vCUDABlockSize, vOffsetAccess, vRetryLocking);
   }
 
+  PROGRESS("CUDA sync", vMaxNumStepps, vMaxNumStepps);
+  doCudaDevSync();
   return ErrorCode::OK;
 }
 

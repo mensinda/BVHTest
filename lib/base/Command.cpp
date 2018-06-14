@@ -69,7 +69,7 @@ ErrorCode Command::run(State &_state) {
 }
 
 void Command::progressDone() {
-  fmt::print("\x1b[2K\x1b[1G"); // Clear progress line
+  if (isatty(fileno(stdout))) { fmt::print("\x1b[2K\x1b[1G"); } // Clear progress line
 }
 
 
@@ -80,12 +80,19 @@ void Command::progress(std::string _str, float _val) {
   _val = max(_val, 0.0f);
   _val = min(_val, 1.0f);
 
-  uint32_t lWidth = 100;
+  uint32_t lWidth  = 100;
+  string   lSuffix = "\x1b[0m";
+  string   lPrefix = "\x1b[2K\x1b[1G\x1b[1m";
 
 #ifdef ENABLE_IOCTL
   struct winsize ws;
-  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0) { lWidth = ws.ws_col; }
-  lWidth = min(lWidth, 1000u);
+  if (isatty(fileno(stdout))) {
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0) { lWidth = ws.ws_col; }
+    lWidth = min(lWidth, 1000u);
+  } else {
+    lSuffix = "\n";
+    lPrefix = "";
+  }
 #endif
 
   lWidth -= 58;
@@ -99,7 +106,7 @@ void Command::progress(std::string _str, float _val) {
   } else {
     lFMT = fmt::format("[{{0:#>{}}}{{1: >{}}}]", lPWidth, lWidth - lPWidth);
   }
-  fmt::print("\x1b[2K\x1b[1G\x1b[1m{2:<50}" + lFMT + " {3:>3}%\x1b[0m", "", "", _str, lVal);
+  fmt::print("{4}{2:<50}" + lFMT + " {3:>3}%{5}", "", "", _str, lVal, lPrefix, lSuffix);
   fflush(stdout);
 }
 

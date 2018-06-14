@@ -35,7 +35,7 @@ class Bittner13GPU final : public OptimizerBase {
   bool     vRandom        = false;
   bool     vSortBatch     = false;
   bool     vOffsetAccess  = false;
-  bool     vShuffleList   = true;
+  bool     vRetryLocking  = true;
 
   GPUWorkingMemory vWorkingMemory;
 

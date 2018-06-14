@@ -45,9 +45,10 @@ using namespace BVHTest::cuda;
   cudaFree(ptr);                                                                                                       \
   ptr = nullptr;
 
-// #define SPINN_LOCK(N)
-#define IF_NOT_LOCK(N) if (atomicCAS(_flags + N, 0, 1) != 0)
+#define IF_LOCK(N, VAL) if (atomicCAS(_flags + N, 0u, VAL) == 0u)
+#define IF_NOT_LOCK(N, VAL) if (atomicCAS(_flags + N, 0u, VAL) != 0u)
 #define RELEASE_LOCK(N) atomicExch(_flags + N, 0u);
+#define RELEASE_LOCK_S(N, VAL) atomicCAS(_flags + N, VAL, 0u);
 
 struct CUBLeafSelect {
   BVHNode *nodes;
@@ -160,58 +161,61 @@ __device__ CUDANodeLevel findNodeForReinsertion(uint32_t _n, PATCH &_bvh) {
 }
 
 
-__device__ CUDA_RM_RES removeNode(uint32_t _node, PATCH &_bvh, uint32_t *_flags) {
+__device__ CUDA_RM_RES removeNode(uint32_t _node, PATCH &_bvh, uint32_t *_flags, uint32_t _lockID) {
   CUDA_RM_RES lFalse = {false, {0, 0}, {0, 0}, {0, 0}};
   if (_bvh[_node]->isLeaf() || _node == _bvh.root()) { return lFalse; }
+  assert(_node != 0);
 
-  IF_NOT_LOCK(_node) { return lFalse; }
+  IF_NOT_LOCK(_node, _lockID) { return lFalse; }
 
   BVHNode *lNode         = _bvh.patchNode(_node);
   uint32_t lSiblingIndex = _bvh.sibling(*lNode);
   uint32_t lParentIndex  = lNode->parent;
 
   if (lParentIndex == _bvh.root()) {
-    RELEASE_LOCK(_node);
+    RELEASE_LOCK_S(_node, _lockID);
     return lFalse;
   } // Can not remove node with this algorithm
 
+  assert(lParentIndex != 0);
 
-  IF_NOT_LOCK(lSiblingIndex) {
-    RELEASE_LOCK(_node);
+
+  IF_NOT_LOCK(lSiblingIndex, _lockID) {
+    RELEASE_LOCK_S(_node, _lockID);
     return lFalse;
   }
   BVHNode *lSibling = _bvh.patchNode(lSiblingIndex);
 
-  IF_NOT_LOCK(lParentIndex) {
-    RELEASE_LOCK(_node);
-    RELEASE_LOCK(lSiblingIndex);
+  IF_NOT_LOCK(lParentIndex, _lockID) {
+    RELEASE_LOCK_S(_node, _lockID);
+    RELEASE_LOCK_S(lSiblingIndex, _lockID);
     return lFalse;
   }
   BVHNode *lParent           = _bvh.patchNode(lParentIndex);
   uint32_t lGrandParentIndex = lParent->parent;
 
-  IF_NOT_LOCK(lGrandParentIndex) {
-    RELEASE_LOCK(_node);
-    RELEASE_LOCK(lSiblingIndex);
-    RELEASE_LOCK(lParentIndex);
+  IF_NOT_LOCK(lGrandParentIndex, _lockID) {
+    RELEASE_LOCK_S(_node, _lockID);
+    RELEASE_LOCK_S(lSiblingIndex, _lockID);
+    RELEASE_LOCK_S(lParentIndex, _lockID);
     return lFalse;
   }
   BVHNode *lGrandParent = _bvh.patchNode(lGrandParentIndex);
 
-  IF_NOT_LOCK(lNode->left) {
-    RELEASE_LOCK(_node);
-    RELEASE_LOCK(lSiblingIndex);
-    RELEASE_LOCK(lParentIndex);
-    RELEASE_LOCK(lGrandParentIndex);
+  IF_NOT_LOCK(lNode->left, _lockID) {
+    RELEASE_LOCK_S(_node, _lockID);
+    RELEASE_LOCK_S(lSiblingIndex, _lockID);
+    RELEASE_LOCK_S(lParentIndex, _lockID);
+    RELEASE_LOCK_S(lGrandParentIndex, _lockID);
     return lFalse;
   }
 
-  IF_NOT_LOCK(lNode->right) {
-    RELEASE_LOCK(_node);
-    RELEASE_LOCK(lSiblingIndex);
-    RELEASE_LOCK(lParentIndex);
-    RELEASE_LOCK(lGrandParentIndex);
-    RELEASE_LOCK(lNode->left);
+  IF_NOT_LOCK(lNode->right, _lockID) {
+    RELEASE_LOCK_S(_node, _lockID);
+    RELEASE_LOCK_S(lSiblingIndex, _lockID);
+    RELEASE_LOCK_S(lParentIndex, _lockID);
+    RELEASE_LOCK_S(lGrandParentIndex, _lockID);
+    RELEASE_LOCK_S(lNode->left, _lockID);
     return lFalse;
   }
 
@@ -246,22 +250,18 @@ __device__ CUDA_RM_RES removeNode(uint32_t _node, PATCH &_bvh, uint32_t *_flags)
 }
 
 
-__device__ CUDA_INS_RES reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, uint32_t *_flags) {
+__device__ CUDA_INS_RES
+           reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, uint32_t *_flags, uint32_t _lockID) {
   CUDANodeLevel lRes = findNodeForReinsertion(_node, _bvh);
-  if (lRes.node == _bvh.root()) {
-    return {false, 0, 0};
-    ;
-  }
+  if (lRes.node == _bvh.root()) { return {false, 0, 0}; }
+  assert(lRes.node != 0);
 
   uint32_t lBestPatchIndex = _bvh.patchIndex(lRes.node); // Check if node is already patched
   BVHNode *lBest           = nullptr;
 
   if (lBestPatchIndex == UINT32_MAX) {
     // Node is not patched ==> try to lock it
-    IF_NOT_LOCK(lRes.node) {
-      return {false, 0, 0};
-      ;
-    }
+    IF_NOT_LOCK(lRes.node, _lockID) { return {false, 0, 0}; }
     lBest = _bvh.patchNode(lRes.node);
   } else {
     // Node is already owned by this thread ==> no need to lock it
@@ -275,8 +275,8 @@ __device__ CUDA_INS_RES reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, 
   BVHNode *lRoot           = nullptr;
 
   if (lRootPatchIndex == UINT32_MAX) {
-    IF_NOT_LOCK(lRootIndex) {
-      RELEASE_LOCK(lRes.node);
+    IF_NOT_LOCK(lRootIndex, _lockID) {
+      RELEASE_LOCK_S(lRes.node, _lockID);
       return {false, 0, 0};
     }
     lRoot = _bvh.patchNode(lRootIndex);
@@ -368,6 +368,89 @@ __global__ void kFixTree(uint32_t *_leaf, float *_sum, float *_min, BVHNode *_no
 }
 
 
+__global__ void kFixTree2(uint32_t *_toFix, BVHNode *_nodes, float *_sum, float *_min, uint32_t *_flags, uint32_t _num) {
+  uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t stride = blockDim.x * gridDim.x;
+
+  for (uint32_t i = index; i < _num; i += stride) {
+    uint32_t lNode = _toFix[i];
+    if (lNode == UINT32_MAX) { continue; }
+
+    uint32_t lLastIndex = _nodes[lNode].left;
+
+    BVHNode *lLast             = &_nodes[lLastIndex];
+    bool     lLastWasLeft      = true;
+    uint32_t lCurrSiblingIndex = 0;
+    uint32_t lParent           = 0;
+    BVHNode *lCurrSibling      = nullptr;
+
+    AABB  lBBox;
+    float lSum;
+    float lMin;
+    float lNum;
+    float lSArea;
+
+    bool lLock1Passed = false;
+    while (!lLock1Passed) {
+      IF_LOCK(lLastIndex, 1) {
+        lBBox = _nodes[lLastIndex].bbox;
+        lSum  = _sum[lLastIndex];
+        lMin  = _min[lLastIndex];
+        lNum  = lLast->numChildren;
+
+        lLock1Passed = true;
+        RELEASE_LOCK(lLastIndex);
+      }
+    }
+
+    __syncthreads();
+
+
+    while (true) {
+      lCurrSiblingIndex = lLastWasLeft ? _nodes[lNode].right : _nodes[lNode].left;
+      lCurrSibling      = &_nodes[lCurrSiblingIndex];
+
+      bool lLock2Passed = false;
+      while (!lLock2Passed) {
+        IF_NOT_LOCK(lNode, 1) { continue; }
+        IF_NOT_LOCK(lCurrSiblingIndex, 1) {
+          RELEASE_LOCK(lNode);
+          continue;
+        }
+
+        lBBox.mergeWith(lCurrSibling->bbox);
+        lSArea                    = lBBox.surfaceArea();
+        _nodes[lNode].bbox        = lBBox;
+        _nodes[lNode].surfaceArea = lSArea;
+
+        lSum                      = lSum + _sum[lCurrSiblingIndex] + lSArea;
+        lMin                      = lMin < _min[lCurrSiblingIndex] ? lMin : _min[lCurrSiblingIndex];
+        lNum                      = lNum + lCurrSibling->numChildren + 2;
+        _sum[lNode]               = lSum;
+        _min[lNode]               = lMin;
+        _nodes[lNode].numChildren = lNum;
+
+        __threadfence();
+
+        RELEASE_LOCK(lCurrSiblingIndex);
+        RELEASE_LOCK(lNode);
+        lLock2Passed = true;
+      }
+
+      lParent = _nodes[lNode].parent;
+      if (lNode == lParent) { break; } // We processed the root ==> everything is done
+
+      lLastWasLeft = _nodes[lNode].isLeftChild();
+      lLastIndex   = lNode;
+      lLast        = &_nodes[lLastIndex];
+      lNode        = lParent;
+    }
+
+    RELEASE_LOCK(lNode);
+  }
+}
+
+
 __global__ void kCalcCost(float *_sum, float *_min, BVHNode *_BVHNode, float *_costOut, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
@@ -389,54 +472,62 @@ __global__ void kRemoveAndReinsert(uint32_t *_todoList,
                                    uint32_t *_skip,
                                    uint32_t *_toFix,
                                    bool      _offsetAccess,
+                                   bool      _retry,
                                    uint32_t  _chunk,
                                    uint32_t  _numChunks,
                                    uint32_t  _chunkSize) {
-  uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
-  uint32_t stride = blockDim.x * gridDim.x;
-  bool     retry  = true;
-  for (uint32_t k = index; k < _chunkSize; k += stride) {
-    uint32_t    lNodeIndex = _todoList[_offsetAccess ? k * _numChunks + _chunk : _chunk * _chunkSize + k];
-    CUDA_RM_RES lRmRes     = removeNode(lNodeIndex, _patches[k], _flags);
+  uint32_t index   = blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t stride  = blockDim.x * gridDim.x;
+  uint32_t lLockID = index + 1;
+
+  for (int32_t k = index; k < _chunkSize; k += stride) {
+    uint32_t     lNodeIndex = _todoList[_offsetAccess ? k * _numChunks + _chunk : _chunk * _chunkSize + k];
+    CUDA_RM_RES  lRmRes     = removeNode(lNodeIndex, _patches[k], _flags, lLockID);
+    CUDA_INS_RES lR1, lR2;
 
     if (!lRmRes.res) {
       _patches[k].clear();
-      if (retry) {
+
+      if (_retry) {
         k -= stride;
-        retry = false;
-      } else {
-        _skip[k] += 1;
+        _retry = false;
+        continue;
       }
+
+      _skip[k] += 1;
+      _toFix[k * 3 + 0] = UINT32_MAX;
+      _toFix[k * 3 + 1] = UINT32_MAX;
+      _toFix[k * 3 + 2] = UINT32_MAX;
+
       continue;
     }
 
-    CUDA_INS_RES lR1 = reinsert(lRmRes.toInsert.n1, lRmRes.unused.n1, _patches[k], true, _flags);
-    CUDA_INS_RES lR2 = reinsert(lRmRes.toInsert.n2, lRmRes.unused.n2, _patches[k], false, _flags);
+    lR1 = reinsert(lRmRes.toInsert.n1, lRmRes.unused.n1, _patches[k], true, _flags, lLockID);
+    lR2 = reinsert(lRmRes.toInsert.n2, lRmRes.unused.n2, _patches[k], false, _flags, lLockID);
     if (!lR1.res || !lR2.res) {
       _patches[k].clear();
 
       // Unlock Nodes
-      RELEASE_LOCK(lRmRes.toInsert.n1);
-      RELEASE_LOCK(lRmRes.toInsert.n2);
-      RELEASE_LOCK(lRmRes.unused.n1);
-      RELEASE_LOCK(lRmRes.unused.n2);
-      RELEASE_LOCK(lRmRes.grandParentAndSibling.n1);
-      RELEASE_LOCK(lRmRes.grandParentAndSibling.n2);
+      RELEASE_LOCK_S(lRmRes.toInsert.n1, lLockID);
+      RELEASE_LOCK_S(lRmRes.toInsert.n2, lLockID);
+      RELEASE_LOCK_S(lRmRes.unused.n1, lLockID);
+      RELEASE_LOCK_S(lRmRes.unused.n2, lLockID);
+      RELEASE_LOCK_S(lRmRes.grandParentAndSibling.n1, lLockID);
+      RELEASE_LOCK_S(lRmRes.grandParentAndSibling.n2, lLockID);
       if (lR1.res) {
-        RELEASE_LOCK(lR1.best);
-        RELEASE_LOCK(lR1.root);
+        RELEASE_LOCK_S(lR1.best, lLockID);
+        RELEASE_LOCK_S(lR1.root, lLockID);
       }
       if (lR2.res) {
-        RELEASE_LOCK(lR2.best);
-        RELEASE_LOCK(lR2.root);
+        RELEASE_LOCK_S(lR2.best, lLockID);
+        RELEASE_LOCK_S(lR2.root, lLockID);
       }
 
-      if (retry) {
-        k -= stride;
-        retry = false;
-      } else {
-        _skip[k] += 1;
-      }
+      _skip[k] += 1;
+      _toFix[k * 3 + 0] = UINT32_MAX;
+      _toFix[k * 3 + 1] = UINT32_MAX;
+      _toFix[k * 3 + 2] = UINT32_MAX;
+
       continue;
     }
 
@@ -489,6 +580,18 @@ void fixTree(GPUWorkingMemory *_data, base::CUDAMemoryBVHPointer *_GPUbvh, uint3
   cudaMemset(_data->sumMin.flags, 0, _data->sumMin.num * sizeof(uint32_t));
 }
 
+void fixTree2(GPUWorkingMemory *_data, base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize) {
+  if (!_data || !_GPUbvh) { return; }
+
+  uint32_t lNumBlocks = (_data->numNodesToFix + _blockSize - 1) / _blockSize;
+  kFixTree2<<<lNumBlocks, _blockSize>>>(_data->nodesToFix,
+                                        _GPUbvh->nodes,
+                                        _data->sumMin.sums,
+                                        _data->sumMin.mins,
+                                        _data->sumMin.flags,
+                                        _data->numNodesToFix);
+}
+
 
 
 void doAlgorithmStep(GPUWorkingMemory *    _data,
@@ -496,7 +599,8 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
                      uint32_t              _numChunks,
                      uint32_t              _chunkSize,
                      uint32_t              _blockSize,
-                     bool                  _offsetAccess) {
+                     bool                  _offsetAccess,
+                     bool                  _retry) {
   if (!_data || !_GPUbvh) { return; }
 
   cudaError_t lRes;
@@ -514,7 +618,6 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
                                                      _data->todoSorted.nodes,
                                                      _data->todoNodes.num));
 
-
   for (uint32_t i = 0; i < _numChunks; ++i) {
     kRemoveAndReinsert<<<lNumBlocksChunk, _blockSize>>>(_data->todoSorted.nodes,
                                                         _data->patches,
@@ -522,6 +625,7 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
                                                         _data->skipped,
                                                         _data->nodesToFix,
                                                         _offsetAccess,
+                                                        _retry,
                                                         i,
                                                         _numChunks,
                                                         _chunkSize);
@@ -554,6 +658,7 @@ error:
 }
 
 
+void doCudaDevSync() { cudaDeviceSynchronize(); }
 
 /*  ___  ___                                                                                              _     */
 /*  |  \/  |                                                                                             | |    */
