@@ -326,7 +326,7 @@ __device__ CUDA_INS_RES
 
 
 
-__global__ void kFixTree(uint32_t *_leaf, float *_sum, float *_min, BVHNode *_node, uint32_t *_flag, uint32_t _num) {
+__global__ void kFixTree(uint32_t *_leaf, float *_sum, float *_min, BVHNode *_nodes, uint32_t *_flags, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
 
@@ -338,31 +338,31 @@ __global__ void kFixTree(uint32_t *_leaf, float *_sum, float *_min, BVHNode *_no
 
   for (uint32_t i = index; i < _num; i += stride) {
     lNode       = _leaf[i];
-    _sum[lNode] = _node[lNode].surfaceArea;
-    _min[lNode] = _node[lNode].surfaceArea;
-    lNode       = _node[lNode].parent;
+    _sum[lNode] = _nodes[lNode].surfaceArea;
+    _min[lNode] = _nodes[lNode].surfaceArea;
+    lNode       = _nodes[lNode].parent;
 
     while (true) {
-      uint32_t lOldLock = atomicCAS(&_flag[lNode], 0, 1);
+      uint32_t lOldLock = atomicCAS(&_flags[lNode], 0, 1);
 
       // Check if this thread is first. If yes break
       if (lOldLock == 0) { break; }
 
-      lLeft  = _node[lNode].left;
-      lRight = _node[lNode].right;
-      lAABB  = _node[lLeft].bbox;
-      lAABB.mergeWith(_node[lRight].bbox);
+      lLeft  = _nodes[lNode].left;
+      lRight = _nodes[lNode].right;
+      lAABB  = _nodes[lLeft].bbox;
+      lAABB.mergeWith(_nodes[lRight].bbox);
       lSArea = lAABB.surfaceArea();
 
-      _node[lNode].bbox        = lAABB;
-      _node[lNode].surfaceArea = lSArea;
-      _node[lNode].numChildren = _node[lLeft].numChildren + _node[lRight].numChildren + 2;
-      _sum[lNode]              = _sum[lLeft] + _sum[lRight] + lSArea;
-      _min[lNode]              = _min[lLeft] < _min[lRight] ? _min[lLeft] : _min[lRight];
+      _nodes[lNode].bbox        = lAABB;
+      _nodes[lNode].surfaceArea = lSArea;
+      _nodes[lNode].numChildren = _nodes[lLeft].numChildren + _nodes[lRight].numChildren + 2;
+      _sum[lNode]               = _sum[lLeft] + _sum[lRight] + lSArea;
+      _min[lNode]               = _min[lLeft] < _min[lRight] ? _min[lLeft] : _min[lRight];
 
       // Check if root
-      if (lNode == _node[lNode].parent) { break; }
-      lNode = _node[lNode].parent;
+      if (lNode == _nodes[lNode].parent) { break; }
+      lNode = _nodes[lNode].parent;
     }
   }
 }
