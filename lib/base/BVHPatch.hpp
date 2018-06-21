@@ -131,8 +131,9 @@ class alignas(16) BVHPatch final {
         lNodePairs[lNumNodes] = {lNode->left, lNodeIndex};
       }
 
-      assert(lNumNodes < NAABB);
       lNumNodes++;
+      // assert(lNumNodes < NAABB);
+      if (lNumNodes >= NAABB) { break; }
       if (lNodeIndex == root()) { break; } // We processed the root ==> everything is done
 
       lLastWasLeft = lNode->isLeftChild();

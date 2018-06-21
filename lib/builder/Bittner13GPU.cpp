@@ -47,27 +47,32 @@ void Bittner13GPU::fromJSON(const json &_j) {
   OptimizerBase::fromJSON(_j);
   vMaxNumStepps  = _j.value("maxNumStepps", vMaxNumStepps);
   vNumChunks     = _j.value("numChunks", vNumChunks);
+  vAltFNQSize    = _j.value("altFindNodeQueueSize", vAltFNQSize);
   vCUDABlockSize = _j.value("CUDABlockSize", vCUDABlockSize);
   vBatchPercent  = _j.value("batchPercent", vBatchPercent);
   vRandom        = _j.value("random", vRandom);
   vSortBatch     = _j.value("sort", vSortBatch);
   vOffsetAccess  = _j.value("offsetAccess", vOffsetAccess);
   vRetryLocking  = _j.value("retryLocking", vRetryLocking);
+  vAltFindNode   = _j.value("altFindNode", vAltFindNode);
 
+  if (vAltFNQSize <= 4) vAltFNQSize = 4;
   if (vBatchPercent <= 0.01f) vBatchPercent = 0.01f;
   if (vBatchPercent >= 75.0f) vBatchPercent = 75.0f;
 }
 
 json Bittner13GPU::toJSON() const {
-  json lJSON             = OptimizerBase::toJSON();
-  lJSON["maxNumStepps"]  = vMaxNumStepps;
-  lJSON["numChunks"]     = vNumChunks;
-  lJSON["CUDABlockSize"] = vCUDABlockSize;
-  lJSON["batchPercent"]  = vBatchPercent;
-  lJSON["random"]        = vRandom;
-  lJSON["sort"]          = vSortBatch;
-  lJSON["offsetAccess"]  = vOffsetAccess;
-  lJSON["retryLocking"]  = vRetryLocking;
+  json lJSON                    = OptimizerBase::toJSON();
+  lJSON["maxNumStepps"]         = vMaxNumStepps;
+  lJSON["numChunks"]            = vNumChunks;
+  lJSON["altFindNodeQueueSize"] = vAltFNQSize;
+  lJSON["CUDABlockSize"]        = vCUDABlockSize;
+  lJSON["batchPercent"]         = vBatchPercent;
+  lJSON["random"]               = vRandom;
+  lJSON["sort"]                 = vSortBatch;
+  lJSON["offsetAccess"]         = vOffsetAccess;
+  lJSON["retryLocking"]         = vRetryLocking;
+  lJSON["altFindNode"]          = vAltFindNode;
   return lJSON;
 }
 

@@ -47,25 +47,30 @@ void Bittner13Par::fromJSON(const json &_j) {
   OptimizerBase::fromJSON(_j);
   vMaxNumStepps = _j.value("maxNumStepps", vMaxNumStepps);
   vNumChunks    = _j.value("numChunks", vNumChunks);
+  vAltFNQSize   = _j.value("altFindNodeQueueSize", vAltFNQSize);
   vBatchPercent = _j.value("batchPercent", vBatchPercent);
   vRandom       = _j.value("random", vRandom);
   vSortBatch    = _j.value("sort", vSortBatch);
   vShuffleList  = _j.value("shuffle", vShuffleList);
   vOffsetAccess = _j.value("offsetAccess", vOffsetAccess);
+  vAltFindNode  = _j.value("altFindNode", vAltFindNode);
 
+  if (vAltFNQSize <= 4) vAltFNQSize = 4;
   if (vBatchPercent <= 0.01f) vBatchPercent = 0.01f;
   if (vBatchPercent >= 75.0f) vBatchPercent = 75.0f;
 }
 
 json Bittner13Par::toJSON() const {
-  json lJSON            = OptimizerBase::toJSON();
-  lJSON["maxNumStepps"] = vMaxNumStepps;
-  lJSON["numChunks"]    = vNumChunks;
-  lJSON["batchPercent"] = vBatchPercent;
-  lJSON["random"]       = vRandom;
-  lJSON["sort"]         = vSortBatch;
-  lJSON["shuffle"]      = vShuffleList;
-  lJSON["offsetAccess"] = vOffsetAccess;
+  json lJSON                    = OptimizerBase::toJSON();
+  lJSON["maxNumStepps"]         = vMaxNumStepps;
+  lJSON["numChunks"]            = vNumChunks;
+  lJSON["altFindNodeQueueSize"] = vAltFNQSize;
+  lJSON["batchPercent"]         = vBatchPercent;
+  lJSON["random"]               = vRandom;
+  lJSON["sort"]                 = vSortBatch;
+  lJSON["shuffle"]              = vShuffleList;
+  lJSON["offsetAccess"]         = vOffsetAccess;
+  lJSON["altFindNode"]          = vAltFindNode;
   return lJSON;
 }
 
@@ -78,8 +83,8 @@ struct HelperStruct {
 };
 
 
-Bittner13Par::NodeLevel Bittner13Par::findNodeForReinsertion(uint32_t _n, PATCH &_bvh) {
-  float          lBestCost      = numeric_limits<float>::infinity();
+Bittner13Par::NodeLevel Bittner13Par::findNode1(uint32_t _n, PATCH &_bvh) {
+  float          lBestCost      = HUGE_VALF;
   NodeLevel      lBestNodeIndex = {0, 0};
   BVHNode const *lNode          = _bvh[_n];
   AABB const &   lNodeBBox      = lNode->bbox;
@@ -119,6 +124,68 @@ Bittner13Par::NodeLevel Bittner13Par::findNodeForReinsertion(uint32_t _n, PATCH 
         CUDA_push_heap(lBegin, lBegin + lSize + 1);
         CUDA_push_heap(lBegin, lBegin + lSize + 2);
         lSize += 2;
+      }
+    }
+  }
+
+  return lBestNodeIndex;
+}
+
+const uint32_t PQ_SIZE = 16;
+
+Bittner13Par::NodeLevel Bittner13Par::findNode2(uint32_t _n, PATCH &_bvh) {
+  float          lBestCost      = HUGE_VALF;
+  NodeLevel      lBestNodeIndex = {0, 0};
+  BVHNode const *lNode          = _bvh[_n];
+  AABB const &   lNodeBBox      = lNode->bbox;
+  float          lSArea         = lNode->surfaceArea;
+  float          lMin           = 0.0f;
+  float          lMax           = HUGE_VALF;
+  uint32_t       lMinIndex      = 0;
+  uint32_t       lMaxIndex      = 1;
+  HelperStruct   lPQ[vAltFNQSize];
+  HelperStruct   lCurr;
+
+  // Init
+  for (uint32_t i = 0; i < vAltFNQSize; ++i) { lPQ[i].cost = HUGE_VALF; }
+
+  lPQ[0] = {_bvh.root(), 0.0f, 0};
+  while (lMin < HUGE_VALF) {
+    lCurr               = lPQ[lMinIndex];
+    lPQ[lMinIndex].cost = HUGE_VALF;
+    BVHNode *lCurrNode  = _bvh[lCurr.node];
+    auto     lBBox      = _bvh.getAABB(lCurr.node, lCurr.level);
+
+    if ((lCurr.cost + lSArea) >= lBestCost) {
+      // Early termination - not possible to further optimize
+      break;
+    }
+
+    lBBox.box.mergeWith(lNodeBBox);
+    float lDirectCost = lBBox.box.surfaceArea();
+    float lTotalCost  = lCurr.cost + lDirectCost;
+    if (lTotalCost < lBestCost) {
+      // Merging here improves the total SAH cost
+      lBestCost      = lTotalCost;
+      lBestNodeIndex = {lCurr.node, lCurr.level};
+    }
+
+    float lNewInduced = lTotalCost - lBBox.sarea;
+    if ((lNewInduced + lSArea) < lBestCost && !lCurrNode->isLeaf()) {
+      lPQ[lMinIndex] = {lCurrNode->left, lNewInduced, lCurr.level + 1};
+      lPQ[lMaxIndex] = {lCurrNode->right, lNewInduced, lCurr.level + 1};
+    }
+
+    lMin = HUGE_VALF;
+    lMax = 0.0f;
+    for (uint32_t i = 0; i < vAltFNQSize; ++i) {
+      if (lPQ[i].cost < lMin) {
+        lMin      = lPQ[i].cost;
+        lMinIndex = i;
+      }
+      if (lPQ[i].cost > lMax) {
+        lMax      = lPQ[i].cost;
+        lMaxIndex = i;
       }
     }
   }
@@ -219,7 +286,7 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMi
 
 Bittner13Par::INS_RES Bittner13Par::reinsert(
     uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, SumMin *_sumMin) {
-  auto [lBestIndex, lLevelOfBest] = findNodeForReinsertion(_node, _bvh);
+  auto [lBestIndex, lLevelOfBest] = vAltFindNode ? findNode2(_node, _bvh) : findNode1(_node, _bvh);
   if (lBestIndex == _bvh.root()) { return {false, 0, 0}; }
 
   uint32_t lBestPatchIndex = _bvh.patchIndex(lBestIndex); // Check if node is already patched
