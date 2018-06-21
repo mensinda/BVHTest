@@ -335,10 +335,7 @@ Bittner13Par::INS_RES Bittner13Par::reinsert(
   lNode->parent = _unused;
   lNode->isLeft = FALSE;
 
-  if (_update) {
-    _bvh.nodeUpdated(lBestIndex, lLevelOfBest);
-    _bvh.patchAABBFrom(_unused);
-  }
+  if (_update) { _bvh.patchAABBFrom(_unused); }
 
   return {true, lBestIndex, lRootIndex};
 }

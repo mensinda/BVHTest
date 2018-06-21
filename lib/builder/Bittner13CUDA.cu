@@ -367,10 +367,7 @@ __device__ CUDA_INS_RES reinsert(
   lNode->parent = _unused;
   lNode->isLeft = FALSE;
 
-  if (_update) {
-    _bvh.nodeUpdated(lRes.node, lRes.level);
-    _bvh.patchAABBFrom(_unused);
-  }
+  if (_update) { _bvh.patchAABBFrom(_unused); }
 
   return {true, lRes.node, lRootIndex};
 }

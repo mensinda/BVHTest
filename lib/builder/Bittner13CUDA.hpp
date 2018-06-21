@@ -20,9 +20,9 @@
 #include "base/BVHPatch.hpp"
 #include <cstdint>
 
-typedef BVHTest::base::BVHPatch<10, 2, 128> PATCH;
-const size_t                                CUDA_QUEUE_SIZE     = 512;
-const size_t                                CUDA_ALT_QUEUE_SIZE = 16;
+typedef BVHTest::base::BVHPatch<10, 2, 6> PATCH;
+const size_t                              CUDA_QUEUE_SIZE     = 512;
+const size_t                              CUDA_ALT_QUEUE_SIZE = 16;
 
 struct SumMinCUDA {
   float *   sums  = nullptr;

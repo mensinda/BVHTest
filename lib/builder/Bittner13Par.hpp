@@ -24,7 +24,7 @@ namespace BVHTest::builder {
 
 class Bittner13Par final : public OptimizerBase {
  public:
-  typedef base::BVHPatch<10, 2, 128> PATCH;
+  typedef base::BVHPatch<10, 2, 6> PATCH;
 
   struct SumMin {
     float            sum;
