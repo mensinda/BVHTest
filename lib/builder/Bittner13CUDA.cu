@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "base/BVH.hpp"
+#include "base/BVHPatch.hpp"
 #include "cuda/cudaFN.hpp"
 #include "Bittner13CUDA.hpp"
 #include "CUDAHeap.hpp"
@@ -326,7 +328,7 @@ __device__ CUDA_INS_RES
 
 
 
-__global__ void kFixTree(uint32_t *_leaf, float *_sum, float *_min, BVHNode *_nodes, uint32_t *_flags, uint32_t _num) {
+__global__ void kFixTree(uint32_t *_leaf, SumMinCUDA _SMF, BVHNode *_nodes, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
 
@@ -337,13 +339,13 @@ __global__ void kFixTree(uint32_t *_leaf, float *_sum, float *_min, BVHNode *_no
   float    lSArea;
 
   for (uint32_t i = index; i < _num; i += stride) {
-    lNode       = _leaf[i];
-    _sum[lNode] = _nodes[lNode].surfaceArea;
-    _min[lNode] = _nodes[lNode].surfaceArea;
-    lNode       = _nodes[lNode].parent;
+    lNode            = _leaf[i];
+    _SMF.sums[lNode] = _nodes[lNode].surfaceArea;
+    _SMF.mins[lNode] = _nodes[lNode].surfaceArea;
+    lNode            = _nodes[lNode].parent;
 
     while (true) {
-      uint32_t lOldLock = atomicCAS(&_flags[lNode], 0, 1);
+      uint32_t lOldLock = atomicCAS(&_SMF.flags[lNode], 0, 1);
 
       // Check if this thread is first. If yes break
       if (lOldLock == 0) { break; }
@@ -357,8 +359,8 @@ __global__ void kFixTree(uint32_t *_leaf, float *_sum, float *_min, BVHNode *_no
       _nodes[lNode].bbox        = lAABB;
       _nodes[lNode].surfaceArea = lSArea;
       _nodes[lNode].numChildren = _nodes[lLeft].numChildren + _nodes[lRight].numChildren + 2;
-      _sum[lNode]               = _sum[lLeft] + _sum[lRight] + lSArea;
-      _min[lNode]               = _min[lLeft] < _min[lRight] ? _min[lLeft] : _min[lRight];
+      _SMF.sums[lNode]          = _SMF.sums[lLeft] + _SMF.sums[lRight] + lSArea;
+      _SMF.mins[lNode]          = _SMF.mins[lLeft] < _SMF.mins[lRight] ? _SMF.mins[lLeft] : _SMF.mins[lRight];
 
       // Check if root
       if (lNode == _nodes[lNode].parent) { break; }
@@ -368,7 +370,7 @@ __global__ void kFixTree(uint32_t *_leaf, float *_sum, float *_min, BVHNode *_no
 }
 
 
-__global__ void kFixTree2(uint32_t *_toFix, BVHNode *_nodes, float *_sum, float *_min, uint32_t *_flags, uint32_t _num) {
+__global__ void kFixTree3_1(uint32_t *_toFix, SumMinCUDA _SMF, BVHNode *_nodes, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
 
@@ -376,77 +378,49 @@ __global__ void kFixTree2(uint32_t *_toFix, BVHNode *_nodes, float *_sum, float 
     uint32_t lNode = _toFix[i];
     if (lNode == UINT32_MAX) { continue; }
 
-    uint32_t lLastIndex = _nodes[lNode].left;
+    while (true) {
+      if (atomicAdd(&_SMF.flags[lNode], 1) != 0) { break; } // Stop when already locked (locked == 1)
 
-    BVHNode *lLast             = &_nodes[lLastIndex];
-    bool     lLastWasLeft      = true;
-    uint32_t lCurrSiblingIndex = 0;
-    uint32_t lParent           = 0;
-    BVHNode *lCurrSibling      = nullptr;
-
-    AABB  lBBox;
-    float lSum;
-    float lMin;
-    float lNum;
-    float lSArea;
-
-    bool lLock1Passed = false;
-    while (!lLock1Passed) {
-      IF_LOCK(lLastIndex, 1) {
-        lBBox = _nodes[lLastIndex].bbox;
-        lSum  = _sum[lLastIndex];
-        lMin  = _min[lLastIndex];
-        lNum  = lLast->numChildren;
-
-        lLock1Passed = true;
-        RELEASE_LOCK(lLastIndex);
-      }
+      // Check if root
+      if (lNode == _nodes[lNode].parent) { break; }
+      lNode = _nodes[lNode].parent;
     }
+  }
+}
 
-    __syncthreads();
+__global__ void kFixTree3_2(uint32_t *_toFix, SumMinCUDA _SMF, BVHNode *_nodes, uint32_t _num) {
+  uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t stride = blockDim.x * gridDim.x;
 
+  AABB     lAABB;
+  uint32_t lNode;
+  uint32_t lLeft;
+  uint32_t lRight;
+  float    lSArea;
+
+  for (uint32_t i = index; i < _num; i += stride) {
+    lNode = _toFix[i];
+    if (lNode == UINT32_MAX) { continue; }
 
     while (true) {
-      lCurrSiblingIndex = lLastWasLeft ? _nodes[lNode].right : _nodes[lNode].left;
-      lCurrSibling      = &_nodes[lCurrSiblingIndex];
+      if (atomicSub(&_SMF.flags[lNode], 1) != 1) { break; } // Stop when already locked (locked == 1)
 
-      bool lLock2Passed = false;
-      while (!lLock2Passed) {
-        IF_NOT_LOCK(lNode, 1) { continue; }
-        IF_NOT_LOCK(lCurrSiblingIndex, 1) {
-          RELEASE_LOCK(lNode);
-          continue;
-        }
+      lLeft  = _nodes[lNode].left;
+      lRight = _nodes[lNode].right;
+      lAABB  = _nodes[lLeft].bbox;
+      lAABB.mergeWith(_nodes[lRight].bbox);
+      lSArea = lAABB.surfaceArea();
 
-        lBBox.mergeWith(lCurrSibling->bbox);
-        lSArea                    = lBBox.surfaceArea();
-        _nodes[lNode].bbox        = lBBox;
-        _nodes[lNode].surfaceArea = lSArea;
+      _nodes[lNode].bbox        = lAABB;
+      _nodes[lNode].surfaceArea = lSArea;
+      _nodes[lNode].numChildren = _nodes[lLeft].numChildren + _nodes[lRight].numChildren + 2;
+      _SMF.sums[lNode]          = _SMF.sums[lLeft] + _SMF.sums[lRight] + lSArea;
+      _SMF.mins[lNode]          = _SMF.mins[lLeft] < _SMF.mins[lRight] ? _SMF.mins[lLeft] : _SMF.mins[lRight];
 
-        lSum                      = lSum + _sum[lCurrSiblingIndex] + lSArea;
-        lMin                      = lMin < _min[lCurrSiblingIndex] ? lMin : _min[lCurrSiblingIndex];
-        lNum                      = lNum + lCurrSibling->numChildren + 2;
-        _sum[lNode]               = lSum;
-        _min[lNode]               = lMin;
-        _nodes[lNode].numChildren = lNum;
-
-        __threadfence();
-
-        RELEASE_LOCK(lCurrSiblingIndex);
-        RELEASE_LOCK(lNode);
-        lLock2Passed = true;
-      }
-
-      lParent = _nodes[lNode].parent;
-      if (lNode == lParent) { break; } // We processed the root ==> everything is done
-
-      lLastWasLeft = _nodes[lNode].isLeftChild();
-      lLastIndex   = lNode;
-      lLast        = &_nodes[lLastIndex];
-      lNode        = lParent;
+      // Check if root
+      if (lNode == _nodes[lNode].parent) { break; }
+      lNode = _nodes[lNode].parent;
     }
-
-    RELEASE_LOCK(lNode);
   }
 }
 
@@ -570,26 +544,17 @@ void fixTree(GPUWorkingMemory *_data, base::CUDAMemoryBVHPointer *_GPUbvh, uint3
   if (!_data || !_GPUbvh) { return; }
 
   uint32_t lNumBlocks = (_data->numLeafNodes + _blockSize - 1) / _blockSize;
-  kFixTree<<<lNumBlocks, _blockSize>>>(_data->leafNodes,
-                                       _data->sumMin.sums,
-                                       _data->sumMin.mins,
-                                       _GPUbvh->nodes,
-                                       _data->sumMin.flags,
-                                       _data->numLeafNodes);
+  kFixTree<<<lNumBlocks, _blockSize>>>(_data->leafNodes, _data->sumMin, _GPUbvh->nodes, _data->numLeafNodes);
 
   cudaMemset(_data->sumMin.flags, 0, _data->sumMin.num * sizeof(uint32_t));
 }
 
-void fixTree2(GPUWorkingMemory *_data, base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize) {
+void fixTree3(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize) {
   if (!_data || !_GPUbvh) { return; }
 
   uint32_t lNumBlocks = (_data->numNodesToFix + _blockSize - 1) / _blockSize;
-  kFixTree2<<<lNumBlocks, _blockSize>>>(_data->nodesToFix,
-                                        _GPUbvh->nodes,
-                                        _data->sumMin.sums,
-                                        _data->sumMin.mins,
-                                        _data->sumMin.flags,
-                                        _data->numNodesToFix);
+  kFixTree3_1<<<lNumBlocks, _blockSize>>>(_data->nodesToFix, _data->sumMin, _GPUbvh->nodes, _data->numNodesToFix);
+  kFixTree3_2<<<lNumBlocks, _blockSize>>>(_data->nodesToFix, _data->sumMin, _GPUbvh->nodes, _data->numNodesToFix);
 }
 
 
@@ -632,7 +597,7 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
 
     kApplyPatches<<<lNumBlocksChunk, _blockSize>>>(_data->patches, _data->sumMin.flags, _chunkSize);
 
-    fixTree(_data, _GPUbvh, _blockSize);
+    fixTree3(_data, _GPUbvh, _blockSize);
   }
 
 error:

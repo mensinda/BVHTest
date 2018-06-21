@@ -60,6 +60,7 @@ void             freeMemory(GPUWorkingMemory *_data);
 void initData(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
 void fixTree(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
 void fixTree2(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
+void fixTree3(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
 
 void doAlgorithmStep(GPUWorkingMemory *                   _data,
                      BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh,
