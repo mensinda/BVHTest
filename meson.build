@@ -39,7 +39,7 @@ baseDeps = [
   threads,
   OpenMP,
   compiler.find_library('stdc++fs', required: true),
-  compiler.find_library('cudart', required: true, dirs: ['/usr/lib', '/usr/local/lib/', '/opt/cuda/lib64'])
+  compiler.find_library('cudart', required: true, dirs: ['/usr/lib', '/usr/local/cuda/lib64', '/opt/cuda/lib64'])
 ]
 
 if not compiler.has_header('filesystem') and not compiler.has_header('experimental/filesystem')
@@ -59,7 +59,7 @@ configure_file(
 fullLibDirPath = get_option('prefix') + '/' + get_option('libdir')
 
 enumGen = find_program(['external/enumGen/enumGen.py', 'enumGen.py', '/usr/bin/enumGen.py', '/bin/enumGen.py'], required : true)
-nvcc    = find_program(['nvcc'], required : true)
+nvcc    = find_program(['nvcc', '/opt/cuda/bin/nvcc', '/usr/local/cuda/bin/nvcc'], required : true)
 enumParser   = generator(enumGen, output: '@BASENAME@.json', arguments: ['-d', '@BUILD_DIR@', 'parse', '@INPUT@'])
 
 nvccCompiler = generator(
