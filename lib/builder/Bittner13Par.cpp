@@ -131,8 +131,6 @@ Bittner13Par::NodeLevel Bittner13Par::findNode1(uint32_t _n, PATCH &_bvh) {
   return lBestNodeIndex;
 }
 
-const uint32_t PQ_SIZE = 16;
-
 Bittner13Par::NodeLevel Bittner13Par::findNode2(uint32_t _n, PATCH &_bvh) {
   float          lBestCost      = HUGE_VALF;
   NodeLevel      lBestNodeIndex = {0, 0};

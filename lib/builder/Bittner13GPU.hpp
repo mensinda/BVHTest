@@ -24,13 +24,9 @@
 namespace BVHTest::builder {
 
 class Bittner13GPU final : public OptimizerBase {
- public:
-  static const size_t QUEUE_SIZE = 512;
-
  private:
   uint32_t vMaxNumStepps  = 500;
   uint32_t vNumChunks     = 32;
-  uint32_t vAltFNQSize    = 16;
   uint32_t vCUDABlockSize = 128;
   float    vBatchPercent  = 1.0f;
   bool     vRandom        = false;

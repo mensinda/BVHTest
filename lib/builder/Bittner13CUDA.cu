@@ -114,7 +114,7 @@ struct CUDA_INS_RES {
   uint32_t root;
 };
 
-__device__ CUDANodeLevel findNodeForReinsertion(uint32_t _n, PATCH &_bvh) {
+__device__ CUDANodeLevel findNode1(uint32_t _n, PATCH &_bvh) {
   float             lBestCost      = HUGE_VALF;
   CUDANodeLevel     lBestNodeIndex = {0, 0};
   BVHNode const *   lNode          = _bvh[_n];
@@ -155,6 +155,67 @@ __device__ CUDANodeLevel findNodeForReinsertion(uint32_t _n, PATCH &_bvh) {
         CUDA_push_heap(lBegin, lBegin + lSize + 1);
         CUDA_push_heap(lBegin, lBegin + lSize + 2);
         lSize += 2;
+      }
+    }
+  }
+
+  return lBestNodeIndex;
+}
+
+
+__device__ CUDANodeLevel findNode2(uint32_t _n, PATCH &_bvh) {
+  float            lBestCost      = HUGE_VALF;
+  CUDANodeLevel    lBestNodeIndex = {0, 0};
+  BVHNode const *  lNode          = _bvh[_n];
+  AABB const &     lNodeBBox      = lNode->bbox;
+  float            lSArea         = lNode->surfaceArea;
+  float            lMin           = 0.0f;
+  float            lMax           = HUGE_VALF;
+  uint32_t         lMinIndex      = 0;
+  uint32_t         lMaxIndex      = 1;
+  CUDAHelperStruct lPQ[CUDA_ALT_QUEUE_SIZE];
+  CUDAHelperStruct lCurr;
+
+  // Init
+  for (uint32_t i = 0; i < CUDA_ALT_QUEUE_SIZE; ++i) { lPQ[i].cost = HUGE_VALF; }
+
+  lPQ[0] = {_bvh.root(), 0.0f, 0};
+  while (lMin < HUGE_VALF) {
+    lCurr               = lPQ[lMinIndex];
+    lPQ[lMinIndex].cost = HUGE_VALF;
+    BVHNode *lCurrNode  = _bvh[lCurr.node];
+    auto     lBBox      = _bvh.getAABB(lCurr.node, lCurr.level);
+
+    if ((lCurr.cost + lSArea) >= lBestCost) {
+      // Early termination - not possible to further optimize
+      break;
+    }
+
+    lBBox.box.mergeWith(lNodeBBox);
+    float lDirectCost = lBBox.box.surfaceArea();
+    float lTotalCost  = lCurr.cost + lDirectCost;
+    if (lTotalCost < lBestCost) {
+      // Merging here improves the total SAH cost
+      lBestCost      = lTotalCost;
+      lBestNodeIndex = {lCurr.node, lCurr.level};
+    }
+
+    float lNewInduced = lTotalCost - lBBox.sarea;
+    if ((lNewInduced + lSArea) < lBestCost && !lCurrNode->isLeaf()) {
+      lPQ[lMinIndex] = {lCurrNode->left, lNewInduced, lCurr.level + 1};
+      lPQ[lMaxIndex] = {lCurrNode->right, lNewInduced, lCurr.level + 1};
+    }
+
+    lMin = HUGE_VALF;
+    lMax = 0.0f;
+    for (uint32_t i = 0; i < CUDA_ALT_QUEUE_SIZE; ++i) {
+      if (lPQ[i].cost < lMin) {
+        lMin      = lPQ[i].cost;
+        lMinIndex = i;
+      }
+      if (lPQ[i].cost > lMax) {
+        lMax      = lPQ[i].cost;
+        lMaxIndex = i;
       }
     }
   }
@@ -252,9 +313,9 @@ __device__ CUDA_RM_RES removeNode(uint32_t _node, PATCH &_bvh, uint32_t *_flags,
 }
 
 
-__device__ CUDA_INS_RES
-           reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, uint32_t *_flags, uint32_t _lockID) {
-  CUDANodeLevel lRes = findNodeForReinsertion(_node, _bvh);
+__device__ CUDA_INS_RES reinsert(
+    uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, uint32_t *_flags, uint32_t _lockID, bool _altFindNode) {
+  CUDANodeLevel lRes = _altFindNode ? findNode2(_node, _bvh) : findNode1(_node, _bvh);
   if (lRes.node == _bvh.root()) { return {false, 0, 0}; }
   assert(lRes.node != 0);
 
@@ -449,7 +510,8 @@ __global__ void kRemoveAndReinsert(uint32_t *_todoList,
                                    bool      _retry,
                                    uint32_t  _chunk,
                                    uint32_t  _numChunks,
-                                   uint32_t  _chunkSize) {
+                                   uint32_t  _chunkSize,
+                                   bool      _altFindNode) {
   uint32_t index   = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride  = blockDim.x * gridDim.x;
   uint32_t lLockID = index + 1;
@@ -476,8 +538,8 @@ __global__ void kRemoveAndReinsert(uint32_t *_todoList,
       continue;
     }
 
-    lR1 = reinsert(lRmRes.toInsert.n1, lRmRes.unused.n1, _patches[k], true, _flags, lLockID);
-    lR2 = reinsert(lRmRes.toInsert.n2, lRmRes.unused.n2, _patches[k], false, _flags, lLockID);
+    lR1 = reinsert(lRmRes.toInsert.n1, lRmRes.unused.n1, _patches[k], true, _flags, lLockID, _altFindNode);
+    lR2 = reinsert(lRmRes.toInsert.n2, lRmRes.unused.n2, _patches[k], false, _flags, lLockID, _altFindNode);
     if (!lR1.res || !lR2.res) {
       _patches[k].clear();
 
@@ -565,7 +627,8 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
                      uint32_t              _chunkSize,
                      uint32_t              _blockSize,
                      bool                  _offsetAccess,
-                     bool                  _retry) {
+                     bool                  _retry,
+                     bool                  _altFindNode) {
   if (!_data || !_GPUbvh) { return; }
 
   cudaError_t lRes;
@@ -593,7 +656,8 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
                                                         _retry,
                                                         i,
                                                         _numChunks,
-                                                        _chunkSize);
+                                                        _chunkSize,
+                                                        _altFindNode);
 
     kApplyPatches<<<lNumBlocksChunk, _blockSize>>>(_data->patches, _data->sumMin.flags, _chunkSize);
 

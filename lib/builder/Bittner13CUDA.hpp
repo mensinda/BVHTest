@@ -21,7 +21,8 @@
 #include <cstdint>
 
 typedef BVHTest::base::BVHPatch<10, 2, 128> PATCH;
-constexpr size_t                            CUDA_QUEUE_SIZE = 512;
+const size_t                                CUDA_QUEUE_SIZE     = 512;
+const size_t                                CUDA_ALT_QUEUE_SIZE = 16;
 
 struct SumMinCUDA {
   float *   sums  = nullptr;
@@ -68,7 +69,8 @@ void doAlgorithmStep(GPUWorkingMemory *                   _data,
                      uint32_t                             _chunkSize,
                      uint32_t                             _blockSize,
                      bool                                 _offsetAccess,
-                     bool                                 _retry);
+                     bool                                 _retry,
+                     bool                                 _altFindNode);
 
 void doCudaDevSync();
 
