@@ -18,7 +18,7 @@ foreach i : incDirsBase
 endforeach
 
 incDirs = include_directories(incDirsBase)
-assimp  = dependency('assimp',  required: true, version: '>=3.3.1')
+assimp  = dependency('assimp',  required: true, version: '>=3.2.0')
 glfw    = dependency('glfw3',   required: true, version: '>=3.1.0')
 GL      = dependency('GL',      required: true, version: '>=3.3')
 OpenMP  = dependency('openmp',  required: true)
