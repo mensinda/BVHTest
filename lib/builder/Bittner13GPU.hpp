@@ -34,6 +34,7 @@ class Bittner13GPU final : public OptimizerBase {
   bool     vOffsetAccess  = false;
   bool     vRetryLocking  = true;
   bool     vAltFindNode   = false;
+  bool     vAltFixTree    = false;
 
   GPUWorkingMemory vWorkingMemory;
 

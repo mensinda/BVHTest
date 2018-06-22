@@ -59,8 +59,7 @@ GPUWorkingMemory allocateMemory(BVHTest::base::CUDAMemoryBVHPointer *_bvh, uint3
 void             freeMemory(GPUWorkingMemory *_data);
 
 void initData(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
-void fixTree(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
-void fixTree2(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
+void fixTree1(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
 void fixTree3(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
 
 void doAlgorithmStep(GPUWorkingMemory *                   _data,
@@ -70,7 +69,8 @@ void doAlgorithmStep(GPUWorkingMemory *                   _data,
                      uint32_t                             _blockSize,
                      bool                                 _offsetAccess,
                      bool                                 _retry,
-                     bool                                 _altFindNode);
+                     bool                                 _altFindNode,
+                     bool                                 _altFixTree);
 
 void doCudaDevSync();
 

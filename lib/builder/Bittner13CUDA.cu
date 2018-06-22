@@ -385,8 +385,41 @@ __device__ CUDA_INS_RES reinsert(
 /*                                                           */
 
 
+__global__ void kInitSumMin(uint32_t *_leaf, SumMinCUDA _SMF, BVHNode *_nodes, uint32_t _num) {
+  uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t stride = blockDim.x * gridDim.x;
 
-__global__ void kFixTree(uint32_t *_leaf, SumMinCUDA _SMF, BVHNode *_nodes, uint32_t _num) {
+  uint32_t lNode;
+  uint32_t lLeft;
+  uint32_t lRight;
+
+  for (uint32_t i = index; i < _num; i += stride) {
+    lNode            = _leaf[i];
+    _SMF.sums[lNode] = _nodes[lNode].surfaceArea;
+    _SMF.mins[lNode] = _nodes[lNode].surfaceArea;
+    lNode            = _nodes[lNode].parent;
+
+    while (true) {
+      uint32_t lOldLock = atomicAdd(&_SMF.flags[lNode], 1);
+
+      // Check if this thread is first. If yes break
+      if (lOldLock == 0) { break; }
+
+      lLeft  = _nodes[lNode].left;
+      lRight = _nodes[lNode].right;
+
+      _SMF.sums[lNode] = _SMF.sums[lLeft] + _SMF.sums[lRight] + _nodes[lNode].surfaceArea;
+      _SMF.mins[lNode] = _SMF.mins[lLeft] < _SMF.mins[lRight] ? _SMF.mins[lLeft] : _SMF.mins[lRight];
+
+      // Check if root
+      if (lNode == _nodes[lNode].parent) { break; }
+      lNode = _nodes[lNode].parent;
+    }
+  }
+}
+
+
+__global__ void kFixTree1(uint32_t *_leaf, SumMinCUDA _SMF, BVHNode *_nodes, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
 
@@ -599,11 +632,11 @@ __global__ void kApplyPatches(PATCH *_patches, uint32_t *_flags, uint32_t _num) 
 /*           |___/                                                                                 */
 
 
-void fixTree(GPUWorkingMemory *_data, base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize) {
+void fixTree1(GPUWorkingMemory *_data, base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize) {
   if (!_data || !_GPUbvh) { return; }
 
   uint32_t lNumBlocks = (_data->numLeafNodes + _blockSize - 1) / _blockSize;
-  kFixTree<<<lNumBlocks, _blockSize>>>(_data->leafNodes, _data->sumMin, _GPUbvh->nodes, _data->numLeafNodes);
+  kFixTree1<<<lNumBlocks, _blockSize>>>(_data->leafNodes, _data->sumMin, _GPUbvh->nodes, _data->numLeafNodes);
 
   cudaMemset(_data->sumMin.flags, 0, _data->sumMin.num * sizeof(uint32_t));
 }
@@ -625,7 +658,8 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
                      uint32_t              _blockSize,
                      bool                  _offsetAccess,
                      bool                  _retry,
-                     bool                  _altFindNode) {
+                     bool                  _altFindNode,
+                     bool                  _altFixTree) {
   if (!_data || !_GPUbvh) { return; }
 
   cudaError_t lRes;
@@ -658,7 +692,11 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
 
     kApplyPatches<<<lNumBlocksChunk, _blockSize>>>(_data->patches, _data->sumMin.flags, _chunkSize);
 
-    fixTree3(_data, _GPUbvh, _blockSize);
+    if (_altFixTree) {
+      fixTree3(_data, _GPUbvh, _blockSize);
+    } else {
+      fixTree1(_data, _GPUbvh, _blockSize);
+    }
   }
 
 error:
@@ -789,6 +827,7 @@ void initData(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, uint32_t _
   cudaError_t   lRes;
   uint32_t      lNumBlocksAll     = (_data->todoNodes.num + _blockSize - 1) / _blockSize;
   uint32_t      lNumBlocksPatches = (_data->numPatches + _blockSize - 1) / _blockSize;
+  uint32_t      lNumBlocksInit    = (_data->numLeafNodes + _blockSize - 1) / _blockSize;
   void *        lTempStorage      = nullptr;
   int *         lNumSelected      = nullptr;
   size_t        lTempStorageSize  = 0;
@@ -819,6 +858,9 @@ void initData(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, uint32_t _
                                  lNumSelected,
                                  _data->todoNodes.num,
                                  lSelector));
+
+  kInitSumMin<<<lNumBlocksInit, _blockSize>>>(_data->leafNodes, _data->sumMin, _GPUbvh->nodes, _data->numLeafNodes);
+  CUDA_RUN(cudaMemset(_data->sumMin.flags, 0, _data->sumMin.num * sizeof(uint32_t)));
 
 error:
   cudaFree(lNumSelected);

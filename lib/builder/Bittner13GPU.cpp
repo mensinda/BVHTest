@@ -54,6 +54,7 @@ void Bittner13GPU::fromJSON(const json &_j) {
   vOffsetAccess  = _j.value("offsetAccess", vOffsetAccess);
   vRetryLocking  = _j.value("retryLocking", vRetryLocking);
   vAltFindNode   = _j.value("altFindNode", vAltFindNode);
+  vAltFixTree    = _j.value("altFixTree", vAltFixTree);
 
   if (vBatchPercent <= 0.01f) vBatchPercent = 0.01f;
   if (vBatchPercent >= 75.0f) vBatchPercent = 75.0f;
@@ -70,6 +71,7 @@ json Bittner13GPU::toJSON() const {
   lJSON["offsetAccess"]  = vOffsetAccess;
   lJSON["retryLocking"]  = vRetryLocking;
   lJSON["altFindNode"]   = vAltFindNode;
+  lJSON["altFixTree"]    = vAltFixTree;
   return lJSON;
 }
 
@@ -88,7 +90,6 @@ ErrorCode Bittner13GPU::runImpl(State &_state) {
   lNumNodes           = lChunkSize * vNumChunks;
 
   initData(&vWorkingMemory, &_state.cudaMem.bvh, vCUDABlockSize);
-  fixTree(&vWorkingMemory, &_state.cudaMem.bvh, vCUDABlockSize);
 
   for (uint32_t i = 0; i < vMaxNumStepps; ++i) {
     PROGRESS(fmt::format("Stepp {:<3}; SAH: ?", i), i, vMaxNumStepps);
@@ -100,7 +101,8 @@ ErrorCode Bittner13GPU::runImpl(State &_state) {
                     vCUDABlockSize,
                     vOffsetAccess,
                     vRetryLocking,
-                    vAltFindNode);
+                    vAltFindNode,
+                    vAltFixTree);
   }
 
   PROGRESS("CUDA sync", vMaxNumStepps, vMaxNumStepps);
