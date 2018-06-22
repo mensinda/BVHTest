@@ -66,10 +66,10 @@ __global__ void kResetTodoData(uint32_t *_nodes, uint32_t _num) {
   for (uint32_t i = index; i < _num; i += stride) { _nodes[i] = i; }
 }
 
-__global__ void kInitPatches(PATCH *_patches, BVH *_bvh, uint32_t _num) {
+__global__ void kInitPatches(MINI_PATCH *_patches, BVH *_bvh, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
-  for (uint32_t i = index; i < _num; i += stride) { new (_patches + i) PATCH(_bvh); }
+  for (uint32_t i = index; i < _num; i += stride) { _patches[i].vSize = 0; }
 }
 
 
@@ -525,29 +525,29 @@ __global__ void kCalcCost(float *_sum, float *_min, BVHNode *_BVHNode, float *_c
 
 
 
-__global__ void kRemoveAndReinsert(uint32_t *_todoList,
-                                   PATCH *   _patches,
-                                   uint32_t *_flags,
-                                   uint32_t *_skip,
-                                   uint32_t *_toFix,
-                                   bool      _offsetAccess,
-                                   bool      _retry,
-                                   uint32_t  _chunk,
-                                   uint32_t  _numChunks,
-                                   uint32_t  _chunkSize,
-                                   bool      _altFindNode) {
+__global__ void kRemoveAndReinsert(uint32_t *  _todoList,
+                                   MINI_PATCH *_patches,
+                                   BVH *       _bvh,
+                                   uint32_t *  _flags,
+                                   uint32_t *  _skip,
+                                   uint32_t *  _toFix,
+                                   bool        _offsetAccess,
+                                   bool        _retry,
+                                   uint32_t    _chunk,
+                                   uint32_t    _numChunks,
+                                   uint32_t    _chunkSize,
+                                   bool        _altFindNode) {
   uint32_t index   = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride  = blockDim.x * gridDim.x;
   uint32_t lLockID = index + 1;
 
   for (int32_t k = index; k < _chunkSize; k += stride) {
+    PATCH        lPatch(_bvh);
     uint32_t     lNodeIndex = _todoList[_offsetAccess ? k * _numChunks + _chunk : _chunk * _chunkSize + k];
-    CUDA_RM_RES  lRmRes     = removeNode(lNodeIndex, _patches[k], _flags, lLockID);
+    CUDA_RM_RES  lRmRes     = removeNode(lNodeIndex, lPatch, _flags, lLockID);
     CUDA_INS_RES lR1, lR2;
 
     if (!lRmRes.res) {
-      _patches[k].clear();
-
       if (_retry) {
         k -= stride;
         _retry = false;
@@ -562,11 +562,9 @@ __global__ void kRemoveAndReinsert(uint32_t *_todoList,
       continue;
     }
 
-    lR1 = reinsert(lRmRes.toInsert.n1, lRmRes.unused.n1, _patches[k], true, _flags, lLockID, _altFindNode);
-    lR2 = reinsert(lRmRes.toInsert.n2, lRmRes.unused.n2, _patches[k], false, _flags, lLockID, _altFindNode);
+    lR1 = reinsert(lRmRes.toInsert.n1, lRmRes.unused.n1, lPatch, true, _flags, lLockID, _altFindNode);
+    lR2 = reinsert(lRmRes.toInsert.n2, lRmRes.unused.n2, lPatch, false, _flags, lLockID, _altFindNode);
     if (!lR1.res || !lR2.res) {
-      _patches[k].clear();
-
       // Unlock Nodes
       RELEASE_LOCK_S(lRmRes.toInsert.n1, lLockID);
       RELEASE_LOCK_S(lRmRes.toInsert.n2, lLockID);
@@ -594,23 +592,25 @@ __global__ void kRemoveAndReinsert(uint32_t *_todoList,
     _toFix[k * 3 + 0] = lRmRes.grandParentAndSibling.n1;
     _toFix[k * 3 + 1] = lRmRes.unused.n1;
     _toFix[k * 3 + 2] = lRmRes.unused.n2;
+
+    _patches[k] = lPatch.genMiniPatch();
   }
 }
 
 
-__global__ void kApplyPatches(PATCH *_patches, uint32_t *_flags, uint32_t _num) {
+__global__ void kApplyPatches(MINI_PATCH *_patches, BVH *_bvh, uint32_t *_flags, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
   for (uint32_t k = index; k < _num; k += stride) {
-    if (_patches[k].empty()) { continue; }
+    if (_patches[k].vSize == 0) { continue; }
 
     for (uint32_t l = 0; l < 10; ++l) {
-      if (l >= _patches[k].size()) { break; }
-      RELEASE_LOCK(_patches[k].getPatchedNodeIndex(l));
+      if (l >= _patches[k].vSize) { break; }
+      RELEASE_LOCK(_patches[k].vPatch[l]);
     }
 
-    _patches[k].apply();
-    _patches[k].clear();
+    _patches[k].apply(_bvh);
+    _patches[k].vSize = 0;
   }
 }
 
@@ -674,6 +674,7 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
   for (uint32_t i = 0; i < _numChunks; ++i) {
     kRemoveAndReinsert<<<lNumBlocksChunk, _blockSize>>>(_data->todoSorted.nodes,
                                                         _data->patches,
+                                                        _GPUbvh->bvh,
                                                         _data->sumMin.flags,
                                                         _data->skipped,
                                                         _data->nodesToFix,
@@ -684,7 +685,7 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
                                                         _chunkSize,
                                                         _altFindNode);
 
-    kApplyPatches<<<lNumBlocksChunk, _blockSize>>>(_data->patches, _data->sumMin.flags, _chunkSize);
+    kApplyPatches<<<lNumBlocksChunk, _blockSize>>>(_data->patches, _GPUbvh->bvh, _data->sumMin.flags, _chunkSize);
 
     if (_altFixTree) {
       fixTree3(_data, _GPUbvh, _blockSize);
@@ -754,7 +755,7 @@ GPUWorkingMemory allocateMemory(CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize,
   ALLOCATE(&lMem.todoSorted.nodes, lMem.todoSorted.num, uint32_t);
   ALLOCATE(&lMem.todoSorted.costs, lMem.todoSorted.num, float);
   ALLOCATE(&lMem.leafNodes, lMem.numLeafNodes, uint32_t);
-  ALLOCATE(&lMem.patches, lMem.numPatches, PATCH);
+  ALLOCATE(&lMem.patches, lMem.numPatches, MINI_PATCH);
   ALLOCATE(&lMem.skipped, lMem.numSkipped, uint32_t);
   ALLOCATE(&lMem.nodesToFix, lMem.numNodesToFix, uint32_t);
 

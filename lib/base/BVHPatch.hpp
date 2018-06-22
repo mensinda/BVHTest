@@ -35,12 +35,24 @@ struct alignas(16) BVHNodePatch {
   CUDA_CALL bool     isRightChild() const noexcept { return isLeft == 0; }
 };
 
-// template <size_t NNode>
-class MiniPatch final {
-  BVHNodePatch vNodes[10];
-  uint32_t     vPatch[10];
-  BVH *        vBVH;
+template <size_t NNode>
+struct alignas(16) MiniPatch final {
+  BVHNodePatch vNodes[NNode];
+  uint32_t     vPatch[NNode];
   uint32_t     vSize = 0;
+
+  CUDA_CALL void apply(BVH *_bvh) {
+    for (uint32_t i = 0; i < NNode; ++i) {
+      if (i >= vSize) { break; }
+      BVHNode *lNode = _bvh->get(vPatch[i]);
+      lNode->parent  = vNodes[i].parent;
+      lNode->left    = vNodes[i].left;
+      lNode->right   = vNodes[i].right;
+      lNode->isLeft  = vNodes[i].isLeft;
+    }
+  }
+
+  CUDA_CALL void clear() { vSize = 0; }
 };
 
 template <size_t NNode, size_t NPath, size_t NAABB>
@@ -208,6 +220,16 @@ class alignas(16) BVHPatch final {
     }
     BVHNode *lNode = vBVH->get(_node);
     return {lNode->bbox, lNode->surfaceArea};
+  }
+
+  CUDA_CALL MiniPatch<NNode> genMiniPatch() const noexcept {
+    MiniPatch<NNode> lRes;
+    lRes.vSize = vSize;
+    for (uint32_t i = 0; i < NNode; ++i) {
+      lRes.vNodes[i] = vNodes[i];
+      lRes.vPatch[i] = vPatch[i];
+    }
+    return lRes;
   }
 
   CUDA_CALL size_t size() const noexcept { return vSize; }
