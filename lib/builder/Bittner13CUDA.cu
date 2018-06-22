@@ -117,7 +117,7 @@ struct CUDA_INS_RES {
 __device__ CUDANodeLevel findNode1(uint32_t _n, PATCH &_bvh) {
   float             lBestCost      = HUGE_VALF;
   CUDANodeLevel     lBestNodeIndex = {0, 0};
-  BVHNode const *   lNode          = _bvh[_n];
+  BVHNode const *   lNode          = _bvh.getOrig(_n);
   AABB const &      lNodeBBox      = lNode->bbox;
   float             lSArea         = lNode->surfaceArea;
   uint32_t          lSize          = 1;
@@ -127,7 +127,7 @@ __device__ CUDANodeLevel findNode1(uint32_t _n, PATCH &_bvh) {
   lPQ[0] = {_bvh.root(), 0.0f, 0};
   while (lSize > 0) {
     CUDAHelperStruct lCurr     = lPQ[0];
-    BVHNode *        lCurrNode = _bvh[lCurr.node];
+    BVHNodePatch     lCurrNode = _bvh.get(lCurr.node);
     auto             lBBox     = _bvh.getAABB(lCurr.node, lCurr.level);
     CUDA_pop_heap(lBegin, lBegin + lSize);
     lSize--;
@@ -148,10 +148,10 @@ __device__ CUDANodeLevel findNode1(uint32_t _n, PATCH &_bvh) {
 
     float lNewInduced = lTotalCost - lBBox.sarea;
     if ((lNewInduced + lSArea) < lBestCost) {
-      if (!lCurrNode->isLeaf()) {
+      if (!lCurrNode.isLeaf()) {
         assert(lSize + 2 < CUDA_QUEUE_SIZE);
-        lPQ[lSize + 0] = {lCurrNode->left, lNewInduced, lCurr.level + 1};
-        lPQ[lSize + 1] = {lCurrNode->right, lNewInduced, lCurr.level + 1};
+        lPQ[lSize + 0] = {lCurrNode.left, lNewInduced, lCurr.level + 1};
+        lPQ[lSize + 1] = {lCurrNode.right, lNewInduced, lCurr.level + 1};
         CUDA_push_heap(lBegin, lBegin + lSize + 1);
         CUDA_push_heap(lBegin, lBegin + lSize + 2);
         lSize += 2;
@@ -166,7 +166,7 @@ __device__ CUDANodeLevel findNode1(uint32_t _n, PATCH &_bvh) {
 __device__ CUDANodeLevel findNode2(uint32_t _n, PATCH &_bvh) {
   float            lBestCost      = HUGE_VALF;
   CUDANodeLevel    lBestNodeIndex = {0, 0};
-  BVHNode const *  lNode          = _bvh[_n];
+  BVHNode const *  lNode          = _bvh.getOrig(_n);
   AABB const &     lNodeBBox      = lNode->bbox;
   float            lSArea         = lNode->surfaceArea;
   float            lMin           = 0.0f;
@@ -181,10 +181,10 @@ __device__ CUDANodeLevel findNode2(uint32_t _n, PATCH &_bvh) {
 
   lPQ[0] = {_bvh.root(), 0.0f, 0};
   while (lMin < HUGE_VALF) {
-    lCurr               = lPQ[lMinIndex];
-    lPQ[lMinIndex].cost = HUGE_VALF;
-    BVHNode *lCurrNode  = _bvh[lCurr.node];
-    auto     lBBox      = _bvh.getAABB(lCurr.node, lCurr.level);
+    lCurr                  = lPQ[lMinIndex];
+    lPQ[lMinIndex].cost    = HUGE_VALF;
+    BVHNodePatch lCurrNode = _bvh.get(lCurr.node);
+    auto         lBBox     = _bvh.getAABB(lCurr.node, lCurr.level);
 
     if ((lCurr.cost + lSArea) >= lBestCost) {
       // Early termination - not possible to further optimize
@@ -201,9 +201,9 @@ __device__ CUDANodeLevel findNode2(uint32_t _n, PATCH &_bvh) {
     }
 
     float lNewInduced = lTotalCost - lBBox.sarea;
-    if ((lNewInduced + lSArea) < lBestCost && !lCurrNode->isLeaf()) {
-      lPQ[lMinIndex] = {lCurrNode->left, lNewInduced, lCurr.level + 1};
-      lPQ[lMaxIndex] = {lCurrNode->right, lNewInduced, lCurr.level + 1};
+    if ((lNewInduced + lSArea) < lBestCost && !lCurrNode.isLeaf()) {
+      lPQ[lMinIndex] = {lCurrNode.left, lNewInduced, lCurr.level + 1};
+      lPQ[lMaxIndex] = {lCurrNode.right, lNewInduced, lCurr.level + 1};
     }
 
     lMin = HUGE_VALF;
@@ -226,14 +226,14 @@ __device__ CUDANodeLevel findNode2(uint32_t _n, PATCH &_bvh) {
 
 __device__ CUDA_RM_RES removeNode(uint32_t _node, PATCH &_bvh, uint32_t *_flags, uint32_t _lockID) {
   CUDA_RM_RES lFalse = {false, {0, 0}, {0, 0}, {0, 0}};
-  if (_bvh[_node]->isLeaf() || _node == _bvh.root()) { return lFalse; }
+  if (_bvh.getOrig(_node)->isLeaf() || _node == _bvh.root()) { return lFalse; }
   assert(_node != 0);
 
   IF_NOT_LOCK(_node, _lockID) { return lFalse; }
 
-  BVHNode *lNode         = _bvh.patchNode(_node);
-  uint32_t lSiblingIndex = _bvh.sibling(*lNode);
-  uint32_t lParentIndex  = lNode->parent;
+  BVHNodePatch *lNode         = _bvh.patchNode(_node);
+  uint32_t      lSiblingIndex = _bvh.sibling(*lNode);
+  uint32_t      lParentIndex  = lNode->parent;
 
   if (lParentIndex == _bvh.root()) {
     RELEASE_LOCK_S(_node, _lockID);
@@ -247,15 +247,15 @@ __device__ CUDA_RM_RES removeNode(uint32_t _node, PATCH &_bvh, uint32_t *_flags,
     RELEASE_LOCK_S(_node, _lockID);
     return lFalse;
   }
-  BVHNode *lSibling = _bvh.patchNode(lSiblingIndex);
+  BVHNodePatch *lSibling = _bvh.patchNode(lSiblingIndex);
 
   IF_NOT_LOCK(lParentIndex, _lockID) {
     RELEASE_LOCK_S(_node, _lockID);
     RELEASE_LOCK_S(lSiblingIndex, _lockID);
     return lFalse;
   }
-  BVHNode *lParent           = _bvh.patchNode(lParentIndex);
-  uint32_t lGrandParentIndex = lParent->parent;
+  BVHNodePatch *lParent           = _bvh.patchNode(lParentIndex);
+  uint32_t      lGrandParentIndex = lParent->parent;
 
   IF_NOT_LOCK(lGrandParentIndex, _lockID) {
     RELEASE_LOCK_S(_node, _lockID);
@@ -263,7 +263,7 @@ __device__ CUDA_RM_RES removeNode(uint32_t _node, PATCH &_bvh, uint32_t *_flags,
     RELEASE_LOCK_S(lParentIndex, _lockID);
     return lFalse;
   }
-  BVHNode *lGrandParent = _bvh.patchNode(lGrandParentIndex);
+  BVHNodePatch *lGrandParent = _bvh.patchNode(lGrandParentIndex);
 
   IF_NOT_LOCK(lNode->left, _lockID) {
     RELEASE_LOCK_S(_node, _lockID);
@@ -282,14 +282,8 @@ __device__ CUDA_RM_RES removeNode(uint32_t _node, PATCH &_bvh, uint32_t *_flags,
     return lFalse;
   }
 
-  BVHNode *lLeft  = _bvh.patchNode(lNode->left);
-  BVHNode *lRight = _bvh.patchNode(lNode->right);
-
   // FREE LIST:   lNode, lParent
   // INSERT LIST: lLeft, lRight
-
-  float lLeftSA  = lLeft->surfaceArea;
-  float lRightSA = lRight->surfaceArea;
 
   // Remove nodes
   if (lParent->isLeftChild()) {
@@ -305,7 +299,7 @@ __device__ CUDA_RM_RES removeNode(uint32_t _node, PATCH &_bvh, uint32_t *_flags,
   // update Bounding Boxes (temporary)
   _bvh.patchAABBFrom(lGrandParentIndex);
 
-  if (lLeftSA > lRightSA) {
+  if (_bvh.getOrig(lNode->left)->surfaceArea > _bvh.getOrig(lNode->right)->surfaceArea) {
     return {true, {lNode->left, lNode->right}, {_node, lParentIndex}, {lGrandParentIndex, lSiblingIndex}};
   } else {
     return {true, {lNode->right, lNode->left}, {_node, lParentIndex}, {lGrandParentIndex, lSiblingIndex}};
@@ -319,8 +313,8 @@ __device__ CUDA_INS_RES reinsert(
   if (lRes.node == _bvh.root()) { return {false, 0, 0}; }
   assert(lRes.node != 0);
 
-  uint32_t lBestPatchIndex = _bvh.patchIndex(lRes.node); // Check if node is already patched
-  BVHNode *lBest           = nullptr;
+  uint32_t      lBestPatchIndex = _bvh.patchIndex(lRes.node); // Check if node is already patched
+  BVHNodePatch *lBest           = nullptr;
 
   if (lBestPatchIndex == UINT32_MAX) {
     // Node is not patched ==> try to lock it
@@ -331,11 +325,11 @@ __device__ CUDA_INS_RES reinsert(
     lBest = _bvh.getPatchedNode(lBestPatchIndex);
   }
 
-  BVHNode *lNode           = _bvh[_node];
-  BVHNode *lUnused         = _bvh[_unused];
-  uint32_t lRootIndex      = lBest->parent;
-  uint32_t lRootPatchIndex = _bvh.patchIndex(lRootIndex);
-  BVHNode *lRoot           = nullptr;
+  BVHNodePatch *lNode           = _bvh.patchNode(_node);
+  BVHNodePatch *lUnused         = _bvh.getAlreadyPatched(_unused);
+  uint32_t      lRootIndex      = lBest->parent;
+  uint32_t      lRootPatchIndex = _bvh.patchIndex(lRootIndex);
+  BVHNodePatch *lRoot           = nullptr;
 
   if (lRootPatchIndex == UINT32_MAX) {
     IF_NOT_LOCK(lRootIndex, _lockID) {

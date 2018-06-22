@@ -86,7 +86,7 @@ struct HelperStruct {
 Bittner13Par::NodeLevel Bittner13Par::findNode1(uint32_t _n, PATCH &_bvh) {
   float          lBestCost      = HUGE_VALF;
   NodeLevel      lBestNodeIndex = {0, 0};
-  BVHNode const *lNode          = _bvh[_n];
+  BVHNode const *lNode          = _bvh.getOrig(_n);
   AABB const &   lNodeBBox      = lNode->bbox;
   float          lSArea         = lNode->surfaceArea;
   uint32_t       lSize          = 1;
@@ -96,7 +96,7 @@ Bittner13Par::NodeLevel Bittner13Par::findNode1(uint32_t _n, PATCH &_bvh) {
   lPQ[0] = {_bvh.root(), 0.0f, 0};
   while (lSize > 0) {
     HelperStruct lCurr     = lPQ[0];
-    BVHNode *    lCurrNode = _bvh[lCurr.node];
+    BVHNodePatch lCurrNode = _bvh.get(lCurr.node);
     auto         lBBox     = _bvh.getAABB(lCurr.node, lCurr.level);
     CUDA_pop_heap(lBegin, lBegin + lSize);
     lSize--;
@@ -117,10 +117,10 @@ Bittner13Par::NodeLevel Bittner13Par::findNode1(uint32_t _n, PATCH &_bvh) {
 
     float lNewInduced = lTotalCost - lBBox.sarea;
     if ((lNewInduced + lSArea) < lBestCost) {
-      if (!lCurrNode->isLeaf()) {
+      if (!lCurrNode.isLeaf()) {
         assert(lSize + 2 < QUEUE_SIZE);
-        lPQ[lSize + 0] = {lCurrNode->left, lNewInduced, lCurr.level + 1};
-        lPQ[lSize + 1] = {lCurrNode->right, lNewInduced, lCurr.level + 1};
+        lPQ[lSize + 0] = {lCurrNode.left, lNewInduced, lCurr.level + 1};
+        lPQ[lSize + 1] = {lCurrNode.right, lNewInduced, lCurr.level + 1};
         CUDA_push_heap(lBegin, lBegin + lSize + 1);
         CUDA_push_heap(lBegin, lBegin + lSize + 2);
         lSize += 2;
@@ -134,7 +134,7 @@ Bittner13Par::NodeLevel Bittner13Par::findNode1(uint32_t _n, PATCH &_bvh) {
 Bittner13Par::NodeLevel Bittner13Par::findNode2(uint32_t _n, PATCH &_bvh) {
   float          lBestCost      = HUGE_VALF;
   NodeLevel      lBestNodeIndex = {0, 0};
-  BVHNode const *lNode          = _bvh[_n];
+  BVHNode const *lNode          = _bvh.getOrig(_n);
   AABB const &   lNodeBBox      = lNode->bbox;
   float          lSArea         = lNode->surfaceArea;
   float          lMin           = 0.0f;
@@ -149,10 +149,10 @@ Bittner13Par::NodeLevel Bittner13Par::findNode2(uint32_t _n, PATCH &_bvh) {
 
   lPQ[0] = {_bvh.root(), 0.0f, 0};
   while (lMin < HUGE_VALF) {
-    lCurr               = lPQ[lMinIndex];
-    lPQ[lMinIndex].cost = HUGE_VALF;
-    BVHNode *lCurrNode  = _bvh[lCurr.node];
-    auto     lBBox      = _bvh.getAABB(lCurr.node, lCurr.level);
+    lCurr                  = lPQ[lMinIndex];
+    lPQ[lMinIndex].cost    = HUGE_VALF;
+    BVHNodePatch lCurrNode = _bvh.get(lCurr.node);
+    auto         lBBox     = _bvh.getAABB(lCurr.node, lCurr.level);
 
     if ((lCurr.cost + lSArea) >= lBestCost) {
       // Early termination - not possible to further optimize
@@ -169,9 +169,9 @@ Bittner13Par::NodeLevel Bittner13Par::findNode2(uint32_t _n, PATCH &_bvh) {
     }
 
     float lNewInduced = lTotalCost - lBBox.sarea;
-    if ((lNewInduced + lSArea) < lBestCost && !lCurrNode->isLeaf()) {
-      lPQ[lMinIndex] = {lCurrNode->left, lNewInduced, lCurr.level + 1};
-      lPQ[lMaxIndex] = {lCurrNode->right, lNewInduced, lCurr.level + 1};
+    if ((lNewInduced + lSArea) < lBestCost && !lCurrNode.isLeaf()) {
+      lPQ[lMinIndex] = {lCurrNode.left, lNewInduced, lCurr.level + 1};
+      lPQ[lMaxIndex] = {lCurrNode.right, lNewInduced, lCurr.level + 1};
     }
 
     lMin = HUGE_VALF;
@@ -198,13 +198,13 @@ Bittner13Par::NodeLevel Bittner13Par::findNode2(uint32_t _n, PATCH &_bvh) {
 
 Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMin *_sumMin) {
   RM_RES lFalse = {false, {0, 0}, {0, 0}, {0, 0}};
-  if (_bvh[_node]->isLeaf() || _node == _bvh.root()) { return lFalse; }
+  if (_bvh.getOrig(_node)->isLeaf() || _node == _bvh.root()) { return lFalse; }
 
   IF_NOT_LOCK(_node) { return lFalse; }
 
-  BVHNode *lNode         = _bvh.patchNode(_node);
-  uint32_t lSiblingIndex = _bvh.sibling(*lNode);
-  uint32_t lParentIndex  = lNode->parent;
+  BVHNodePatch *lNode         = _bvh.patchNode(_node);
+  uint32_t      lSiblingIndex = _bvh.sibling(*lNode);
+  uint32_t      lParentIndex  = lNode->parent;
 
   if (lParentIndex == _bvh.root()) {
     RELEASE_LOCK(_node);
@@ -216,15 +216,15 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMi
     RELEASE_LOCK(_node);
     return lFalse;
   }
-  BVHNode *lSibling = _bvh.patchNode(lSiblingIndex);
+  BVHNodePatch *lSibling = _bvh.patchNode(lSiblingIndex);
 
   IF_NOT_LOCK(lParentIndex) {
     RELEASE_LOCK(_node);
     RELEASE_LOCK(lSiblingIndex);
     return lFalse;
   }
-  BVHNode *lParent           = _bvh.patchNode(lParentIndex);
-  uint32_t lGrandParentIndex = lParent->parent;
+  BVHNodePatch *lParent           = _bvh.patchNode(lParentIndex);
+  uint32_t      lGrandParentIndex = lParent->parent;
 
   IF_NOT_LOCK(lGrandParentIndex) {
     RELEASE_LOCK(_node);
@@ -232,7 +232,7 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMi
     RELEASE_LOCK(lParentIndex);
     return lFalse;
   }
-  BVHNode *lGrandParent = _bvh.patchNode(lGrandParentIndex);
+  BVHNodePatch *lGrandParent = _bvh.patchNode(lGrandParentIndex);
 
   IF_NOT_LOCK(lNode->left) {
     RELEASE_LOCK(_node);
@@ -251,14 +251,8 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMi
     return lFalse;
   }
 
-  BVHNode *lLeft  = _bvh.patchNode(lNode->left);
-  BVHNode *lRight = _bvh.patchNode(lNode->right);
-
   // FREE LIST:   lNode, lParent
   // INSERT LIST: lLeft, lRight
-
-  float lLeftSA  = lLeft->surfaceArea;
-  float lRightSA = lRight->surfaceArea;
 
   // Remove nodes
   if (lParent->isLeftChild()) {
@@ -274,7 +268,7 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMi
   // update Bounding Boxes (temporary)
   _bvh.patchAABBFrom(lGrandParentIndex);
 
-  if (lLeftSA > lRightSA) {
+  if (_bvh.getOrig(lNode->left)->surfaceArea > _bvh.getOrig(lNode->right)->surfaceArea) {
     return {true, {lNode->left, lNode->right}, {_node, lParentIndex}, {lGrandParentIndex, lSiblingIndex}};
   } else {
     return {true, {lNode->right, lNode->left}, {_node, lParentIndex}, {lGrandParentIndex, lSiblingIndex}};
@@ -284,11 +278,12 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMi
 
 Bittner13Par::INS_RES Bittner13Par::reinsert(
     uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, SumMin *_sumMin) {
+
   auto [lBestIndex, lLevelOfBest] = vAltFindNode ? findNode2(_node, _bvh) : findNode1(_node, _bvh);
   if (lBestIndex == _bvh.root()) { return {false, 0, 0}; }
 
-  uint32_t lBestPatchIndex = _bvh.patchIndex(lBestIndex); // Check if node is already patched
-  BVHNode *lBest           = nullptr;
+  uint32_t      lBestPatchIndex = _bvh.patchIndex(lBestIndex); // Check if node is already patched
+  BVHNodePatch *lBest           = nullptr;
 
   if (lBestPatchIndex == UINT32_MAX) {
     // Node is not patched ==> try to lock it
@@ -299,11 +294,11 @@ Bittner13Par::INS_RES Bittner13Par::reinsert(
     lBest = _bvh.getPatchedNode(lBestPatchIndex);
   }
 
-  BVHNode *lNode           = _bvh[_node];
-  BVHNode *lUnused         = _bvh[_unused];
-  uint32_t lRootIndex      = lBest->parent;
-  uint32_t lRootPatchIndex = _bvh.patchIndex(lRootIndex);
-  BVHNode *lRoot           = nullptr;
+  BVHNodePatch *lNode           = _bvh.patchNode(_node);
+  BVHNodePatch *lUnused         = _bvh.getAlreadyPatched(_unused);
+  uint32_t      lRootIndex      = lBest->parent;
+  uint32_t      lRootPatchIndex = _bvh.patchIndex(lRootIndex);
+  BVHNodePatch *lRoot           = nullptr;
 
   if (lRootPatchIndex == UINT32_MAX) {
     IF_NOT_LOCK(lRootIndex) {
