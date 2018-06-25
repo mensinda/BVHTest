@@ -29,12 +29,11 @@ class Bittner13GPU final : public OptimizerBase {
   uint32_t vNumChunks     = 32;
   uint32_t vCUDABlockSize = 128;
   float    vBatchPercent  = 1.0f;
-  bool     vRandom        = false;
   bool     vSortBatch     = false;
   bool     vOffsetAccess  = false;
-  bool     vRetryLocking  = true;
   bool     vAltFindNode   = false;
   bool     vAltFixTree    = false;
+  bool     vLocalPatchCPY = false;
 
   GPUWorkingMemory vWorkingMemory;
 

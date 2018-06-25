@@ -66,10 +66,10 @@ __global__ void kResetTodoData(uint32_t *_nodes, uint32_t _num) {
   for (uint32_t i = index; i < _num; i += stride) { _nodes[i] = i; }
 }
 
-__global__ void kInitPatches(MINI_PATCH *_patches, BVH *_bvh, uint32_t _num) {
+__global__ void kInitPatches(PATCH *_patches, BVH *_bvh, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
-  for (uint32_t i = index; i < _num; i += stride) { _patches[i].vSize = 0; }
+  for (uint32_t i = index; i < _num; i += stride) { new (_patches + i) PATCH(_bvh); }
 }
 
 
@@ -320,14 +320,14 @@ __device__ CUDA_INS_RES
 
 
 
-/*  ___  ___      _         _                        _       */
-/*  |  \/  |     (_)       | |                      | |      */
-/*  | .  . | __ _ _ _ __   | | _____ _ __ _ __   ___| |___   */
-/*  | |\/| |/ _` | | '_ \  | |/ / _ \ '__| '_ \ / _ \ / __|  */
-/*  | |  | | (_| | | | | | |   <  __/ |  | | | |  __/ \__ \  */
-/*  \_|  |_/\__,_|_|_| |_| |_|\_\___|_|  |_| |_|\___|_|___/  */
-/*                                                           */
-/*                                                           */
+/*  ______ _        _____               */
+/*  |  ___(_)      |_   _|              */
+/*  | |_   ___  __   | |_ __ ___  ___   */
+/*  |  _| | \ \/ /   | | '__/ _ \/ _ \  */
+/*  | |   | |>  <    | | | |  __/  __/  */
+/*  \_|   |_/_/\_\   \_/_|  \___|\___|  */
+/*                                      */
+/*                                      */
 
 
 __global__ void kInitSumMin(uint32_t *_leaf, SumMinCUDA _SMF, BVHNode *_nodes, uint32_t _num) {
@@ -461,6 +461,16 @@ __global__ void kFixTree3_2(uint32_t *_toFix, SumMinCUDA _SMF, BVHNode *_nodes, 
 }
 
 
+
+/*  ___  ___      _         _                        _       */
+/*  |  \/  |     (_)       | |                      | |      */
+/*  | .  . | __ _ _ _ __   | | _____ _ __ _ __   ___| |___   */
+/*  | |\/| |/ _` | | '_ \  | |/ / _ \ '__| '_ \ / _ \ / __|  */
+/*  | |  | | (_| | | | | | |   <  __/ |  | | | |  __/ \__ \  */
+/*  \_|  |_/\__,_|_|_| |_| |_|\_\___|_|  |_| |_|\___|_|___/  */
+/*                                                           */
+/*                                                           */
+
 __global__ void kCalcCost(float *_sum, float *_min, BVHNode *_BVHNode, float *_costOut, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
@@ -476,16 +486,45 @@ __global__ void kCalcCost(float *_sum, float *_min, BVHNode *_BVHNode, float *_c
 
 
 
-__global__ void kRemoveAndReinsert(uint32_t *  _todoList,
-                                   MINI_PATCH *_patches,
-                                   BVH *       _bvh,
-                                   uint32_t *  _toFix,
-                                   bool        _offsetAccess,
-                                   bool        _retry,
-                                   uint32_t    _chunk,
-                                   uint32_t    _numChunks,
-                                   uint32_t    _chunkSize,
-                                   bool        _altFindNode) {
+__global__ void kRemoveAndReinsert1(uint32_t *_todoList,
+                                    PATCH *   _patches,
+                                    uint32_t *_toFix,
+                                    bool      _offsetAccess,
+                                    uint32_t  _chunk,
+                                    uint32_t  _numChunks,
+                                    uint32_t  _chunkSize,
+                                    bool      _altFindNode) {
+  uint32_t index   = blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t stride  = blockDim.x * gridDim.x;
+  uint32_t lLockID = index + 1;
+
+  for (int32_t k = index; k < _chunkSize; k += stride) {
+    uint32_t     lNodeIndex = _todoList[_offsetAccess ? k * _numChunks + _chunk : _chunk * _chunkSize + k];
+    CUDA_RM_RES  lRmRes     = removeNode(lNodeIndex, _patches[k], lLockID);
+    CUDA_INS_RES lR1, lR2;
+
+    if (!lRmRes.res) { continue; }
+
+    lR1 = reinsert(lRmRes.toInsert.n1, lRmRes.unused.n1, _patches[k], true, lLockID, _altFindNode);
+    lR2 = reinsert(lRmRes.toInsert.n2, lRmRes.unused.n2, _patches[k], false, lLockID, _altFindNode);
+
+    if (!lR1.res || !lR2.res) { continue; }
+
+    _toFix[k * 3 + 0] = lRmRes.grandParentAndSibling.n1;
+    _toFix[k * 3 + 1] = lRmRes.unused.n1;
+    _toFix[k * 3 + 2] = lRmRes.unused.n2;
+  }
+}
+
+__global__ void kRemoveAndReinsert2(uint32_t *_todoList,
+                                    PATCH *   _patches,
+                                    BVH *     _bvh,
+                                    uint32_t *_toFix,
+                                    bool      _offsetAccess,
+                                    uint32_t  _chunk,
+                                    uint32_t  _numChunks,
+                                    uint32_t  _chunkSize,
+                                    bool      _altFindNode) {
   uint32_t index   = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride  = blockDim.x * gridDim.x;
   uint32_t lLockID = index + 1;
@@ -507,33 +546,31 @@ __global__ void kRemoveAndReinsert(uint32_t *  _todoList,
     _toFix[k * 3 + 1] = lRmRes.unused.n1;
     _toFix[k * 3 + 2] = lRmRes.unused.n2;
 
-
-    lPatch.genMiniPatch(_patches[k]);
+    _patches[k] = lPatch;
   }
 }
 
 
-__global__ void kCheckConflicts(
-    MINI_PATCH *_patches, uint32_t *_flags, uint32_t *_skip, uint32_t *_toFix, uint32_t _num) {
+__global__ void kCheckConflicts(PATCH *_patches, uint32_t *_flags, uint32_t *_skip, uint32_t *_toFix, uint32_t _num) {
   uint32_t index   = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride  = blockDim.x * gridDim.x;
   uint32_t lLockID = index + 1;
 
   for (uint32_t k = index; k < _num; k += stride) {
-    MINI_PATCH lPatch = _patches[k];
+    PATCH lPatch = _patches[k];
 
     // clang-format off
-    switch (lPatch.vSize) {
-      case 10: IF_NOT_LOCK(lPatch.vPatch[9], lLockID) { break; } // fallthrough
-      case 9:  IF_NOT_LOCK(lPatch.vPatch[8], lLockID) { break; } // fallthrough
-      case 8:  IF_NOT_LOCK(lPatch.vPatch[7], lLockID) { break; } // fallthrough
-      case 7:  IF_NOT_LOCK(lPatch.vPatch[6], lLockID) { break; } // fallthrough
-      case 6:  IF_NOT_LOCK(lPatch.vPatch[5], lLockID) { break; } // fallthrough
-      case 5:  IF_NOT_LOCK(lPatch.vPatch[4], lLockID) { break; } // fallthrough
-      case 4:  IF_NOT_LOCK(lPatch.vPatch[3], lLockID) { break; } // fallthrough
-      case 3:  IF_NOT_LOCK(lPatch.vPatch[2], lLockID) { break; } // fallthrough
-      case 2:  IF_NOT_LOCK(lPatch.vPatch[1], lLockID) { break; } // fallthrough
-      case 1:  IF_NOT_LOCK(lPatch.vPatch[0], lLockID) { break; }
+    switch (lPatch.size()) {
+      case 10: IF_NOT_LOCK(lPatch.getPatchedNodeIndex(9), lLockID) { break; } // fallthrough
+      case 9:  IF_NOT_LOCK(lPatch.getPatchedNodeIndex(8), lLockID) { break; } // fallthrough
+      case 8:  IF_NOT_LOCK(lPatch.getPatchedNodeIndex(7), lLockID) { break; } // fallthrough
+      case 7:  IF_NOT_LOCK(lPatch.getPatchedNodeIndex(6), lLockID) { break; } // fallthrough
+      case 6:  IF_NOT_LOCK(lPatch.getPatchedNodeIndex(5), lLockID) { break; } // fallthrough
+      case 5:  IF_NOT_LOCK(lPatch.getPatchedNodeIndex(4), lLockID) { break; } // fallthrough
+      case 4:  IF_NOT_LOCK(lPatch.getPatchedNodeIndex(3), lLockID) { break; } // fallthrough
+      case 3:  IF_NOT_LOCK(lPatch.getPatchedNodeIndex(2), lLockID) { break; } // fallthrough
+      case 2:  IF_NOT_LOCK(lPatch.getPatchedNodeIndex(1), lLockID) { break; } // fallthrough
+      case 1:  IF_NOT_LOCK(lPatch.getPatchedNodeIndex(0), lLockID) { break; }
                continue; // Everything is locked
       case 0:  break;
     }
@@ -542,17 +579,17 @@ __global__ void kCheckConflicts(
     // A break in the switch got executed
 
     // clang-format off
-    switch (lPatch.vSize) {
-      case 10: RELEASE_LOCK_S(lPatch.vPatch[9], lLockID); // fallthrough
-      case 9:  RELEASE_LOCK_S(lPatch.vPatch[8], lLockID); // fallthrough
-      case 8:  RELEASE_LOCK_S(lPatch.vPatch[7], lLockID); // fallthrough
-      case 7:  RELEASE_LOCK_S(lPatch.vPatch[6], lLockID); // fallthrough
-      case 6:  RELEASE_LOCK_S(lPatch.vPatch[5], lLockID); // fallthrough
-      case 5:  RELEASE_LOCK_S(lPatch.vPatch[4], lLockID); // fallthrough
-      case 4:  RELEASE_LOCK_S(lPatch.vPatch[3], lLockID); // fallthrough
-      case 3:  RELEASE_LOCK_S(lPatch.vPatch[2], lLockID); // fallthrough
-      case 2:  RELEASE_LOCK_S(lPatch.vPatch[1], lLockID); // fallthrough
-      case 1:  RELEASE_LOCK_S(lPatch.vPatch[0], lLockID); // fallthrough
+    switch (lPatch.size()) {
+      case 10: RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(9), lLockID); // fallthrough
+      case 9:  RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(8), lLockID); // fallthrough
+      case 8:  RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(7), lLockID); // fallthrough
+      case 7:  RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(6), lLockID); // fallthrough
+      case 6:  RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(5), lLockID); // fallthrough
+      case 5:  RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(4), lLockID); // fallthrough
+      case 4:  RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(3), lLockID); // fallthrough
+      case 3:  RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(2), lLockID); // fallthrough
+      case 2:  RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(1), lLockID); // fallthrough
+      case 1:  RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(0), lLockID); // fallthrough
       case 0:  break;
     }
     // clang-format on
@@ -561,24 +598,24 @@ __global__ void kCheckConflicts(
     _toFix[k * 3 + 0] = UINT32_MAX;
     _toFix[k * 3 + 1] = UINT32_MAX;
     _toFix[k * 3 + 2] = UINT32_MAX;
-    _patches[k].vSize = 0;
+    _patches[k].clear();
   }
 }
 
 
-__global__ void kApplyPatches(MINI_PATCH *_patches, BVH *_bvh, uint32_t *_flags, uint32_t _num) {
+__global__ void kApplyPatches(PATCH *_patches, BVH *_bvh, uint32_t *_flags, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
   for (uint32_t k = index; k < _num; k += stride) {
-    if (_patches[k].vSize == 0) { continue; }
+    if (_patches[k].size() == 0) { continue; }
 
     for (uint32_t l = 0; l < 10; ++l) {
-      if (l >= _patches[k].vSize) { break; }
-      RELEASE_LOCK(_patches[k].vPatch[l]);
+      if (l >= _patches[k].size()) { break; }
+      RELEASE_LOCK(_patches[k].getPatchedNodeIndex(l));
     }
 
-    _patches[k].apply(_bvh);
-    _patches[k].vSize = 0;
+    _patches[k].apply();
+    _patches[k].clear();
   }
 }
 
@@ -619,9 +656,9 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
                      uint32_t              _chunkSize,
                      uint32_t              _blockSize,
                      bool                  _offsetAccess,
-                     bool                  _retry,
                      bool                  _altFindNode,
-                     bool                  _altFixTree) {
+                     bool                  _altFixTree,
+                     bool                  _localPatchCPY) {
   if (!_data || !_GPUbvh) { return; }
 
   cudaError_t lRes;
@@ -640,16 +677,26 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
                                                      _data->todoNodes.num));
 
   for (uint32_t i = 0; i < _numChunks; ++i) {
-    kRemoveAndReinsert<<<lNumBlocksChunk, _blockSize>>>(_data->todoSorted.nodes,
-                                                        _data->patches,
-                                                        _GPUbvh->bvh,
-                                                        _data->nodesToFix,
-                                                        _offsetAccess,
-                                                        _retry,
-                                                        i,
-                                                        _numChunks,
-                                                        _chunkSize,
-                                                        _altFindNode);
+    if (_localPatchCPY) {
+      kRemoveAndReinsert2<<<lNumBlocksChunk, _blockSize>>>(_data->todoSorted.nodes,
+                                                           _data->patches,
+                                                           _GPUbvh->bvh,
+                                                           _data->nodesToFix,
+                                                           _offsetAccess,
+                                                           i,
+                                                           _numChunks,
+                                                           _chunkSize,
+                                                           _altFindNode);
+    } else {
+      kRemoveAndReinsert1<<<lNumBlocksChunk, _blockSize>>>(_data->todoSorted.nodes,
+                                                           _data->patches,
+                                                           _data->nodesToFix,
+                                                           _offsetAccess,
+                                                           i,
+                                                           _numChunks,
+                                                           _chunkSize,
+                                                           _altFindNode);
+    }
 
     kCheckConflicts<<<lNumBlocksChunk, _blockSize>>>(
         _data->patches, _data->sumMin.flags, _data->skipped, _data->nodesToFix, _chunkSize);
@@ -724,7 +771,7 @@ GPUWorkingMemory allocateMemory(CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize,
   ALLOCATE(&lMem.todoSorted.nodes, lMem.todoSorted.num, uint32_t);
   ALLOCATE(&lMem.todoSorted.costs, lMem.todoSorted.num, float);
   ALLOCATE(&lMem.leafNodes, lMem.numLeafNodes, uint32_t);
-  ALLOCATE(&lMem.patches, lMem.numPatches, MINI_PATCH);
+  ALLOCATE(&lMem.patches, lMem.numPatches, PATCH);
   ALLOCATE(&lMem.skipped, lMem.numSkipped, uint32_t);
   ALLOCATE(&lMem.nodesToFix, lMem.numNodesToFix, uint32_t);
 

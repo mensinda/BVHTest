@@ -20,10 +20,10 @@
 #include "base/BVHPatch.hpp"
 #include <cstdint>
 
-typedef BVHTest::base::BVHPatch<10, 2, 6> PATCH;
-typedef BVHTest::base::MiniPatch<10>      MINI_PATCH;
-const size_t                              CUDA_QUEUE_SIZE     = 512;
-const size_t                              CUDA_ALT_QUEUE_SIZE = 16;
+typedef BVHTest::base::BVHPatch  PATCH;
+typedef BVHTest::base::MiniPatch MINI_PATCH;
+const size_t                     CUDA_QUEUE_SIZE     = 512;
+const size_t                     CUDA_ALT_QUEUE_SIZE = 16;
 
 struct SumMinCUDA {
   float *   sums  = nullptr;
@@ -44,16 +44,16 @@ struct GPUWorkingMemory {
   TodoStruct todoNodes;
   TodoStruct todoSorted;
 
-  uint32_t *  leafNodes              = nullptr;
-  MINI_PATCH *patches                = nullptr;
-  uint32_t *  skipped                = nullptr;
-  uint32_t *  nodesToFix             = nullptr;
-  void *      cubSortTempStorage     = nullptr;
-  uint32_t    numLeafNodes           = 0;
-  uint32_t    numPatches             = 0;
-  uint32_t    numSkipped             = 0;
-  uint32_t    numNodesToFix          = 0;
-  size_t      cubSortTempStorageSize = 0;
+  uint32_t *leafNodes              = nullptr;
+  PATCH *   patches                = nullptr;
+  uint32_t *skipped                = nullptr;
+  uint32_t *nodesToFix             = nullptr;
+  void *    cubSortTempStorage     = nullptr;
+  uint32_t  numLeafNodes           = 0;
+  uint32_t  numPatches             = 0;
+  uint32_t  numSkipped             = 0;
+  uint32_t  numNodesToFix          = 0;
+  size_t    cubSortTempStorageSize = 0;
 };
 
 GPUWorkingMemory allocateMemory(BVHTest::base::CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize, uint32_t _numFaces);
@@ -69,9 +69,9 @@ void doAlgorithmStep(GPUWorkingMemory *                   _data,
                      uint32_t                             _chunkSize,
                      uint32_t                             _blockSize,
                      bool                                 _offsetAccess,
-                     bool                                 _retry,
                      bool                                 _altFindNode,
-                     bool                                 _altFixTree);
+                     bool                                 _altFixTree,
+                     bool                                 _localPatchCPY);
 
 void doCudaDevSync();
 

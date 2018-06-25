@@ -49,12 +49,11 @@ void Bittner13GPU::fromJSON(const json &_j) {
   vNumChunks     = _j.value("numChunks", vNumChunks);
   vCUDABlockSize = _j.value("CUDABlockSize", vCUDABlockSize);
   vBatchPercent  = _j.value("batchPercent", vBatchPercent);
-  vRandom        = _j.value("random", vRandom);
   vSortBatch     = _j.value("sort", vSortBatch);
   vOffsetAccess  = _j.value("offsetAccess", vOffsetAccess);
-  vRetryLocking  = _j.value("retryLocking", vRetryLocking);
   vAltFindNode   = _j.value("altFindNode", vAltFindNode);
   vAltFixTree    = _j.value("altFixTree", vAltFixTree);
+  vLocalPatchCPY = _j.value("localPatchCPY", vLocalPatchCPY);
 
   if (vBatchPercent <= 0.01f) vBatchPercent = 0.01f;
   if (vBatchPercent >= 75.0f) vBatchPercent = 75.0f;
@@ -66,12 +65,11 @@ json Bittner13GPU::toJSON() const {
   lJSON["numChunks"]     = vNumChunks;
   lJSON["CUDABlockSize"] = vCUDABlockSize;
   lJSON["batchPercent"]  = vBatchPercent;
-  lJSON["random"]        = vRandom;
   lJSON["sort"]          = vSortBatch;
   lJSON["offsetAccess"]  = vOffsetAccess;
-  lJSON["retryLocking"]  = vRetryLocking;
   lJSON["altFindNode"]   = vAltFindNode;
   lJSON["altFixTree"]    = vAltFixTree;
+  lJSON["localPatchCPY"] = vLocalPatchCPY;
   return lJSON;
 }
 
@@ -100,9 +98,9 @@ ErrorCode Bittner13GPU::runImpl(State &_state) {
                     lChunkSize,
                     vCUDABlockSize,
                     vOffsetAccess,
-                    vRetryLocking,
                     vAltFindNode,
-                    vAltFixTree);
+                    vAltFixTree,
+                    vLocalPatchCPY);
   }
 
   PROGRESS("CUDA sync", vMaxNumStepps, vMaxNumStepps);

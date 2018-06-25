@@ -35,7 +35,10 @@ struct alignas(16) BVHNodePatch {
   CUDA_CALL bool     isRightChild() const noexcept { return isLeft == 0; }
 };
 
-template <size_t NNode>
+const size_t NNode = 10;
+const size_t NPath = 2;
+const size_t NAABB = 6;
+
 struct alignas(16) MiniPatch final {
   BVHNodePatch vNodes[NNode];
   uint32_t     vPatch[NNode];
@@ -55,7 +58,6 @@ struct alignas(16) MiniPatch final {
   CUDA_CALL void clear() { vSize = 0; }
 };
 
-template <size_t NNode, size_t NPath, size_t NAABB>
 class alignas(16) BVHPatch final {
  public:
   struct BBox {
@@ -221,7 +223,7 @@ class alignas(16) BVHPatch final {
     return {lNode->bbox, lNode->surfaceArea};
   }
 
-  CUDA_CALL void genMiniPatch(MiniPatch<NNode> &_out) const noexcept {
+  CUDA_CALL void genMiniPatch(MiniPatch &_out) const noexcept {
     for (uint32_t i = 0; i < NNode; ++i) {
       _out.vNodes[i] = vNodes[i];
       _out.vPatch[i] = vPatch[i];
