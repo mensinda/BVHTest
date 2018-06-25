@@ -69,12 +69,11 @@ class alignas(16) BVHPatch final {
   };
 
  private:
-  BVH *    vBVH;
-  uint32_t vSize     = 0;
-  uint32_t vNumPaths = 0;
-
-  uint32_t     vPatch[NNode];
   BVHNodePatch vNodes[NNode];
+  uint32_t     vPatch[NNode];
+  uint32_t     vSize     = 0;
+  uint32_t     vNumPaths = 0;
+  BVH *        vBVH;
 
   struct AABBPath {
     uint32_t vAABBPath[NAABB];
@@ -222,14 +221,12 @@ class alignas(16) BVHPatch final {
     return {lNode->bbox, lNode->surfaceArea};
   }
 
-  CUDA_CALL MiniPatch<NNode> genMiniPatch() const noexcept {
-    MiniPatch<NNode> lRes;
-    lRes.vSize = vSize;
+  CUDA_CALL void genMiniPatch(MiniPatch<NNode> &_out) const noexcept {
     for (uint32_t i = 0; i < NNode; ++i) {
-      lRes.vNodes[i] = vNodes[i];
-      lRes.vPatch[i] = vPatch[i];
+      _out.vNodes[i] = vNodes[i];
+      _out.vPatch[i] = vPatch[i];
     }
-    return lRes;
+    _out.vSize = vSize;
   }
 
   CUDA_CALL size_t size() const noexcept { return vSize; }

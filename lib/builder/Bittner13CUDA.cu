@@ -593,7 +593,7 @@ __global__ void kRemoveAndReinsert(uint32_t *  _todoList,
     _toFix[k * 3 + 1] = lRmRes.unused.n1;
     _toFix[k * 3 + 2] = lRmRes.unused.n2;
 
-    _patches[k] = lPatch.genMiniPatch();
+    lPatch.genMiniPatch(_patches[k]);
   }
 }
 
