@@ -74,6 +74,7 @@ nvccCompiler = generator(
     '-gencode=arch=compute_70,code=sm_70',
     '-gencode=arch=compute_70,code=compute_70',
     '-O3', '-lineinfo', # '--ptxas-options=-v', # '--maxrregcount=24',
+    #'-O0', '-G', '-g', '--ptxas-options=-v', # '--maxrregcount=24',
     '-Xcudafe', '--diag_suppress=esa_on_defaulted_function_ignored',
     '-c', '@INPUT@', '-o', '@OUTPUT@',
 ])
