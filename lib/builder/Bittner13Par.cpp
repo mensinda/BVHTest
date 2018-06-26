@@ -202,7 +202,7 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMi
 
   IF_NOT_LOCK(_node) { return lFalse; }
 
-  BVHNodePatch *lNode         = _bvh.patchNode(_node);
+  BVHNodePatch *lNode         = _bvh.patchNode(_node, PINDEX_NODE);
   uint32_t      lSiblingIndex = _bvh.sibling(*lNode);
   uint32_t      lParentIndex  = lNode->parent;
 
@@ -216,14 +216,14 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMi
     RELEASE_LOCK(_node);
     return lFalse;
   }
-  BVHNodePatch *lSibling = _bvh.patchNode(lSiblingIndex);
+  BVHNodePatch *lSibling = _bvh.patchNode(lSiblingIndex, PINDEX_SIBLING);
 
   IF_NOT_LOCK(lParentIndex) {
     RELEASE_LOCK(_node);
     RELEASE_LOCK(lSiblingIndex);
     return lFalse;
   }
-  BVHNodePatch *lParent           = _bvh.patchNode(lParentIndex);
+  BVHNodePatch *lParent           = _bvh.patchNode(lParentIndex, PINDEX_PARENT);
   uint32_t      lGrandParentIndex = lParent->parent;
 
   IF_NOT_LOCK(lGrandParentIndex) {
@@ -232,7 +232,7 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMi
     RELEASE_LOCK(lParentIndex);
     return lFalse;
   }
-  BVHNodePatch *lGrandParent = _bvh.patchNode(lGrandParentIndex);
+  BVHNodePatch *lGrandParent = _bvh.patchNode(lGrandParentIndex, PINDEX_GRAND_PARENT);
 
   IF_NOT_LOCK(lNode->left) {
     RELEASE_LOCK(_node);
@@ -288,13 +288,13 @@ Bittner13Par::INS_RES Bittner13Par::reinsert(
   if (lBestPatchIndex == UINT32_MAX) {
     // Node is not patched ==> try to lock it
     IF_NOT_LOCK(lBestIndex) { return {false, 0, 0}; }
-    lBest = _bvh.patchNode(lBestIndex);
+    lBest = _bvh.patchNode(lBestIndex, _update ? PINDEX_1ST_BEST : PINDEX_2ND_BEST);
   } else {
     // Node is already owned by this thread ==> no need to lock it
     lBest = _bvh.getPatchedNode(lBestPatchIndex);
   }
 
-  BVHNodePatch *lNode           = _bvh.patchNode(_node);
+  BVHNodePatch *lNode           = _bvh.patchNode(_node, _update ? PINDEX_1ST_INSERT : PINDEX_2ND_INSERT);
   BVHNodePatch *lUnused         = _bvh.getAlreadyPatched(_unused);
   uint32_t      lRootIndex      = lBest->parent;
   uint32_t      lRootPatchIndex = _bvh.patchIndex(lRootIndex);
@@ -305,7 +305,7 @@ Bittner13Par::INS_RES Bittner13Par::reinsert(
       RELEASE_LOCK(lBestIndex);
       return {false, 0, 0};
     }
-    lRoot = _bvh.patchNode(lRootIndex);
+    lRoot = _bvh.patchNode(lRootIndex, _update ? PINDEX_1ST_ROOT : PINDEX_2ND_ROOT);
   } else {
     lRoot = _bvh.getPatchedNode(lRootPatchIndex);
   }
@@ -587,9 +587,10 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
         if (lSkipp[k]) { continue; }
 
         // Reset locks
-        for (uint32_t l = 0; l < 10; ++l) {
-          if (l >= lPatches[k].size()) { break; }
-          RELEASE_LOCK(lPatches[k].getPatchedNodeIndex(l));
+        for (uint32_t l = 0; l < NNode; ++l) {
+          uint32_t lIDX = lPatches[k].getPatchedNodeIndex(l);
+          if (lIDX == UINT32_MAX) { continue; }
+          RELEASE_LOCK(lIDX);
         }
 
         lPatches[k].apply();

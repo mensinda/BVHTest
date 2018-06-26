@@ -228,17 +228,17 @@ __device__ CUDA_RM_RES removeNode(uint32_t _node, PATCH &_bvh, uint32_t _lockID)
   CUDA_RM_RES lFalse = {false, {0, 0}, {0, 0}, {0, 0}};
   if (_bvh.getOrig(_node)->isLeaf() || _node == _bvh.root()) { return lFalse; }
 
-  BVHNodePatch *lNode         = _bvh.patchNode(_node);
+  BVHNodePatch *lNode         = _bvh.patchNode(_node, PINDEX_NODE);
   uint32_t      lSiblingIndex = _bvh.sibling(*lNode);
   uint32_t      lParentIndex  = lNode->parent;
 
   if (lParentIndex == _bvh.root()) { return lFalse; } // Can not remove node with this algorithm
 
-  BVHNodePatch *lSibling          = _bvh.patchNode(lSiblingIndex);
-  BVHNodePatch *lParent           = _bvh.patchNode(lParentIndex);
+  BVHNodePatch *lSibling          = _bvh.patchNode(lSiblingIndex, PINDEX_SIBLING);
+  BVHNodePatch *lParent           = _bvh.patchNode(lParentIndex, PINDEX_PARENT);
   uint32_t      lGrandParentIndex = lParent->parent;
 
-  BVHNodePatch *lGrandParent = _bvh.patchNode(lGrandParentIndex);
+  BVHNodePatch *lGrandParent = _bvh.patchNode(lGrandParentIndex, PINDEX_GRAND_PARENT);
 
   // FREE LIST:   lNode, lParent
   // INSERT LIST: lLeft, lRight
@@ -274,20 +274,20 @@ __device__ CUDA_INS_RES
   BVHNodePatch *lBest           = nullptr;
 
   if (lBestPatchIndex == UINT32_MAX) {
-    lBest = _bvh.patchNode(lRes.node);
+    lBest = _bvh.patchNode(lRes.node, _update ? PINDEX_1ST_BEST : PINDEX_2ND_BEST);
   } else {
     // Node is already owned by this thread ==> no need to lock it
     lBest = _bvh.getPatchedNode(lBestPatchIndex);
   }
 
-  BVHNodePatch *lNode           = _bvh.patchNode(_node);
+  BVHNodePatch *lNode           = _bvh.patchNode(_node, _update ? PINDEX_1ST_INSERT : PINDEX_2ND_INSERT);
   BVHNodePatch *lUnused         = _bvh.getAlreadyPatched(_unused);
   uint32_t      lRootIndex      = lBest->parent;
   uint32_t      lRootPatchIndex = _bvh.patchIndex(lRootIndex);
   BVHNodePatch *lRoot           = nullptr;
 
   if (lRootPatchIndex == UINT32_MAX) {
-    lRoot = _bvh.patchNode(lRootIndex);
+    lRoot = _bvh.patchNode(lRootIndex, _update ? PINDEX_1ST_ROOT : PINDEX_2ND_ROOT);
   } else {
     lRoot = _bvh.getPatchedNode(lRootPatchIndex);
   }
@@ -559,40 +559,20 @@ __global__ void kCheckConflicts(PATCH *_patches, uint32_t *_flags, uint32_t *_sk
   for (uint32_t k = index; k < _num; k += stride) {
     PATCH lPatch = _patches[k];
 
-    // clang-format off
-    switch (lPatch.size()) {
-      case 10: IF_NOT_LOCK(lPatch.getPatchedNodeIndex(9), lLockID) { break; } // fallthrough
-      case 9:  IF_NOT_LOCK(lPatch.getPatchedNodeIndex(8), lLockID) { break; } // fallthrough
-      case 8:  IF_NOT_LOCK(lPatch.getPatchedNodeIndex(7), lLockID) { break; } // fallthrough
-      case 7:  IF_NOT_LOCK(lPatch.getPatchedNodeIndex(6), lLockID) { break; } // fallthrough
-      case 6:  IF_NOT_LOCK(lPatch.getPatchedNodeIndex(5), lLockID) { break; } // fallthrough
-      case 5:  IF_NOT_LOCK(lPatch.getPatchedNodeIndex(4), lLockID) { break; } // fallthrough
-      case 4:  IF_NOT_LOCK(lPatch.getPatchedNodeIndex(3), lLockID) { break; } // fallthrough
-      case 3:  IF_NOT_LOCK(lPatch.getPatchedNodeIndex(2), lLockID) { break; } // fallthrough
-      case 2:  IF_NOT_LOCK(lPatch.getPatchedNodeIndex(1), lLockID) { break; } // fallthrough
-      case 1:  IF_NOT_LOCK(lPatch.getPatchedNodeIndex(0), lLockID) { break; }
-               continue; // Everything is locked
-      case 0:  break;
+    uint32_t i;
+    for (i = 0; i < NNode; ++i) {
+      uint32_t lIDX = lPatch.getPatchedNodeIndex(NNode - i - 1);
+      if (lIDX == UINT32_MAX) { continue; }
+      IF_NOT_LOCK(lIDX, lLockID) { break; }
     }
-    // clang-format on
 
-    // A break in the switch got executed
+    if (i == NNode) { continue; } // Loop finished --> all locked
 
-    // clang-format off
-    switch (lPatch.size()) {
-      case 10: RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(9), lLockID); // fallthrough
-      case 9:  RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(8), lLockID); // fallthrough
-      case 8:  RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(7), lLockID); // fallthrough
-      case 7:  RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(6), lLockID); // fallthrough
-      case 6:  RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(5), lLockID); // fallthrough
-      case 5:  RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(4), lLockID); // fallthrough
-      case 4:  RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(3), lLockID); // fallthrough
-      case 3:  RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(2), lLockID); // fallthrough
-      case 2:  RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(1), lLockID); // fallthrough
-      case 1:  RELEASE_LOCK_S(lPatch.getPatchedNodeIndex(0), lLockID); // fallthrough
-      case 0:  break;
+    for (i = 0; i < NNode; ++i) {
+      uint32_t lIDX = lPatch.getPatchedNodeIndex(NNode - i - 1);
+      if (lIDX == UINT32_MAX) { continue; }
+      RELEASE_LOCK_S(lIDX, lLockID);
     }
-    // clang-format on
 
     _skip[k] += 1;
     _toFix[k * 3 + 0] = UINT32_MAX;
@@ -607,15 +587,16 @@ __global__ void kApplyPatches(PATCH *_patches, BVH *_bvh, uint32_t *_flags, uint
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
   for (uint32_t k = index; k < _num; k += stride) {
-    if (_patches[k].size() == 0) { continue; }
+    for (uint32_t l = 0; l < NNode; ++l) {
+      uint32_t lIDX = _patches[k].getPatchedNodeIndex(l);
+      if (lIDX == UINT32_MAX) { continue; }
 
-    for (uint32_t l = 0; l < 10; ++l) {
-      if (l >= _patches[k].size()) { break; }
-      RELEASE_LOCK(_patches[k].getPatchedNodeIndex(l));
+      RELEASE_LOCK(lIDX);
+      _patches[k].applyOne(l);
+      _patches[k].clearNode(l);
     }
 
-    _patches[k].apply();
-    _patches[k].clear();
+    _patches[k].clearPaths();
   }
 }
 

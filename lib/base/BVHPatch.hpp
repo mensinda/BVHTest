@@ -39,14 +39,24 @@ const size_t NNode = 10;
 const size_t NPath = 2;
 const size_t NAABB = 3;
 
+const uint32_t PINDEX_NODE         = 0;
+const uint32_t PINDEX_SIBLING      = 1;
+const uint32_t PINDEX_PARENT       = 2;
+const uint32_t PINDEX_GRAND_PARENT = 3;
+const uint32_t PINDEX_1ST_INSERT   = 4;
+const uint32_t PINDEX_2ND_INSERT   = 5;
+const uint32_t PINDEX_1ST_ROOT     = 6;
+const uint32_t PINDEX_1ST_BEST     = 7;
+const uint32_t PINDEX_2ND_ROOT     = 8;
+const uint32_t PINDEX_2ND_BEST     = 9;
+
 struct alignas(16) MiniPatch final {
   BVHNodePatch vNodes[NNode];
   uint32_t     vPatch[NNode];
-  uint32_t     vSize = 0;
 
   CUDA_CALL void apply(BVH *_bvh) {
     for (uint32_t i = 0; i < NNode; ++i) {
-      if (i >= vSize) { break; }
+      if (vPatch[i] == UINT32_MAX) { continue; }
       BVHNode *lNode = _bvh->get(vPatch[i]);
       lNode->parent  = vNodes[i].parent;
       lNode->left    = vNodes[i].left;
@@ -55,7 +65,9 @@ struct alignas(16) MiniPatch final {
     }
   }
 
-  CUDA_CALL void clear() { vSize = 0; }
+  CUDA_CALL void clear() {
+    for (uint32_t i = 0; i < NNode; ++i) { vPatch[i] = UINT32_MAX; }
+  }
 };
 
 class alignas(16) BVHPatch final {
@@ -73,7 +85,6 @@ class alignas(16) BVHPatch final {
  private:
   BVHNodePatch vNodes[NNode];
   uint32_t     vPatch[NNode];
-  uint32_t     vSize     = 0;
   uint32_t     vNumPaths = 0;
 
   struct AABBPath {
@@ -114,7 +125,6 @@ class alignas(16) BVHPatch final {
 
   CUDA_CALL uint32_t patchIndex(uint32_t _node) const noexcept {
     for (uint32_t i = 0; i < NNode; ++i) {
-      if (i >= vSize) { break; }
       if (vPatch[i] == _node) { return i; }
     }
     return UINT32_MAX;
@@ -123,7 +133,7 @@ class alignas(16) BVHPatch final {
   CUDA_CALL BVHNodePatch get(uint32_t _node) {
     uint32_t lIndex = patchIndex(_node);
     if (lIndex == UINT32_MAX) { return node2PatchedNode(*vBVH->get(_node)); }
-    assert(lIndex < vSize);
+    assert(lIndex < NNode);
     return vNodes[lIndex];
   }
 
@@ -133,30 +143,45 @@ class alignas(16) BVHPatch final {
   CUDA_CALL BVHNodePatch *getPatchedNode(uint32_t _patchIndex) { return &vNodes[_patchIndex]; }
   CUDA_CALL uint32_t getPatchedNodeIndex(uint32_t _patchIndex) { return vPatch[_patchIndex]; }
 
-  CUDA_CALL BVHNodePatch *patchNode(uint32_t _node) {
-    assert(vSize < NNode);
-    vPatch[vSize]       = _node;
-    vNodes[vSize]       = node2PatchedNode(*vBVH->get(_node));
-    BVHNodePatch *lNode = &vNodes[vSize];
-    vSize++;
+  CUDA_CALL BVHNodePatch *patchNode(uint32_t _node, uint32_t _index) {
+    assert(_index < NNode);
+    vPatch[_index]      = _node;
+    vNodes[_index]      = node2PatchedNode(*vBVH->get(_node));
+    BVHNodePatch *lNode = &vNodes[_index];
     return lNode;
   }
 
-  CUDA_CALL void clear() {
-    vSize     = 0;
-    vNumPaths = 0;
+  CUDA_CALL void clearNode(uint32_t _index) { vPatch[_index] = UINT32_MAX; }
+
+  CUDA_CALL void clearPaths() {
     for (uint32_t i = 0; i < NPath; ++i) { vPaths[i].vPathLength = 0; }
+    vNumPaths = 0;
+  }
+
+  CUDA_CALL void clear() {
+    for (uint32_t i = 0; i < NNode; ++i) { vPatch[i] = UINT32_MAX; }
+    clearPaths();
   }
 
   CUDA_CALL void apply() {
     for (uint32_t i = 0; i < NNode; ++i) {
-      if (i >= vSize) { break; }
+      if (vPatch[i] == UINT32_MAX) { continue; }
       BVHNode *lNode = vBVH->get(vPatch[i]);
       lNode->parent  = vNodes[i].parent;
       lNode->left    = vNodes[i].left;
       lNode->right   = vNodes[i].right;
       lNode->isLeft  = vNodes[i].isLeft;
     }
+  }
+
+  CUDA_CALL void applyOne(uint32_t _index) {
+    assert(_index < NNode);
+    assert(vPatch[_index] != UINT32_MAX);
+    BVHNode *lNode = vBVH->get(vPatch[_index]);
+    lNode->parent  = vNodes[_index].parent;
+    lNode->left    = vNodes[_index].left;
+    lNode->right   = vNodes[_index].right;
+    lNode->isLeft  = vNodes[_index].isLeft;
   }
 
 
@@ -226,11 +251,8 @@ class alignas(16) BVHPatch final {
       _out.vNodes[i] = vNodes[i];
       _out.vPatch[i] = vPatch[i];
     }
-    _out.vSize = vSize;
   }
 
-  CUDA_CALL size_t size() const noexcept { return vSize; }
-  CUDA_CALL bool   empty() const noexcept { return vSize == 0; }
   CUDA_CALL uint32_t root() const noexcept { return vBVH->root(); }
 };
 
