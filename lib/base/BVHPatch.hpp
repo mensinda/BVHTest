@@ -67,6 +67,16 @@ struct alignas(16) MiniPatch final {
     }
   }
 
+  CUDA_CALL void applyOne(uint32_t _index, BVH *_bvh) {
+    assert(_index < NNode);
+    assert(vPatch[_index] != UINT32_MAX);
+    BVHNode *lNode = _bvh->get(vPatch[_index]);
+    lNode->parent  = vNodes[_index].parent;
+    lNode->left    = vNodes[_index].left;
+    lNode->right   = vNodes[_index].right;
+    lNode->isLeft  = vNodes[_index].isLeft;
+  }
+
   CUDA_CALL void clear() {
     for (uint32_t i = 0; i < NNode; ++i) { vPatch[i] = UINT32_MAX; }
   }

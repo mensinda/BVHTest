@@ -588,16 +588,16 @@ __global__ void kApplyPatches(PATCH *_patches, BVH *_bvh, uint32_t *_flags, uint
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
   for (uint32_t k = index; k < _num; k += stride) {
+    MINI_PATCH lPatch;
+    _patches[k].genMiniPatch(lPatch);
+    _patches[k].clear();
+
     for (uint32_t l = 0; l < NNode; ++l) {
-      uint32_t lIDX = _patches[k].getPatchedNodeIndex(l);
-      if (lIDX == UINT32_MAX) { continue; }
+      if (lPatch.vPatch[l] == UINT32_MAX) { continue; }
 
-      RELEASE_LOCK(lIDX);
-      _patches[k].applyOne(l);
-      _patches[k].clearNode(l);
+      RELEASE_LOCK(lPatch.vPatch[l]);
+      lPatch.applyOne(l, _bvh);
     }
-
-    _patches[k].clearPaths();
   }
 }
 
