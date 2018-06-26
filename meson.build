@@ -6,8 +6,7 @@ project( 'BVHTest', ['cpp', 'c'],
     'libdir=lib/BVHTest',
     'includedir=include/BVHTest',
     'b_colorout=always',
-    'b_ndebug=if-release',
-    'b_lto=true'
+    'b_ndebug=if-release'
   ],
   version : '0.0.1',
   license : 'Apache 2')

@@ -39,16 +39,18 @@ const size_t NNode = 10;
 const size_t NPath = 2;
 const size_t NAABB = 3;
 
-const uint32_t PINDEX_NODE         = 0;
-const uint32_t PINDEX_SIBLING      = 1;
-const uint32_t PINDEX_PARENT       = 2;
-const uint32_t PINDEX_GRAND_PARENT = 3;
+const uint32_t PINDEX_GRAND_PARENT = 0;
+const uint32_t PINDEX_1ST_ROOT     = 1;
+const uint32_t PINDEX_1ST_BEST     = 2;
+const uint32_t PINDEX_NODE         = 3;
 const uint32_t PINDEX_1ST_INSERT   = 4;
-const uint32_t PINDEX_2ND_INSERT   = 5;
-const uint32_t PINDEX_1ST_ROOT     = 6;
-const uint32_t PINDEX_1ST_BEST     = 7;
-const uint32_t PINDEX_2ND_ROOT     = 8;
-const uint32_t PINDEX_2ND_BEST     = 9;
+const uint32_t PINDEX_2ND_ROOT     = 5;
+const uint32_t PINDEX_2ND_BEST     = 6;
+const uint32_t PINDEX_2ND_INSERT   = 7;
+const uint32_t PINDEX_SIBLING      = 8;
+const uint32_t PINDEX_PARENT       = 9;
+
+const uint32_t PINDEX_SUBSET_END = 4;
 
 struct alignas(16) MiniPatch final {
   BVHNodePatch vNodes[NNode];
@@ -123,6 +125,17 @@ class alignas(16) BVHPatch final {
     return lRes;
   }
 
+  // Optimized for findNode -- only checks the required nodes
+  CUDA_CALL uint32_t patchIndexSubset(uint32_t _node) const noexcept {
+    if (vPatch[0] == _node) { return 0; }
+    if (vPatch[1] == UINT32_MAX) { return UINT32_MAX; }
+    if (vPatch[1] == _node) { return 1; }
+    if (vPatch[2] == _node) { return 2; }
+    if (vPatch[3] == _node) { return 3; }
+
+    return UINT32_MAX;
+  }
+
   CUDA_CALL uint32_t patchIndex(uint32_t _node) const noexcept {
     for (uint32_t i = 0; i < NNode; ++i) {
       if (vPatch[i] == _node) { return i; }
@@ -137,6 +150,14 @@ class alignas(16) BVHPatch final {
     return vNodes[lIndex];
   }
 
+  //! \brief only looks at the subset of the patch that is relevant for findNode
+  CUDA_CALL BVHNodePatch getSubset(uint32_t _node) {
+    uint32_t lIndex = patchIndexSubset(_node);
+    if (lIndex == UINT32_MAX) { return node2PatchedNode(*vBVH->get(_node)); }
+    assert(lIndex < NNode);
+    return vNodes[lIndex];
+  }
+
   CUDA_CALL BVHNode *getOrig(uint32_t _node) { return vBVH->get(_node); }
 
   CUDA_CALL BVHNodePatch *getPatchedNode(uint32_t _patchIndex) { return &vNodes[_patchIndex]; }
@@ -144,10 +165,16 @@ class alignas(16) BVHPatch final {
 
   CUDA_CALL BVHNodePatch *patchNode(uint32_t _node, uint32_t _index) {
     assert(_index < NNode);
-    vPatch[_index]      = _node;
-    vNodes[_index]      = node2PatchedNode(*vBVH->get(_node));
-    BVHNodePatch *lNode = &vNodes[_index];
-    return lNode;
+    vPatch[_index] = _node;
+    vNodes[_index] = node2PatchedNode(*vBVH->get(_node));
+    return &vNodes[_index];
+  }
+
+  CUDA_CALL BVHNodePatch *movePatch(uint32_t _from, uint32_t _to) {
+    vPatch[_to]   = vPatch[_from];
+    vPatch[_from] = UINT32_MAX;
+    vNodes[_to]   = vNodes[_from];
+    return &vNodes[_to];
   }
 
   //! \brief Resets only one node
@@ -193,7 +220,7 @@ class alignas(16) BVHPatch final {
    */
   CUDA_CALL void patchAABBFrom(uint32_t _node) {
     uint32_t     lNodeIndex = _node;
-    BVHNodePatch lStart     = get(lNodeIndex);
+    BVHNodePatch lStart     = getSubset(lNodeIndex);
     BVHNodePatch lNode      = lStart;
 
     // Pair: sibling node (= the node we need to fetch) , current Node index
@@ -219,7 +246,7 @@ class alignas(16) BVHPatch final {
       if (lNodeIndex == root()) { break; } // We processed the root ==> everything is done
 
       lNodeIndex = lNode.parent;
-      lNode      = get(lNodeIndex);
+      lNode      = getSubset(lNodeIndex);
     }
 
     // Merge the BBox up the tree

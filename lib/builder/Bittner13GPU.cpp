@@ -90,7 +90,7 @@ ErrorCode Bittner13GPU::runImpl(State &_state) {
   initData(&vWorkingMemory, &_state.cudaMem.bvh, vCUDABlockSize);
 
   for (uint32_t i = 0; i < vMaxNumStepps; ++i) {
-    PROGRESS(fmt::format("Stepp {:<3}; SAH: ?", i), i, vMaxNumStepps);
+    //     PROGRESS(fmt::format("Stepp {:<3}; SAH: ?", i), i, vMaxNumStepps);
 
     doAlgorithmStep(&vWorkingMemory,
                     &_state.cudaMem.bvh,
@@ -103,7 +103,7 @@ ErrorCode Bittner13GPU::runImpl(State &_state) {
                     vLocalPatchCPY);
   }
 
-  PROGRESS("CUDA sync", vMaxNumStepps, vMaxNumStepps);
+  //   PROGRESS("CUDA sync", vMaxNumStepps, vMaxNumStepps);
   doCudaDevSync();
   return ErrorCode::OK;
 }

@@ -96,7 +96,7 @@ Bittner13Par::NodeLevel Bittner13Par::findNode1(uint32_t _n, PATCH &_bvh) {
   lPQ[0] = {_bvh.root(), 0.0f, 0};
   while (lSize > 0) {
     HelperStruct lCurr     = lPQ[0];
-    BVHNodePatch lCurrNode = _bvh.get(lCurr.node);
+    BVHNodePatch lCurrNode = _bvh.getSubset(lCurr.node);
     auto         lBBox     = _bvh.getAABB(lCurr.node, lCurr.level);
     CUDA_pop_heap(lBegin, lBegin + lSize);
     lSize--;
@@ -151,7 +151,7 @@ Bittner13Par::NodeLevel Bittner13Par::findNode2(uint32_t _n, PATCH &_bvh) {
   while (lMin < HUGE_VALF) {
     lCurr                  = lPQ[lMinIndex];
     lPQ[lMinIndex].cost    = HUGE_VALF;
-    BVHNodePatch lCurrNode = _bvh.get(lCurr.node);
+    BVHNodePatch lCurrNode = _bvh.getSubset(lCurr.node);
     auto         lBBox     = _bvh.getAABB(lCurr.node, lCurr.level);
 
     if ((lCurr.cost + lSArea) >= lBestCost) {
@@ -289,9 +289,11 @@ Bittner13Par::INS_RES Bittner13Par::reinsert(
     // Node is not patched ==> try to lock it
     IF_NOT_LOCK(lBestIndex) { return {false, 0, 0}; }
     lBest = _bvh.patchNode(lBestIndex, _update ? PINDEX_1ST_BEST : PINDEX_2ND_BEST);
+  } else if (lBestPatchIndex == PINDEX_GRAND_PARENT) {
+    lBest = _bvh.getPatchedNode(PINDEX_GRAND_PARENT);
   } else {
-    // Node is already owned by this thread ==> no need to lock it
-    lBest = _bvh.getPatchedNode(lBestPatchIndex);
+    // Node is already owned by this thread ==> no need to lock it -- but move to "correct" patch index
+    lBest = _bvh.movePatch(lBestPatchIndex, _update ? PINDEX_1ST_BEST : PINDEX_2ND_BEST);
   }
 
   BVHNodePatch *lNode           = _bvh.patchNode(_node, _update ? PINDEX_1ST_INSERT : PINDEX_2ND_INSERT);
@@ -307,7 +309,7 @@ Bittner13Par::INS_RES Bittner13Par::reinsert(
     }
     lRoot = _bvh.patchNode(lRootIndex, _update ? PINDEX_1ST_ROOT : PINDEX_2ND_ROOT);
   } else {
-    lRoot = _bvh.getPatchedNode(lRootPatchIndex);
+    lRoot = _bvh.movePatch(lRootPatchIndex, _update ? PINDEX_1ST_ROOT : PINDEX_2ND_ROOT);
   }
 
   // Insert the unused node

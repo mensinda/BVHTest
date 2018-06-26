@@ -127,7 +127,7 @@ __device__ CUDANodeLevel findNode1(uint32_t _n, PATCH &_bvh) {
   lPQ[0] = {_bvh.root(), 0.0f, 0};
   while (lSize > 0) {
     CUDAHelperStruct lCurr     = lPQ[0];
-    BVHNodePatch     lCurrNode = _bvh.get(lCurr.node);
+    BVHNodePatch     lCurrNode = _bvh.getSubset(lCurr.node);
     auto             lBBox     = _bvh.getAABB(lCurr.node, lCurr.level);
     CUDA_pop_heap(lBegin, lBegin + lSize);
     lSize--;
@@ -183,7 +183,7 @@ __device__ CUDANodeLevel findNode2(uint32_t _n, PATCH &_bvh) {
   while (lMin < HUGE_VALF) {
     lCurr                  = lPQ[lMinIndex];
     lPQ[lMinIndex].cost    = HUGE_VALF;
-    BVHNodePatch lCurrNode = _bvh.get(lCurr.node);
+    BVHNodePatch lCurrNode = _bvh.getSubset(lCurr.node);
     auto         lBBox     = _bvh.getAABB(lCurr.node, lCurr.level);
 
     if ((lCurr.cost + lSArea) >= lBestCost) {
@@ -275,9 +275,10 @@ __device__ CUDA_INS_RES
 
   if (lBestPatchIndex == UINT32_MAX) {
     lBest = _bvh.patchNode(lRes.node, _update ? PINDEX_1ST_BEST : PINDEX_2ND_BEST);
+  } else if (lBestPatchIndex == PINDEX_GRAND_PARENT) {
+    lBest = _bvh.getPatchedNode(PINDEX_GRAND_PARENT);
   } else {
-    // Node is already owned by this thread ==> no need to lock it
-    lBest = _bvh.getPatchedNode(lBestPatchIndex);
+    lBest = _bvh.movePatch(lBestPatchIndex, _update ? PINDEX_1ST_BEST : PINDEX_2ND_BEST);
   }
 
   BVHNodePatch *lNode           = _bvh.patchNode(_node, _update ? PINDEX_1ST_INSERT : PINDEX_2ND_INSERT);
@@ -289,7 +290,7 @@ __device__ CUDA_INS_RES
   if (lRootPatchIndex == UINT32_MAX) {
     lRoot = _bvh.patchNode(lRootIndex, _update ? PINDEX_1ST_ROOT : PINDEX_2ND_ROOT);
   } else {
-    lRoot = _bvh.getPatchedNode(lRootPatchIndex);
+    lRoot = _bvh.movePatch(lRootPatchIndex, _update ? PINDEX_1ST_ROOT : PINDEX_2ND_ROOT);
   }
 
   // Insert the unused node
@@ -561,7 +562,7 @@ __global__ void kCheckConflicts(PATCH *_patches, uint32_t *_flags, uint32_t *_sk
 
     uint32_t i;
     for (i = 0; i < NNode; ++i) {
-      uint32_t lIDX = lPatch.getPatchedNodeIndex(NNode - i - 1);
+      uint32_t lIDX = lPatch.getPatchedNodeIndex(i);
       if (lIDX == UINT32_MAX) { continue; }
       IF_NOT_LOCK(lIDX, lLockID) { break; }
     }
@@ -569,7 +570,7 @@ __global__ void kCheckConflicts(PATCH *_patches, uint32_t *_flags, uint32_t *_sk
     if (i == NNode) { continue; } // Loop finished --> all locked
 
     for (i = 0; i < NNode; ++i) {
-      uint32_t lIDX = lPatch.getPatchedNodeIndex(NNode - i - 1);
+      uint32_t lIDX = lPatch.getPatchedNodeIndex(i);
       if (lIDX == UINT32_MAX) { continue; }
       RELEASE_LOCK_S(lIDX, lLockID);
     }
