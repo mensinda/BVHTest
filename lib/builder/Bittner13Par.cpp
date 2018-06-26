@@ -295,7 +295,7 @@ Bittner13Par::INS_RES Bittner13Par::reinsert(
   }
 
   BVHNodePatch *lNode           = _bvh.patchNode(_node, _update ? PINDEX_1ST_INSERT : PINDEX_2ND_INSERT);
-  BVHNodePatch *lUnused         = _bvh.getAlreadyPatched(_unused);
+  BVHNodePatch *lUnused         = _bvh.getPatchedNode(_update ? PINDEX_NODE : PINDEX_PARENT);
   uint32_t      lRootIndex      = lBest->parent;
   uint32_t      lRootPatchIndex = _bvh.patchIndex(lRootIndex);
   BVHNodePatch *lRoot           = nullptr;

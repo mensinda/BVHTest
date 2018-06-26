@@ -138,7 +138,6 @@ class alignas(16) BVHPatch final {
   }
 
   CUDA_CALL BVHNode *getOrig(uint32_t _node) { return vBVH->get(_node); }
-  CUDA_CALL BVHNodePatch *getAlreadyPatched(uint32_t _node) { return &vNodes[patchIndex(_node)]; }
 
   CUDA_CALL BVHNodePatch *getPatchedNode(uint32_t _patchIndex) { return &vNodes[_patchIndex]; }
   CUDA_CALL uint32_t getPatchedNodeIndex(uint32_t _patchIndex) { return vPatch[_patchIndex]; }
@@ -151,8 +150,10 @@ class alignas(16) BVHPatch final {
     return lNode;
   }
 
+  //! \brief Resets only one node
   CUDA_CALL void clearNode(uint32_t _index) { vPatch[_index] = UINT32_MAX; }
 
+  //! \brief Only Resets the paths
   CUDA_CALL void clearPaths() {
     for (uint32_t i = 0; i < NPath; ++i) { vPaths[i].vPathLength = 0; }
     vNumPaths = 0;
@@ -163,6 +164,7 @@ class alignas(16) BVHPatch final {
     clearPaths();
   }
 
+  //! \brief applys all patches to the BVH
   CUDA_CALL void apply() {
     for (uint32_t i = 0; i < NNode; ++i) {
       if (vPatch[i] == UINT32_MAX) { continue; }
@@ -174,6 +176,7 @@ class alignas(16) BVHPatch final {
     }
   }
 
+  //! \brief Applys only one Patch to the BVH
   CUDA_CALL void applyOne(uint32_t _index) {
     assert(_index < NNode);
     assert(vPatch[_index] != UINT32_MAX);

@@ -27,6 +27,7 @@ using namespace BVHTest::view;
 using namespace BVHTest::base;
 using namespace BVHTest::misc;
 
+namespace {
 struct VBOData {
   vec3 pos;
   vec3 color;
@@ -36,6 +37,7 @@ struct Line {
   uint32_t start;
   uint32_t end;
 };
+} // namespace
 
 static const char *gVertexShader = R"__GLSL__(
 #version 330 core
