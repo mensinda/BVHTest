@@ -37,7 +37,7 @@ struct alignas(16) BVHNodePatch {
 
 const size_t NNode = 10;
 const size_t NPath = 2;
-const size_t NAABB = 6;
+const size_t NAABB = 3;
 
 struct alignas(16) MiniPatch final {
   BVHNodePatch vNodes[NNode];
@@ -75,16 +75,16 @@ class alignas(16) BVHPatch final {
   uint32_t     vPatch[NNode];
   uint32_t     vSize     = 0;
   uint32_t     vNumPaths = 0;
-  BVH *        vBVH;
 
   struct AABBPath {
     uint32_t vAABBPath[NAABB];
-    BBox     vAABBs[NAABB];
-    uint16_t vPathLength = 0;
-    uint16_t vSize       = 0;
+    AABB     vAABBs[NAABB];
+    uint32_t vPathLength = 0;
   };
 
   AABBPath vPaths[NPath];
+
+  BVH *vBVH;
 
  public:
   BVHPatch() = delete;
@@ -145,10 +145,7 @@ class alignas(16) BVHPatch final {
   CUDA_CALL void clear() {
     vSize     = 0;
     vNumPaths = 0;
-    for (uint32_t i = 0; i < NPath; ++i) {
-      vPaths[i].vSize       = 0;
-      vPaths[i].vPathLength = 0;
-    }
+    for (uint32_t i = 0; i < NPath; ++i) { vPaths[i].vPathLength = 0; }
   }
 
   CUDA_CALL void apply() {
@@ -206,8 +203,7 @@ class alignas(16) BVHPatch final {
       lAABB.box.mergeWith(getAABB(lNodePairs[i].first, lNumNodes - i - 1).box);
 
       vPaths[vNumPaths].vAABBPath[i] = lNodePairs[i].second;
-      vPaths[vNumPaths].vAABBs[i]    = {lAABB.box, lAABB.box.surfaceArea()};
-      vPaths[vNumPaths].vSize++;
+      vPaths[vNumPaths].vAABBs[i]    = lAABB.box;
     }
 
     vPaths[vNumPaths].vPathLength = lNumNodes;
@@ -217,7 +213,9 @@ class alignas(16) BVHPatch final {
   CUDA_CALL BBox getAABB(uint32_t _node, uint32_t _level) {
     for (int32_t i = NPath - 1; i >= 0; --i) {
       uint32_t lIndex = vPaths[i].vPathLength - _level - 1; // May underflow but this is fine (one check less)
-      if (lIndex < vPaths[vNumPaths].vSize && vPaths[i].vAABBPath[lIndex] == _node) { return vPaths[i].vAABBs[lIndex]; }
+      if (lIndex < NAABB && vPaths[i].vAABBPath[lIndex] == _node) {
+        return {vPaths[i].vAABBs[lIndex], vPaths[i].vAABBs[lIndex].surfaceArea()};
+      }
     }
     BVHNode *lNode = vBVH->get(_node);
     return {lNode->bbox, lNode->surfaceArea};
