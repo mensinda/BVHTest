@@ -558,21 +558,33 @@ __global__ void kCheckConflicts(PATCH *_patches, uint32_t *_flags, uint32_t *_sk
   uint32_t lLockID = index + 1;
 
   for (uint32_t k = index; k < _num; k += stride) {
-    PATCH lPatch = _patches[k];
+    uint32_t lPatch[NNode];
+    for (uint32_t i = 0; i < NNode; ++i) { lPatch[i] = _patches[k].getPatchedNodeIndex(i); }
 
-    uint32_t i;
-    for (i = 0; i < NNode; ++i) {
-      uint32_t lIDX = lPatch.getPatchedNodeIndex(i);
-      if (lIDX == UINT32_MAX) { continue; }
-      IF_NOT_LOCK(lIDX, lLockID) { break; }
-    }
+#define TRY_LOCK(N)                                                                                                    \
+  if (lPatch[N] != UINT32_MAX) {                                                                                       \
+    IF_NOT_LOCK(lPatch[N], lLockID) { goto FAILED; }                                                                   \
+  }
 
-    if (i == NNode) { continue; } // Loop finished --> all locked
+    TRY_LOCK(0);
+    TRY_LOCK(1);
+    TRY_LOCK(2);
+    TRY_LOCK(3);
+    TRY_LOCK(4);
+    TRY_LOCK(5);
+    TRY_LOCK(6);
+    TRY_LOCK(7);
+    TRY_LOCK(8);
+    TRY_LOCK(9);
 
-    for (i = 0; i < NNode; ++i) {
-      uint32_t lIDX = lPatch.getPatchedNodeIndex(i);
-      if (lIDX == UINT32_MAX) { continue; }
-      RELEASE_LOCK_S(lIDX, lLockID);
+#undef TRY_LOCK
+
+    continue;
+
+  FAILED:
+
+    for (uint32_t i = 0; i < NNode; ++i) {
+      if (lPatch[i] != UINT32_MAX) { RELEASE_LOCK_S(lPatch[i], lLockID); }
     }
 
     _skip[k] += 1;
