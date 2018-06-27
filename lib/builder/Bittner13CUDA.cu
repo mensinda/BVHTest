@@ -431,6 +431,7 @@ __global__ void kFixTree3_2(uint32_t *_toFix, SumMinCUDA _SMF, BVHNode _nodes, u
   uint32_t lNode;
   uint32_t lLeft;
   uint32_t lRight;
+  uint32_t lParent;
   float    lSArea;
 
   for (uint32_t i = index; i < _num; i += stride) {
@@ -440,9 +441,10 @@ __global__ void kFixTree3_2(uint32_t *_toFix, SumMinCUDA _SMF, BVHNode _nodes, u
     while (true) {
       if (atomicSub(&_SMF.flags[lNode], 1) != 1) { break; } // Stop when already locked (locked == 1)
 
-      lLeft  = _nodes.left[lNode];
-      lRight = _nodes.right[lNode];
-      lAABB  = _nodes.bbox[lLeft];
+      lParent = _nodes.parent[lNode];
+      lLeft   = _nodes.left[lNode];
+      lRight  = _nodes.right[lNode];
+      lAABB   = _nodes.bbox[lLeft];
       lAABB.mergeWith(_nodes.bbox[lRight]);
       lSArea = lAABB.surfaceArea();
 
@@ -453,8 +455,8 @@ __global__ void kFixTree3_2(uint32_t *_toFix, SumMinCUDA _SMF, BVHNode _nodes, u
       _SMF.mins[lNode]          = _SMF.mins[lLeft] < _SMF.mins[lRight] ? _SMF.mins[lLeft] : _SMF.mins[lRight];
 
       // Check if root
-      if (lNode == _nodes.parent[lNode]) { break; }
-      lNode = _nodes.parent[lNode];
+      if (lNode == lParent) { break; }
+      lNode = lParent;
     }
   }
 }

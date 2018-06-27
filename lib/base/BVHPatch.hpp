@@ -270,7 +270,7 @@ class alignas(16) BVHPatch final {
    */
   CUDA_CALL void patchAABBFrom(uint32_t _node) {
     uint32_t lNodeIndex = _node;
-    uint64_t lStart     = get(lNodeIndex);
+    uint64_t lStart     = getSubset(lNodeIndex);
     uint64_t lNode      = lStart;
 
     // Pair: sibling node (= the node we need to fetch) , current Node index
@@ -296,7 +296,7 @@ class alignas(16) BVHPatch final {
       if ((uint32_t)lNodeIndex == root()) { break; } // We processed the root ==> everything is done
 
       lNodeIndex = *parent(lNode);
-      lNode      = get(lNodeIndex);
+      lNode      = getSubset(lNodeIndex);
     }
 
     // Merge the BBox up the tree
