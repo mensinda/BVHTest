@@ -81,7 +81,7 @@ bool Validate::checkTree(State &_state) {
       lMaxLevel = std::max(lLevel, lMaxLevel);
       continue;
     } else {
-      REQUIRE(lBVH.numChildren(lNode) == 0, lWrongCildCountErrors);
+      REQUIRE(*lBVH.numChildren(lNode) == 0, lWrongCildCountErrors);
     }
 
     // Backtrack

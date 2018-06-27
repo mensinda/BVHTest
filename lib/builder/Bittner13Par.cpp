@@ -304,7 +304,7 @@ Bittner13Par::INS_RES Bittner13Par::reinsert(
   }
 
   // Insert the unused node
-  if (_bvh.isLeftChild(lBest)) {
+  if (_bvh.patch_isLeftChild(lBest)) {
     *_bvh.patch_left(lRoot)     = _unused;
     *_bvh.patch_isLeft(lUnused) = TRUE;
   } else {
@@ -338,10 +338,10 @@ void Bittner13Par::fixTree(uint32_t _node, BVH &_bvh, SumMin *_sumMin) {
   bool     lLastWasLeft = true;
   uint32_t lCurrSibling = 0;
 
-  AABB  lBBox = *_bvh.bbox(lLast);
-  float lSum  = SUM_OF(lLast);
-  float lMin  = MIN_OF(lLast);
-  float lNum  = *_bvh.numChildren(lLast);
+  AABB     lBBox = *_bvh.bbox(lLast);
+  float    lSum  = SUM_OF(lLast);
+  float    lMin  = MIN_OF(lLast);
+  uint32_t lNum  = *_bvh.numChildren(lLast);
 
   float lSArea;
   RELEASE_LOCK(lLast);
@@ -517,7 +517,7 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
       /*                | |   | |                                                                                     */
       /*                |_|   |_|                                                                                     */
 
-      // #pragma omp parallel for schedule(dynamic, 128)
+#pragma omp parallel for schedule(dynamic, 128)
       for (uint32_t k = 0; k < lChunkSize; ++k) {
         lPatches[k].clear();
 

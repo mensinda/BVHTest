@@ -292,7 +292,7 @@ __device__ CUDA_INS_RES
   }
 
   // Insert the unused node
-  if (_bvh.isLeftChild(lBest)) {
+  if (_bvh.patch_isLeftChild(lBest)) {
     *_bvh.patch_left(lRoot)     = _unused;
     *_bvh.patch_isLeft(lUnused) = TRUE;
   } else {
