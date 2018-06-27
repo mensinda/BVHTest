@@ -148,7 +148,7 @@ __device__ CUDANodeLevel findNode1(uint32_t _n, PATCH &_bvh) {
     float lNewInduced = lTotalCost - lBBox.sarea;
     if ((lNewInduced + lSArea) < lBestCost) {
       if (!_bvh.isLeaf(lCurrNode)) {
-        assert(lSize + 2 < QUEUE_SIZE);
+        assert(lSize + 2 < CUDA_QUEUE_SIZE);
         lPQ[lSize + 0] = {*_bvh.left(lCurrNode), lNewInduced, lCurr.level + 1};
         lPQ[lSize + 1] = {*_bvh.right(lCurrNode), lNewInduced, lCurr.level + 1};
         CUDA_push_heap(lBegin, lBegin + lSize + 1);

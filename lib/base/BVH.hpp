@@ -212,7 +212,6 @@ class BVH final {
   }
 
   inline void setMemory(BVHNode _mem, size_t _numNodes, size_t _capacity) {
-    clear();
     bvh       = _mem;
     vSize     = _numNodes;
     vCapacity = _capacity;
