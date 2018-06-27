@@ -26,9 +26,9 @@ Validate::~Validate() {}
 void Validate::fromJSON(const json &) {}
 json Validate::toJSON() const { return json::object(); }
 
-#define PARENT lBVH.parent(lNode)
-#define LEFT lBVH.left(lNode)
-#define RIGHT lBVH.right(lNode)
+#define PARENT *lBVH.parent(lNode)
+#define LEFT *lBVH.left(lNode)
+#define RIGHT *lBVH.right(lNode)
 #define REQUIRE(a, cnt)                                                                                                \
   if (not(a)) {                                                                                                        \
     cnt++;                                                                                                             \
@@ -58,19 +58,20 @@ bool Validate::checkTree(State &_state) {
   vector<uint16_t> lTraversed;
   lTraversed.resize(lBVH.size(), 0);
 
-  REQUIRE(lNode == lBVH.parent(lNode), lWrongParentErrors); // Loop at root
+  REQUIRE(lNode == *lBVH.parent(lNode), lWrongParentErrors); // Loop at root
 
   while (true) {
     lTraversed[lNode] = 1;
-    REQUIRE(lBVH.level(lNode) == lLevel, lLevelErrors);
+    REQUIRE(*lBVH.level(lNode) == lLevel, lLevelErrors);
     if (lNode != lBVH.root()) {
-      if (lBVH.isLeftChild(lNode)) { REQUIRE(lBVH.left(PARENT) == lNode, lLeftRightErrors); }
-      if (lBVH.isRightChild(lNode)) { REQUIRE(lBVH.right(PARENT) == lNode, lLeftRightErrors); }
+      if (lBVH.isLeftChild(lNode)) { REQUIRE(*lBVH.left(PARENT) == lNode, lLeftRightErrors); }
+      if (lBVH.isRightChild(lNode)) { REQUIRE(*lBVH.right(PARENT) == lNode, lLeftRightErrors); }
     }
 
     if (!lBVH.isLeaf(lNode)) {
       REQUIRE(LEFT != RIGHT, lSameChildrenErrors);
-      REQUIRE(lBVH.numChildren(lNode) == lBVH.numChildren(LEFT) + lBVH.numChildren(RIGHT) + 2, lWrongCildCountErrors);
+      REQUIRE(*lBVH.numChildren(lNode) == *lBVH.numChildren(LEFT) + *lBVH.numChildren(RIGHT) + 2,
+              lWrongCildCountErrors);
       lBitStack <<= 1;
       lBitStack |= 1;
       lLastNode = lNode;
@@ -92,7 +93,7 @@ bool Validate::checkTree(State &_state) {
     }
 
     lLastNode = PARENT;
-    lNode     = lBVH.right(PARENT);
+    lNode     = *lBVH.right(PARENT);
     REQUIRE(PARENT == lLastNode, lWrongParentErrors);
     lBitStack ^= 1;
   }
@@ -131,9 +132,9 @@ bool Validate::checkBBoxes(State &_state) {
   for (uint32_t lNode = 0; lNode < lBVH.size(); ++lNode) {
     if (!lBVH.isLeaf(lNode)) {
       uint32_t lErrors = 0;
-      AABB     lBBox   = lBVH.bbox(lNode);
-      AABB     lLBBox  = lBVH.bbox(LEFT);
-      AABB     lRBBox  = lBVH.bbox(RIGHT);
+      AABB     lBBox   = *lBVH.bbox(lNode);
+      AABB     lLBBox  = *lBVH.bbox(LEFT);
+      AABB     lRBBox  = *lBVH.bbox(RIGHT);
 
       REQUIRE(lBBox.min.x <= lLBBox.min.x, lErrors);
       REQUIRE(lBBox.min.y <= lLBBox.min.y, lErrors);
@@ -166,9 +167,9 @@ bool Validate::checkBBoxesStrict(State &_state) {
   for (uint32_t lNode = 0; lNode < lBVH.size(); ++lNode) {
     if (!lBVH.isLeaf(lNode)) {
       uint32_t lErrors = 0;
-      AABB     lBBox   = lBVH.bbox(lNode);
-      AABB     lLBBox  = lBVH.bbox(LEFT);
-      AABB     lRBBox  = lBVH.bbox(RIGHT);
+      AABB     lBBox   = *lBVH.bbox(lNode);
+      AABB     lLBBox  = *lBVH.bbox(LEFT);
+      AABB     lRBBox  = *lBVH.bbox(RIGHT);
 
       REQUIRE(lBBox.min.x == min(lLBBox.min.x, lRBBox.min.x), lErrors);
       REQUIRE(lBBox.min.y == min(lLBBox.min.y, lRBBox.min.y), lErrors);
@@ -192,7 +193,7 @@ bool Validate::checkSurfaceArea(State &_state) {
 
 #pragma omp parallel for
   for (uint32_t lNode = 0; lNode < lBVH.size(); ++lNode) {
-    REQUIRE(fabs(lBVH.surfaceArea(lNode) - lBVH.bbox(lNode).surfaceArea()) < 0.000001f, lTotalErros);
+    REQUIRE(fabs(*lBVH.surfaceArea(lNode) - lBVH.bbox(lNode)->surfaceArea()) < 0.000001f, lTotalErros);
   }
 
   ERROR_IF(lTotalErros, "{:<3} wrong pre-calculated surface areas");
@@ -212,7 +213,7 @@ bool Validate::checkTris(State &_state) {
   for (uint32_t lNode = 0; lNode < lBVH.size(); ++lNode) {
     if (lBVH.isLeaf(lNode)) {
       uint32_t lErrors = 0;
-      AABB     lBBox   = lBVH.bbox(lNode);
+      AABB     lBBox   = *lBVH.bbox(lNode);
       uint32_t lStart  = lBVH.beginFaces(lNode);
       uint32_t lEnd    = lStart + lBVH.numFaces(lNode);
 

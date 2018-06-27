@@ -91,10 +91,10 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &_bvh) {
   while (true) {
     if (!_bvh.isLeaf(lNode)) {
       lRes.intCount++;
-      uint32_t lLeft     = _bvh.left(lNode);
-      uint32_t lRight    = _bvh.right(lNode);
-      bool     lLeftHit  = _bvh.bbox(lLeft).intersect(_ray, 0.01f, lNearest + 0.01f, lMinLeft, lTemp);
-      bool     lRightHit = _bvh.bbox(lRight).intersect(_ray, 0.01f, lNearest + 0.01f, lMinRight, lTemp);
+      uint32_t lLeft     = *_bvh.left(lNode);
+      uint32_t lRight    = *_bvh.right(lNode);
+      bool     lLeftHit  = _bvh.bbox(lLeft)->intersect(_ray, 0.01f, lNearest + 0.01f, lMinLeft, lTemp);
+      bool     lRightHit = _bvh.bbox(lRight)->intersect(_ray, 0.01f, lNearest + 0.01f, lMinRight, lTemp);
 
       if (lLeftHit || lRightHit) {
         lBitStack <<= 1;
@@ -130,7 +130,7 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &_bvh) {
     // Backtrac
     while ((lBitStack & 1) == 0) {
       if (lBitStack == 0) { goto LABEL_END; } // I know, I know...
-      lNode = _bvh.parent(lNode);
+      lNode = *_bvh.parent(lNode);
       lBitStack >>= 1;
     }
 

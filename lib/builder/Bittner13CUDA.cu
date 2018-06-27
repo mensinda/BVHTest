@@ -147,7 +147,7 @@ __device__ CUDANodeLevel findNode1(uint32_t _n, PATCH &_bvh) {
 
     float lNewInduced = lTotalCost - lBBox.sarea;
     if ((lNewInduced + lSArea) < lBestCost) {
-      if (!_bvh.isLeft(lCurrNode)) {
+      if (!_bvh.isLeaf(lCurrNode)) {
         assert(lSize + 2 < QUEUE_SIZE);
         lPQ[lSize + 0] = {_bvh.left(lCurrNode), lNewInduced, lCurr.level + 1};
         lPQ[lSize + 1] = {_bvh.right(lCurrNode), lNewInduced, lCurr.level + 1};
@@ -199,7 +199,7 @@ __device__ CUDANodeLevel findNode2(uint32_t _n, PATCH &_bvh) {
     }
 
     float lNewInduced = lTotalCost - lBBox.sarea;
-    if ((lNewInduced + lSArea) < lBestCost && !_bvh.isLeft(lCurrNode)) {
+    if ((lNewInduced + lSArea) < lBestCost && !_bvh.isLeaf(lCurrNode)) {
       lPQ[lMinIndex] = {_bvh.left(lCurrNode), lNewInduced, lCurr.level + 1};
       lPQ[lMaxIndex] = {_bvh.right(lCurrNode), lNewInduced, lCurr.level + 1};
     }
@@ -226,19 +226,17 @@ __device__ CUDA_RM_RES removeNode(uint32_t _node, PATCH &_bvh, uint32_t _lockID)
   CUDA_RM_RES lFalse = {false, {0, 0}, {0, 0}, {0, 0}};
   if (_bvh.orig_isLeaf(_node) || _node == _bvh.root()) { return lFalse; }
 
-  uint16_t lNode         = _bvh.patchNode(_node, PINDEX_NODE);
-  uint32_t lParentIndex  = _bvh.patch_parent(lNode);
-  uint32_t lLeftIndex    = _bvh.patch_left(lNode);
-  uint32_t lRightIndex   = _bvh.patch_right(lNode);
-  uint32_t lSiblingIndex = _bvh.isRightChild(lNode) ? _bvh.orig_left(lParentIndex) : _bvh.orig_right(lParentIndex);
+  uint16_t lNode             = _bvh.patchNode(_node, PINDEX_NODE);
+  uint32_t lParentIndex      = _bvh.patch_parent(lNode);
+  uint32_t lLeftIndex        = _bvh.patch_left(lNode);
+  uint32_t lRightIndex       = _bvh.patch_right(lNode);
+  uint16_t lParent           = _bvh.patchNode(lParentIndex, PINDEX_PARENT);
+  uint32_t lSiblingIndex     = _bvh.isRightChild(lNode) ? _bvh.patch_left(lParent) : _bvh.patch_right(lParent);
+  uint32_t lGrandParentIndex = _bvh.patch_parent(lParent);
+  uint16_t lSibling          = _bvh.patchNode(lSiblingIndex, PINDEX_SIBLING);
+  uint16_t lGrandParent      = _bvh.patchNode(lGrandParentIndex, PINDEX_GRAND_PARENT);
 
   if (lParentIndex == _bvh.root()) { return lFalse; } // Can not remove node with this algorithm
-
-  uint16_t lSibling          = _bvh.patchNode(lSiblingIndex, PINDEX_SIBLING);
-  uint16_t lParent           = _bvh.patchNode(lParentIndex, PINDEX_PARENT);
-  uint32_t lGrandParentIndex = _bvh.patch_parent(lParent);
-
-  uint16_t lGrandParent = _bvh.patchNode(lGrandParentIndex, PINDEX_GRAND_PARENT);
 
   // FREE LIST:   lNode, lParent
   // INSERT LIST: lLeft, lRight
@@ -295,11 +293,11 @@ __device__ CUDA_INS_RES
 
   // Insert the unused node
   if (_bvh.isLeftChild(lBest)) {
-    _bvh.patch_left(lRoot) = _unused;
-    _bvh.isLeft(lUnused)   = TRUE;
+    _bvh.patch_left(lRoot)     = _unused;
+    _bvh.patch_isLeft(lUnused) = TRUE;
   } else {
-    _bvh.patch_right(lRoot) = _unused;
-    _bvh.isLeft(lUnused)    = FALSE;
+    _bvh.patch_right(lRoot)    = _unused;
+    _bvh.patch_isLeft(lUnused) = FALSE;
   }
 
 
