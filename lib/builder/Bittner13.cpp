@@ -235,7 +235,7 @@ void Bittner13::initSumAndMin(BVH &_bvh) {
   float    lSArea = 0.0f;
 
   while (true) {
-    while (!_bvh.isLeft(lNode)) {
+    while (!_bvh.isLeaf(lNode)) {
       lBitStack <<= 1;
       lBitStack |= 1;
       lNode = _bvh.left(lNode);
