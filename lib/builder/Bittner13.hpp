@@ -50,12 +50,6 @@ class Bittner13 final : public OptimizerBase {
 
   std::vector<SumMin> vSumAndMin;
 
-  inline float directCost(base::BVHNode const *_l, base::BVHNode const *_x) {
-    base::AABB lMerge = _l->bbox;
-    lMerge.mergeWith(_x->bbox);
-    return lMerge.surfaceArea();
-  }
-
   uint32_t findNodeForReinsertion(uint32_t _n, base::BVH &_bvh);
   RM_RES   removeNode(uint32_t _node, base::BVH &_bvh);
   void     reinsert(uint32_t _node, uint32_t _unused, base::BVH &_bvh);

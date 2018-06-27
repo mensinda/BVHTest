@@ -21,23 +21,27 @@
 namespace BVHTest {
 namespace base {
 
-struct alignas(16) BVHNodePatch {
-  uint32_t parent;     // Index of the parent
-  uint32_t left;       // Left child or index of first triangle when leaf
-  uint32_t right;      // Right child or number of faces when leaf
-  uint16_t isLeafFlag; // 0 ==> leaf
-  uint16_t isLeft;     // 1 if the Node is the left child of the parent -- 0 otherwise (right child)
-
-  CUDA_CALL bool isLeaf() const noexcept { return isLeafFlag == 0; }
-  CUDA_CALL uint32_t beginFaces() const noexcept { return left; }
-  CUDA_CALL uint32_t numFaces() const noexcept { return right; }
-  CUDA_CALL bool     isLeftChild() const noexcept { return isLeft != 0; }
-  CUDA_CALL bool     isRightChild() const noexcept { return isLeft == 0; }
-};
-
 const size_t NNode = 10;
 const size_t NPath = 2;
 const size_t NAABB = 3;
+
+const uint64_t MASK_INDEX   = (1ul << 32ul) - 1ul;
+const uint64_t MASK_CONTROL = ~MASK_INDEX;
+const uint64_t PATCHED_BIT  = (1ul << 32ul);
+
+struct BVHNodePatch {
+  uint32_t parent[NNode];     // Index of the parent
+  uint32_t left[NNode];       // Left child or index of first triangle when leaf
+  uint32_t right[NNode];      // Right child or number of faces when leaf
+  uint8_t  isLeafFlag[NNode]; // 0 ==> leaf
+  uint8_t  isLeft[NNode];     // 1 if the Node is the left child of the parent -- 0 otherwise (right child)
+
+  CUDA_CALL bool isLeaf(uint32_t _n) const noexcept { return isLeafFlag[_n] == 0; }
+  CUDA_CALL uint32_t beginFaces(uint32_t _n) const noexcept { return left[_n]; }
+  CUDA_CALL uint32_t numFaces(uint32_t _n) const noexcept { return right[_n]; }
+  CUDA_CALL bool     isLeftChild(uint32_t _n) const noexcept { return isLeft[_n] != 0; }
+  CUDA_CALL bool     isRightChild(uint32_t _n) const noexcept { return isLeft[_n] == 0; }
+};
 
 const uint32_t PINDEX_GRAND_PARENT = 0;
 const uint32_t PINDEX_1ST_ROOT     = 1;
@@ -53,28 +57,26 @@ const uint32_t PINDEX_PARENT       = 9;
 const uint32_t PINDEX_SUBSET_END = 4;
 
 struct alignas(16) MiniPatch final {
-  BVHNodePatch vNodes[NNode];
+  BVHNodePatch vNodes;
   uint32_t     vPatch[NNode];
 
   CUDA_CALL void apply(BVH *_bvh) {
     for (uint32_t i = 0; i < NNode; ++i) {
       if (vPatch[i] == UINT32_MAX) { continue; }
-      BVHNode *lNode = _bvh->get(vPatch[i]);
-      lNode->parent  = vNodes[i].parent;
-      lNode->left    = vNodes[i].left;
-      lNode->right   = vNodes[i].right;
-      lNode->isLeft  = vNodes[i].isLeft;
+      _bvh->parent(vPatch[i]) = vNodes.parent[i];
+      _bvh->left(vPatch[i])   = vNodes.left[i];
+      _bvh->right(vPatch[i])  = vNodes.right[i];
+      _bvh->isLeft(vPatch[i]) = vNodes.isLeft[i];
     }
   }
 
   CUDA_CALL void applyOne(uint32_t _index, BVH *_bvh) {
     assert(_index < NNode);
     assert(vPatch[_index] != UINT32_MAX);
-    BVHNode *lNode = _bvh->get(vPatch[_index]);
-    lNode->parent  = vNodes[_index].parent;
-    lNode->left    = vNodes[_index].left;
-    lNode->right   = vNodes[_index].right;
-    lNode->isLeft  = vNodes[_index].isLeft;
+    _bvh->parent(vPatch[_index]) = vNodes.parent[_index];
+    _bvh->left(vPatch[_index])   = vNodes.left[_index];
+    _bvh->right(vPatch[_index])  = vNodes.right[_index];
+    _bvh->isLeft(vPatch[_index]) = vNodes.isLeft[_index];
   }
 
   CUDA_CALL void clear() {
@@ -95,7 +97,7 @@ class alignas(16) BVHPatch final {
   };
 
  private:
-  BVHNodePatch vNodes[NNode];
+  BVHNodePatch vNodes;
   uint32_t     vPatch[NNode];
   uint32_t     vNumPaths = 0;
 
@@ -112,28 +114,6 @@ class alignas(16) BVHPatch final {
  public:
   BVHPatch() = delete;
   CUDA_CALL BVHPatch(BVH *_bvh) : vBVH(_bvh) { clear(); }
-
-  CUDA_CALL uint32_t sibling(uint32_t _node) {
-    return get(_node).isRightChild() ? get(get(_node).parent).left : get(get(_node).parent).right;
-  }
-
-  CUDA_CALL uint32_t sibling(BVHNode const &_node) {
-    return _node.isRightChild() ? get(_node.parent).left : get(_node.parent).right;
-  }
-
-  CUDA_CALL uint32_t sibling(BVHNodePatch const &_node) {
-    return _node.isRightChild() ? get(_node.parent).left : get(_node.parent).right;
-  }
-
-  static CUDA_CALL BVHNodePatch node2PatchedNode(BVHNode const &_n) noexcept {
-    BVHNodePatch lRes;
-    lRes.parent     = _n.parent;
-    lRes.left       = _n.left;
-    lRes.right      = _n.right;
-    lRes.isLeft     = _n.isLeft;
-    lRes.isLeafFlag = static_cast<uint16_t>(_n.numChildren);
-    return lRes;
-  }
 
   // Optimized for findNode -- only checks the required nodes
   CUDA_CALL uint32_t patchIndexSubset(uint32_t _node) const noexcept {
@@ -153,38 +133,72 @@ class alignas(16) BVHPatch final {
     return UINT32_MAX;
   }
 
-  CUDA_CALL BVHNodePatch get(uint32_t _node) {
+  CUDA_CALL uint64_t get(uint32_t _node) {
     uint32_t lIndex = patchIndex(_node);
-    if (lIndex == UINT32_MAX) { return node2PatchedNode(*vBVH->get(_node)); }
+    if (lIndex == UINT32_MAX) { return _node; }
     assert(lIndex < NNode);
-    return vNodes[lIndex];
+    return PATCHED_BIT | lIndex;
   }
 
   //! \brief only looks at the subset of the patch that is relevant for findNode
-  CUDA_CALL BVHNodePatch getSubset(uint32_t _node) {
+  CUDA_CALL uint64_t getSubset(uint32_t _node) {
     uint32_t lIndex = patchIndexSubset(_node);
-    if (lIndex == UINT32_MAX) { return node2PatchedNode(*vBVH->get(_node)); }
+    if (lIndex == UINT32_MAX) { return _node; }
     assert(lIndex < NNode);
-    return vNodes[lIndex];
+    return PATCHED_BIT | lIndex;
   }
 
-  CUDA_CALL BVHNode *getOrig(uint32_t _node) { return vBVH->get(_node); }
+  CUDA_CALL uint32_t &parent(uint64_t _n) noexcept {
+    return _n & PATCHED_BIT ? vNodes.parent[(uint32_t)_n] : vBVH->parent((uint32_t)_n);
+  }
+  CUDA_CALL uint32_t &left(uint64_t _n) noexcept {
+    return _n & PATCHED_BIT ? vNodes.left[(uint32_t)_n] : vBVH->left((uint32_t)_n);
+  }
+  CUDA_CALL uint32_t &right(uint64_t _n) noexcept {
+    return _n & PATCHED_BIT ? vNodes.right[(uint32_t)_n] : vBVH->right((uint32_t)_n);
+  }
+  CUDA_CALL uint8_t &isLeft(uint64_t _n) noexcept {
+    return _n & PATCHED_BIT ? vNodes.isLeft[(uint32_t)_n] : vBVH->isLeft((uint32_t)_n);
+  }
 
-  CUDA_CALL BVHNodePatch *getPatchedNode(uint32_t _patchIndex) { return &vNodes[_patchIndex]; }
+  CUDA_CALL bool isLeaf(uint64_t _n) const noexcept {
+    return _n & PATCHED_BIT ? vNodes.isLeaf((uint32_t)_n) : vBVH->isLeaf((uint32_t)_n);
+  }
+  CUDA_CALL uint32_t beginFaces(uint64_t _n) const noexcept {
+    return _n & PATCHED_BIT ? vNodes.beginFaces((uint32_t)_n) : vBVH->beginFaces((uint32_t)_n);
+  }
+  CUDA_CALL uint32_t numFaces(uint64_t _n) const noexcept {
+    return _n & PATCHED_BIT ? vNodes.numFaces((uint32_t)_n) : vBVH->numFaces((uint32_t)_n);
+  }
+  CUDA_CALL bool isLeftChild(uint64_t _n) const noexcept {
+    return _n & PATCHED_BIT ? vNodes.isLeftChild((uint32_t)_n) : vBVH->isLeftChild((uint32_t)_n);
+  }
+  CUDA_CALL bool isRightChild(uint64_t _n) const noexcept {
+    return _n & PATCHED_BIT ? vNodes.isRightChild((uint32_t)_n) : vBVH->isRightChild((uint32_t)_n);
+  }
+
   CUDA_CALL uint32_t getPatchedNodeIndex(uint32_t _patchIndex) { return vPatch[_patchIndex]; }
 
-  CUDA_CALL BVHNodePatch *patchNode(uint32_t _node, uint32_t _index) {
+  CUDA_CALL uint32_t patchNode(uint32_t _node, uint32_t _index) {
     assert(_index < NNode);
-    vPatch[_index] = _node;
-    vNodes[_index] = node2PatchedNode(*vBVH->get(_node));
-    return &vNodes[_index];
+    vPatch[_index]            = _node;
+    vNodes.parent[_index]     = vBVH->parent(_node);
+    vNodes.left[_index]       = vBVH->left(_node);
+    vNodes.right[_index]      = vBVH->right(_node);
+    vNodes.isLeafFlag[_index] = vBVH->isLeaf(_node) ? TRUE : FALSE;
+    vNodes.isLeft[_index]     = vBVH->isLeft(_node);
+    return _index;
   }
 
-  CUDA_CALL BVHNodePatch *movePatch(uint32_t _from, uint32_t _to) {
-    vPatch[_to]   = vPatch[_from];
-    vPatch[_from] = UINT32_MAX;
-    vNodes[_to]   = vNodes[_from];
-    return &vNodes[_to];
+  CUDA_CALL uint32_t movePatch(uint32_t _from, uint32_t _to) {
+    vPatch[_to]            = vPatch[_from];
+    vPatch[_from]          = UINT32_MAX;
+    vNodes.parent[_to]     = vNodes.parent[_from];
+    vNodes.left[_to]       = vNodes.left[_from];
+    vNodes.right[_to]      = vNodes.right[_from];
+    vNodes.isLeafFlag[_to] = vNodes.isLeafFlag[_from];
+    vNodes.isLeft[_to]     = vNodes.isLeft[_from];
+    return _to;
   }
 
   //! \brief Resets only one node
@@ -205,11 +219,10 @@ class alignas(16) BVHPatch final {
   CUDA_CALL void apply() {
     for (uint32_t i = 0; i < NNode; ++i) {
       if (vPatch[i] == UINT32_MAX) { continue; }
-      BVHNode *lNode = vBVH->get(vPatch[i]);
-      lNode->parent  = vNodes[i].parent;
-      lNode->left    = vNodes[i].left;
-      lNode->right   = vNodes[i].right;
-      lNode->isLeft  = vNodes[i].isLeft;
+      vBVH->parent(vPatch[i]) = vNodes.parent[i];
+      vBVH->left(vPatch[i])   = vNodes.left[i];
+      vBVH->right(vPatch[i])  = vNodes.right[i];
+      vBVH->isLeft(vPatch[i]) = vNodes.isLeft[i];
     }
   }
 
@@ -217,11 +230,10 @@ class alignas(16) BVHPatch final {
   CUDA_CALL void applyOne(uint32_t _index) {
     assert(_index < NNode);
     assert(vPatch[_index] != UINT32_MAX);
-    BVHNode *lNode = vBVH->get(vPatch[_index]);
-    lNode->parent  = vNodes[_index].parent;
-    lNode->left    = vNodes[_index].left;
-    lNode->right   = vNodes[_index].right;
-    lNode->isLeft  = vNodes[_index].isLeft;
+    vBVH->parent(vPatch[_index]) = vNodes.parent[_index];
+    vBVH->left(vPatch[_index])   = vNodes.left[_index];
+    vBVH->right(vPatch[_index])  = vNodes.right[_index];
+    vBVH->isLeft(vPatch[_index]) = vNodes.isLeft[_index];
   }
 
 
@@ -229,9 +241,9 @@ class alignas(16) BVHPatch final {
    * \brief Fix the AABBs starting at _node in a path to the root
    */
   CUDA_CALL void patchAABBFrom(uint32_t _node) {
-    uint32_t     lNodeIndex = _node;
-    BVHNodePatch lStart     = getSubset(lNodeIndex);
-    BVHNodePatch lNode      = lStart;
+    uint32_t lNodeIndex = _node;
+    uint64_t lStart     = getSubset(lNodeIndex);
+    uint64_t lNode      = lStart;
 
     // Pair: sibling node (= the node we need to fetch) , current Node index
     uint32_t lNumNodes = 0;
@@ -243,24 +255,24 @@ class alignas(16) BVHPatch final {
       // Merge with the sibling of the last processed Node
       if (lNumNodes < NAABB) {
         if (lLastWasLeft) {
-          lNodePairs[lNumNodes] = {lNode.right, lNodeIndex};
+          lNodePairs[lNumNodes] = {right(lNode), lNodeIndex};
         } else {
-          lNodePairs[lNumNodes] = {lNode.left, lNodeIndex};
+          lNodePairs[lNumNodes] = {left(lNode), lNodeIndex};
         }
 
-        lLastWasLeft = lNode.isLeftChild();
+        lLastWasLeft = isLeftChild(lNode);
       }
 
       lNumNodes++;
 
       if (lNodeIndex == root()) { break; } // We processed the root ==> everything is done
 
-      lNodeIndex = lNode.parent;
+      lNodeIndex = parent(lNode);
       lNode      = getSubset(lNodeIndex);
     }
 
     // Merge the BBox up the tree
-    BBox lAABB = getAABB(lStart.left, lNumNodes - 1);
+    BBox lAABB = getAABB(left(lStart), lNumNodes - 1);
     for (uint32_t i = 0; i < NAABB; ++i) {
       if (i >= lNumNodes) { break; }
 
@@ -282,13 +294,12 @@ class alignas(16) BVHPatch final {
         return {vPaths[i].vAABBs[lIndex], vPaths[i].vAABBs[lIndex].surfaceArea()};
       }
     }
-    BVHNode *lNode = vBVH->get(_node);
-    return {lNode->bbox, lNode->surfaceArea};
+    return {vBVH->bbox(_node), vBVH->surfaceArea(_node)};
   }
 
   CUDA_CALL void genMiniPatch(MiniPatch &_out) const noexcept {
     for (uint32_t i = 0; i < NNode; ++i) {
-      _out.vNodes[i] = vNodes[i];
+      _out.vNodes    = vNodes;
       _out.vPatch[i] = vPatch[i];
     }
   }
