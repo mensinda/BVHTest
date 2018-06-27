@@ -108,11 +108,11 @@ BuilderBase::BuildRes BuilderBase::build(BuilderBase::ITER _begin,
 
     lNodeBBox = lBBOX1;
     lNodeBBox.mergeWith(lBBOX2);
-    *_bvh.bbox(lNewNode)        = lNodeBBox;
-    *_bvh.numChildren(lNewNode) = 2 + *_bvh.numChildren(lID1) + *_bvh.numChildren(lID2);
-    *_bvh.left(lNewNode)        = lID1;
-    *_bvh.right(lNewNode)       = lID2;
-    *_bvh.surfaceArea(lNewNode) = lNodeBBox.surfaceArea();
+    _bvh.bbox(lNewNode)        = lNodeBBox;
+    _bvh.numChildren(lNewNode) = 2 + _bvh.numChildren(lID1) + _bvh.numChildren(lID2);
+    _bvh.left(lNewNode)        = lID1;
+    _bvh.right(lNewNode)       = lID2;
+    _bvh.surfaceArea(lNewNode) = lNodeBBox.surfaceArea();
   }
 
   return {lNewNode, lNodeBBox};

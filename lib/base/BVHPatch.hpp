@@ -43,25 +43,25 @@ struct BVHNodePatch {
   CUDA_CALL bool     isRightChild(uint32_t _n) const noexcept { return isLeft[_n] == 0; }
 };
 
-const uint32_t PINDEX_GRAND_PARENT = 0;
-const uint32_t PINDEX_1ST_ROOT     = 1;
-const uint32_t PINDEX_1ST_BEST     = 2;
-const uint32_t PINDEX_NODE         = 3;
-const uint32_t PINDEX_1ST_INSERT   = 4;
-const uint32_t PINDEX_2ND_ROOT     = 5;
-const uint32_t PINDEX_2ND_BEST     = 6;
-const uint32_t PINDEX_2ND_INSERT   = 7;
-const uint32_t PINDEX_SIBLING      = 8;
-const uint32_t PINDEX_PARENT       = 9;
+const uint16_t PINDEX_GRAND_PARENT = 0;
+const uint16_t PINDEX_1ST_ROOT     = 1;
+const uint16_t PINDEX_1ST_BEST     = 2;
+const uint16_t PINDEX_NODE         = 3;
+const uint16_t PINDEX_1ST_INSERT   = 4;
+const uint16_t PINDEX_2ND_ROOT     = 5;
+const uint16_t PINDEX_2ND_BEST     = 6;
+const uint16_t PINDEX_2ND_INSERT   = 7;
+const uint16_t PINDEX_SIBLING      = 8;
+const uint16_t PINDEX_PARENT       = 9;
 
-const uint32_t PINDEX_SUBSET_END = 4;
+const uint16_t PINDEX_SUBSET_END = 4;
 
 struct alignas(16) MiniPatch final {
   BVHNodePatch vNodes;
   uint32_t     vPatch[NNode];
 
   CUDA_CALL void apply(BVH *_bvh) {
-    for (uint32_t i = 0; i < NNode; ++i) {
+    for (uint16_t i = 0; i < NNode; ++i) {
       if (vPatch[i] == UINT32_MAX) { continue; }
       _bvh->parent(vPatch[i]) = vNodes.parent[i];
       _bvh->left(vPatch[i])   = vNodes.left[i];
@@ -70,7 +70,7 @@ struct alignas(16) MiniPatch final {
     }
   }
 
-  CUDA_CALL void applyOne(uint32_t _index, BVH *_bvh) {
+  CUDA_CALL void applyOne(uint16_t _index, BVH *_bvh) {
     assert(_index < NNode);
     assert(vPatch[_index] != UINT32_MAX);
     _bvh->parent(vPatch[_index]) = vNodes.parent[_index];
@@ -177,9 +177,37 @@ class alignas(16) BVHPatch final {
     return _n & PATCHED_BIT ? vNodes.isRightChild((uint32_t)_n) : vBVH->isRightChild((uint32_t)_n);
   }
 
+
+  CUDA_CALL uint32_t &patch_parent(uint16_t _n) noexcept { return vNodes.parent[_n]; }
+  CUDA_CALL uint32_t &patch_left(uint16_t _n) noexcept { return vNodes.left[_n]; }
+  CUDA_CALL uint32_t &patch_right(uint16_t _n) noexcept { return vNodes.right[_n]; }
+  CUDA_CALL uint8_t &patch_isLeft(uint16_t _n) noexcept { return vNodes.isLeft[_n]; }
+
+  CUDA_CALL bool patch_isLeaf(uint16_t _n) const noexcept { return vNodes.isLeaf(_n); }
+  CUDA_CALL uint32_t patch_beginFaces(uint16_t _n) const noexcept { return vNodes.beginFaces(_n); }
+  CUDA_CALL uint32_t patch_numFaces(uint16_t _n) const noexcept { return vNodes.numFaces(_n); }
+  CUDA_CALL bool     patch_isLeftChild(uint16_t _n) const noexcept { return vNodes.isLeftChild(_n); }
+  CUDA_CALL bool     patch_isRightChild(uint16_t _n) const noexcept { return vNodes.isRightChild(_n); }
+
+
+  CUDA_CALL AABB &orig_bbox(uint32_t _node) noexcept { return vBVH->bbox(_node); }
+  CUDA_CALL uint32_t &orig_parent(uint32_t _node) noexcept { return vBVH->parent(_node); }
+  CUDA_CALL uint32_t &orig_numChildren(uint32_t _node) noexcept { return vBVH->numChildren(_node); }
+  CUDA_CALL uint32_t &orig_left(uint32_t _node) noexcept { return vBVH->left(_node); }
+  CUDA_CALL uint32_t &orig_right(uint32_t _node) noexcept { return vBVH->right(_node); }
+  CUDA_CALL uint16_t &orig_level(uint32_t _node) noexcept { return vBVH->level(_node); }
+  CUDA_CALL uint8_t &orig_isLeft(uint32_t _node) noexcept { return vBVH->isLeft(_node); }
+  CUDA_CALL float &  orig_surfaceArea(uint32_t _node) noexcept { return vBVH->surfaceArea(_node); }
+
+  CUDA_CALL uint32_t orig_beginFaces(uint32_t _node) const noexcept { return vBVH->beginFaces(_node); }
+  CUDA_CALL uint32_t orig_numFaces(uint32_t _node) const noexcept { return vBVH->numFaces(_node); }
+  CUDA_CALL bool     orig_isLeftChild(uint32_t _node) const noexcept { return vBVH->isLeftChild(_node); }
+  CUDA_CALL bool     orig_isRightChild(uint32_t _node) const noexcept { return vBVH->isRightChild(_node); }
+  CUDA_CALL bool     orig_isLeaf(uint32_t _node) const noexcept { return vBVH->isLeaf(_node); }
+
   CUDA_CALL uint32_t getPatchedNodeIndex(uint32_t _patchIndex) { return vPatch[_patchIndex]; }
 
-  CUDA_CALL uint32_t patchNode(uint32_t _node, uint32_t _index) {
+  CUDA_CALL uint16_t patchNode(uint32_t _node, uint16_t _index) {
     assert(_index < NNode);
     vPatch[_index]            = _node;
     vNodes.parent[_index]     = vBVH->parent(_node);
@@ -190,7 +218,7 @@ class alignas(16) BVHPatch final {
     return _index;
   }
 
-  CUDA_CALL uint32_t movePatch(uint32_t _from, uint32_t _to) {
+  CUDA_CALL uint16_t movePatch(uint16_t _from, uint16_t _to) {
     vPatch[_to]            = vPatch[_from];
     vPatch[_from]          = UINT32_MAX;
     vNodes.parent[_to]     = vNodes.parent[_from];
@@ -202,22 +230,22 @@ class alignas(16) BVHPatch final {
   }
 
   //! \brief Resets only one node
-  CUDA_CALL void clearNode(uint32_t _index) { vPatch[_index] = UINT32_MAX; }
+  CUDA_CALL void clearNode(uint16_t _index) { vPatch[_index] = UINT32_MAX; }
 
   //! \brief Only Resets the paths
   CUDA_CALL void clearPaths() {
-    for (uint32_t i = 0; i < NPath; ++i) { vPaths[i].vPathLength = 0; }
+    for (uint16_t i = 0; i < NPath; ++i) { vPaths[i].vPathLength = 0; }
     vNumPaths = 0;
   }
 
   CUDA_CALL void clear() {
-    for (uint32_t i = 0; i < NNode; ++i) { vPatch[i] = UINT32_MAX; }
+    for (uint16_t i = 0; i < NNode; ++i) { vPatch[i] = UINT32_MAX; }
     clearPaths();
   }
 
   //! \brief applys all patches to the BVH
   CUDA_CALL void apply() {
-    for (uint32_t i = 0; i < NNode; ++i) {
+    for (uint16_t i = 0; i < NNode; ++i) {
       if (vPatch[i] == UINT32_MAX) { continue; }
       vBVH->parent(vPatch[i]) = vNodes.parent[i];
       vBVH->left(vPatch[i])   = vNodes.left[i];
@@ -227,7 +255,7 @@ class alignas(16) BVHPatch final {
   }
 
   //! \brief Applys only one Patch to the BVH
-  CUDA_CALL void applyOne(uint32_t _index) {
+  CUDA_CALL void applyOne(uint16_t _index) {
     assert(_index < NNode);
     assert(vPatch[_index] != UINT32_MAX);
     vBVH->parent(vPatch[_index]) = vNodes.parent[_index];
@@ -298,7 +326,7 @@ class alignas(16) BVHPatch final {
   }
 
   CUDA_CALL void genMiniPatch(MiniPatch &_out) const noexcept {
-    for (uint32_t i = 0; i < NNode; ++i) {
+    for (uint16_t i = 0; i < NNode; ++i) {
       _out.vNodes    = vNodes;
       _out.vPatch[i] = vPatch[i];
     }

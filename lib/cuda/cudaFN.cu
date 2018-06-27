@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
+#include <base/BVH.hpp>
 #include "cudaFN.hpp"
+#include <driver_types.h>
 #include <iostream>
 
 using namespace glm;
@@ -25,41 +27,72 @@ using namespace BVHTest::cuda;
 
 #define CUDA_RUN(call)                                                                                                 \
   lRes = call;                                                                                                         \
-  if (lRes != cudaSuccess) { goto error; }
+  if (lRes != cudaSuccess) {                                                                                           \
+    cout << "CUDA ERROR (" << __FILE__ << ":" << __LINE__ << "): " << cudaGetErrorString(lRes) << endl;                \
+    goto error;                                                                                                        \
+  }
+
+#define ALLOCATE(ptr, num, type) CUDA_RUN(cudaMalloc(ptr, num * sizeof(type)));
+#define FREE(ptr)                                                                                                      \
+  cudaFree(ptr);                                                                                                       \
+  ptr = nullptr;
+
+#define MEMCOPY_WARPPER(dest, src, num, type, dev) CUDA_RUN(cudaMemcpy(dest, src, num * sizeof(type), dev))
+#define COPY_TO_GPU(dest, src, num, type) MEMCOPY_WARPPER(dest, src, num, type, cudaMemcpyHostToDevice)
+#define COPY_TO_HOST(dest, src, num, type) MEMCOPY_WARPPER(dest, src, num, type, cudaMemcpyDeviceToHost)
 
 extern "C" bool copyBVHToGPU(BVH *_bvh, CUDAMemoryBVHPointer *_ptr) {
   if (!_bvh || !_ptr) { return false; }
 
-  size_t      lSize = _bvh->size() * sizeof(BVHNode);
+  size_t      lNumNodes = _bvh->size();
+  BVHNode     lData     = _bvh->data();
   BVH         lTempBVH;
   cudaError_t lRes;
 
-  _ptr->numNodes = _bvh->size();
+  _ptr->numNodes = lNumNodes;
 
-  CUDA_RUN(cudaMalloc(&_ptr->nodes, lSize));
-  CUDA_RUN(cudaMemcpy(_ptr->nodes, _bvh->data(), lSize, cudaMemcpyHostToDevice));
+  ALLOCATE(&_ptr->nodes.bbox, lNumNodes, AABB);
+  ALLOCATE(&_ptr->nodes.parent, lNumNodes, uint32_t);
+  ALLOCATE(&_ptr->nodes.numChildren, lNumNodes, uint32_t);
+  ALLOCATE(&_ptr->nodes.left, lNumNodes, uint32_t);
+  ALLOCATE(&_ptr->nodes.right, lNumNodes, uint32_t);
+  ALLOCATE(&_ptr->nodes.isLeft, lNumNodes, uint8_t);
+  ALLOCATE(&_ptr->nodes.level, lNumNodes, uint16_t);
+  ALLOCATE(&_ptr->nodes.surfaceArea, lNumNodes, float);
+
+  COPY_TO_GPU(_ptr->nodes.bbox, lData.bbox, lNumNodes, AABB);
+  COPY_TO_GPU(_ptr->nodes.parent, lData.parent, lNumNodes, uint32_t);
+  COPY_TO_GPU(_ptr->nodes.numChildren, lData.numChildren, lNumNodes, uint32_t);
+  COPY_TO_GPU(_ptr->nodes.left, lData.left, lNumNodes, uint32_t);
+  COPY_TO_GPU(_ptr->nodes.right, lData.right, lNumNodes, uint32_t);
+  COPY_TO_GPU(_ptr->nodes.isLeft, lData.isLeft, lNumNodes, uint8_t);
+  COPY_TO_GPU(_ptr->nodes.level, lData.level, lNumNodes, uint16_t);
+  COPY_TO_GPU(_ptr->nodes.surfaceArea, lData.surfaceArea, lNumNodes, float);
 
   lTempBVH.setNewRoot(_bvh->root());
   lTempBVH.setMaxLevel(_bvh->maxLevel());
-  lTempBVH.setMemory(_ptr->nodes, _bvh->size(), _bvh->size());
+  lTempBVH.setMemory(_ptr->nodes, lNumNodes, lNumNodes);
 
-  CUDA_RUN(cudaMalloc(&_ptr->bvh, sizeof(BVH)));
-  CUDA_RUN(cudaMemcpy(_ptr->bvh, &lTempBVH, sizeof(BVH), cudaMemcpyHostToDevice));
+  ALLOCATE(&_ptr->bvh, 1, BVH);
+  COPY_TO_GPU(_ptr->bvh, &lTempBVH, 1, BVH);
 
-  lTempBVH.setMemory(nullptr, 0, 0); // Avoid destructor segfault
+  lTempBVH.setMemory(BVHNode(), 0, 0); // Avoid destructor segfault
 
   return true;
 
 error:
-  cout << "CUDA ERROR: " << cudaGetErrorString(lRes) << endl;
+  FREE(_ptr->nodes.bbox);
+  FREE(_ptr->nodes.parent);
+  FREE(_ptr->nodes.numChildren);
+  FREE(_ptr->nodes.left);
+  FREE(_ptr->nodes.right);
+  FREE(_ptr->nodes.isLeft);
+  FREE(_ptr->nodes.level);
+  FREE(_ptr->nodes.surfaceArea);
+  FREE(_ptr->bvh);
 
-  cudaFree(_ptr->nodes);
-  cudaFree(_ptr->bvh);
+  lTempBVH.setMemory(BVHNode(), 0, 0); // Avoid destructor segfault
 
-  lTempBVH.setMemory(nullptr, 0, 0); // Avoid destructor segfault
-
-  _ptr->bvh      = nullptr;
-  _ptr->nodes    = nullptr;
   _ptr->numNodes = 0;
   return false;
 }
@@ -87,8 +120,6 @@ extern "C" bool copyMeshToGPU(Mesh *_mesh, MeshRaw *_meshOut) {
   return true;
 
 error:
-  cout << "CUDA ERROR: " << cudaGetErrorString(lRes) << endl;
-
   if (_meshOut->vert) { cudaFree(_meshOut->vert); }
   if (_meshOut->norm) { cudaFree(_meshOut->norm); }
   if (_meshOut->faces) { cudaFree(_meshOut->faces); }
@@ -102,33 +133,60 @@ error:
 
 
 extern "C" bool copyBVHToHost(CUDAMemoryBVHPointer *_bvh, base::BVH *_ptr) {
-  if (!_bvh->bvh || !_bvh->nodes || !_ptr) { return false; }
+  if (!_bvh || !_bvh->bvh || !_bvh->nodes.bbox || !_ptr) { return false; }
 
   cudaError_t lRes;
-  BVH         lTempBVH;
-  uint32_t    lSize = 0;
+  BVHNode     lData;
+  uint32_t    lNumNodes = 0;
 
-  CUDA_RUN(cudaMemcpy(&lTempBVH, _bvh->bvh, sizeof(BVH), cudaMemcpyDeviceToHost));
+  _ptr->clear();
 
-  _ptr->setNewRoot(lTempBVH.root());
-  _ptr->setMaxLevel(lTempBVH.maxLevel());
-  _ptr->resize(lTempBVH.size());
+  COPY_TO_HOST(_ptr, _bvh->bvh, 1, BVH);
+  lNumNodes = _ptr->size();
 
-  lSize       = lTempBVH.size() * sizeof(BVHNode);
-  _bvh->nodes = lTempBVH.data();
+  lData.bbox        = static_cast<AABB *>(malloc(lNumNodes * sizeof(AABB)));
+  lData.parent      = static_cast<uint32_t *>(malloc(lNumNodes * sizeof(uint32_t)));
+  lData.numChildren = static_cast<uint32_t *>(malloc(lNumNodes * sizeof(uint32_t)));
+  lData.left        = static_cast<uint32_t *>(malloc(lNumNodes * sizeof(uint32_t)));
+  lData.right       = static_cast<uint32_t *>(malloc(lNumNodes * sizeof(uint32_t)));
+  lData.isLeft      = static_cast<uint8_t *>(malloc(lNumNodes * sizeof(uint8_t)));
+  lData.level       = static_cast<uint16_t *>(malloc(lNumNodes * sizeof(uint16_t)));
+  lData.surfaceArea = static_cast<float *>(malloc(lNumNodes * sizeof(float)));
 
-  CUDA_RUN(cudaMemcpy(_ptr->data(), _bvh->nodes, lSize, cudaMemcpyDeviceToHost));
+  COPY_TO_HOST(lData.bbox, _bvh->nodes.bbox, lNumNodes, AABB);
+  COPY_TO_HOST(lData.parent, _bvh->nodes.parent, lNumNodes, uint32_t);
+  COPY_TO_HOST(lData.numChildren, _bvh->nodes.numChildren, lNumNodes, uint32_t);
+  COPY_TO_HOST(lData.left, _bvh->nodes.left, lNumNodes, uint32_t);
+  COPY_TO_HOST(lData.right, _bvh->nodes.right, lNumNodes, uint32_t);
+  COPY_TO_HOST(lData.isLeft, _bvh->nodes.isLeft, lNumNodes, uint8_t);
+  COPY_TO_HOST(lData.level, _bvh->nodes.level, lNumNodes, uint16_t);
+  COPY_TO_HOST(lData.surfaceArea, _bvh->nodes.surfaceArea, lNumNodes, float);
+
+  _ptr->setMemory(lData, lNumNodes, lNumNodes);
+  lData = BVHNode(); // set everything to nullptr --> free below does nothing
 
 error:
-  if (lRes != cudaSuccess) { cout << "CUDA ERROR: " << cudaGetErrorString(lRes) << endl; }
+  FREE(_bvh->nodes.bbox);
+  FREE(_bvh->nodes.parent);
+  FREE(_bvh->nodes.numChildren);
+  FREE(_bvh->nodes.left);
+  FREE(_bvh->nodes.right);
+  FREE(_bvh->nodes.isLeft);
+  FREE(_bvh->nodes.level);
+  FREE(_bvh->nodes.surfaceArea);
+  FREE(_bvh->bvh);
 
-  cudaFree(_bvh->nodes);
-  cudaFree(_bvh->bvh);
-
-  lTempBVH.setMemory(nullptr, 0, 0); // Avoid destructor segfault
+  free(lData.bbox);
+  free(lData.parent);
+  free(lData.numChildren);
+  free(lData.left);
+  free(lData.right);
+  free(lData.isLeft);
+  free(lData.level);
+  free(lData.surfaceArea);
 
   _bvh->bvh      = nullptr;
-  _bvh->nodes    = nullptr;
+  _bvh->nodes    = BVHNode();
   _bvh->numNodes = 0;
 
   return lRes == cudaSuccess;

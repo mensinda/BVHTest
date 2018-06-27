@@ -141,7 +141,7 @@ class BVH final {
   uint16_t vMaxLevel  = 0;
 
  public:
-  CUDA_CALL ~BVH() { clear(); }
+  inline ~BVH() { clear(); }
 
   CUDA_CALL uint32_t sibling(uint32_t _node) const {
     return bvh.isRightChild(_node) ? bvh.left[bvh.parent[_node]] : bvh.right[bvh.parent[_node]];
@@ -212,7 +212,7 @@ class BVH final {
     }
   }
 
-  CUDA_CALL void setMemory(BVHNode _mem, size_t _numNodes, size_t _capacity) {
+  inline void setMemory(BVHNode _mem, size_t _numNodes, size_t _capacity) {
     clear();
     bvh       = _mem;
     vSize     = _numNodes;
@@ -260,8 +260,8 @@ class BVH final {
 };
 
 struct CUDAMemoryBVHPointer {
-  BVH *    bvh      = nullptr; // CUDA device only memory
-  BVHNode *nodes    = nullptr; // CUDA device only memory
+  BVH *    bvh = nullptr; // CUDA device only memory
+  BVHNode  nodes;         // CUDA device only memory
   uint32_t numNodes = 0;
 };
 

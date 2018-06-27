@@ -24,8 +24,6 @@ namespace BVHTest::builder {
 
 class Bittner13Par final : public OptimizerBase {
  public:
-  typedef base::BVHPatch PATCH;
-
   struct SumMin {
     float            sum;
     float            min;
@@ -68,11 +66,11 @@ class Bittner13Par final : public OptimizerBase {
   bool     vShuffleList  = true;
   bool     vAltFindNode  = false;
 
-  NodeLevel findNode1(uint32_t _n, PATCH &_bvh);
-  NodeLevel findNode2(uint32_t _n, PATCH &_bvh);
+  NodeLevel findNode1(uint32_t _n, base::BVHPatch &_bvh);
+  NodeLevel findNode2(uint32_t _n, base::BVHPatch &_bvh);
 
-  RM_RES  removeNode(uint32_t _node, PATCH &_bvh, SumMin *_sumMin);
-  INS_RES reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, SumMin *_sumMin);
+  RM_RES  removeNode(uint32_t _node, base::BVHPatch &_bvh, SumMin *_sumMin);
+  INS_RES reinsert(uint32_t _node, uint32_t _unused, base::BVHPatch &_bvh, bool _update, SumMin *_sumMin);
   void    fixTree(uint32_t _node, base::BVH &_bvh, SumMin *_sumMin);
   void    initSumAndMin(base::BVH &_bvh, SumMin *_sumMin);
 
