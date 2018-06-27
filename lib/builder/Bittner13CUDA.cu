@@ -255,7 +255,7 @@ __device__ CUDA_RM_RES removeNode(uint32_t _node, PATCH &_bvh, uint32_t _lockID)
   // update Bounding Boxes (temporary)
   _bvh.patchAABBFrom(lGrandParentIndex);
 
-  if (_bvh.orig_surfaceArea(lLeftIndex) > _bvh.orig_surfaceArea(lRightIndex)) {
+  if (*_bvh.orig_surfaceArea(lLeftIndex) > *_bvh.orig_surfaceArea(lRightIndex)) {
     return {true, {lLeftIndex, lRightIndex}, {_node, lParentIndex}, {lGrandParentIndex, lSiblingIndex}};
   } else {
     return {true, {lRightIndex, lLeftIndex}, {_node, lParentIndex}, {lGrandParentIndex, lSiblingIndex}};

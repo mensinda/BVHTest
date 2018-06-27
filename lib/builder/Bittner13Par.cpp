@@ -198,7 +198,7 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, BVHPatch &_bvh, Su
   uint32_t lLeftIndex        = *_bvh.patch_left(lNode);
   uint32_t lRightIndex       = *_bvh.patch_right(lNode);
   uint16_t lParent           = _bvh.patchNode(lParentIndex, PINDEX_PARENT);
-  uint32_t lSiblingIndex     = _bvh.isRightChild(lNode) ? *_bvh.patch_left(lParent) : *_bvh.patch_right(lParent);
+  uint32_t lSiblingIndex     = _bvh.patch_isRightChild(lNode) ? *_bvh.patch_left(lParent) : *_bvh.patch_right(lParent);
   uint32_t lGrandParentIndex = *_bvh.patch_parent(lParent);
   uint16_t lSibling          = _bvh.patchNode(lSiblingIndex, PINDEX_SIBLING);
   uint16_t lGrandParent      = _bvh.patchNode(lGrandParentIndex, PINDEX_GRAND_PARENT);
@@ -259,7 +259,7 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, BVHPatch &_bvh, Su
   // update Bounding Boxes (temporary)
   _bvh.patchAABBFrom(lGrandParentIndex);
 
-  if (_bvh.orig_surfaceArea(lLeftIndex) > _bvh.orig_surfaceArea(lRightIndex)) {
+  if (*_bvh.orig_surfaceArea(lLeftIndex) > *_bvh.orig_surfaceArea(lRightIndex)) {
     return {true, {lLeftIndex, lRightIndex}, {_node, lParentIndex}, {lGrandParentIndex, lSiblingIndex}};
   } else {
     return {true, {lRightIndex, lLeftIndex}, {_node, lParentIndex}, {lGrandParentIndex, lSiblingIndex}};
