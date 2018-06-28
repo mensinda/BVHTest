@@ -19,7 +19,7 @@
 #include "cuda/cudaFN.hpp"
 #include "Bittner13CUDA.hpp"
 #include "CUDAHeap.hpp"
-#include "bucketSelect.cu"
+// #include "bucketSelect.cu"
 #include <cmath>
 #include <cub/cub.cuh>
 #include <cuda_profiler_api.h>
@@ -227,7 +227,6 @@ __device__ uint32_t findNode2(uint32_t _n, PATCH &_bvh) {
     lMin = HUGE_VALF;
     lMax = 0.0f;
 
-#pragma unroll 16
     for (uint32_t i = 0; i < CUDA_ALT_QUEUE_SIZE; ++i) {
       if (lPQ_CO[i] < lMin) {
         lMin      = lPQ_CO[i];
@@ -687,7 +686,7 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
   kCalcCost<<<lNumBlocksAll, _blockSize>>>(
       _data->sumMin.sums, _data->sumMin.mins, _GPUbvh->nodes, _data->todoNodes.costs, _data->sumMin.num);
 
-  if (_sort) {
+  if (_sort || true) {
     CUDA_RUN(cub::DeviceRadixSort::SortPairsDescending(_data->cubSortTempStorage,
                                                        _data->cubSortTempStorageSize,
                                                        _data->todoNodes.costs,
@@ -695,20 +694,20 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
                                                        _data->todoNodes.nodes,
                                                        _data->todoSorted.nodes,
                                                        _data->todoNodes.num));
-  } else {
-    float lKCost = BucketSelect::bucketSelectWrapper<float>(
-        _data->todoNodes.costs, _data->todoNodes.num, _numChunks * _chunkSize, lNumBlocksAll, _blockSize);
+  } /* else {
+     float lKCost = BucketSelect::bucketSelectWrapper<float>(
+         _data->todoNodes.costs, _data->todoNodes.num, _numChunks * _chunkSize, lNumBlocksAll, _blockSize);
 
-    CUBNodeSlelect lSelector(_data->todoNodes.costs, lKCost);
+     CUBNodeSlelect lSelector(_data->todoNodes.costs, lKCost);
 
-    CUDA_RUN(cub::DeviceSelect::If(_data->cubSortTempStorage,
-                                   _data->cubSortTempStorageSize,
-                                   _data->todoNodes.nodes,
-                                   _data->todoSorted.nodes,
-                                   lNumSelected,
-                                   _data->todoNodes.num,
-                                   lSelector));
-  }
+     CUDA_RUN(cub::DeviceSelect::If(_data->cubSortTempStorage,
+                                    _data->cubSortTempStorageSize,
+                                    _data->todoNodes.nodes,
+                                    _data->todoSorted.nodes,
+                                    lNumSelected,
+                                    _data->todoNodes.num,
+                                    lSelector));
+   }*/
 
   for (uint32_t i = 0; i < _numChunks; ++i) {
     if (_localPatchCPY) {

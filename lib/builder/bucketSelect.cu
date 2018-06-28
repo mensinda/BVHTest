@@ -16,13 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cub/cub.cuh>
 #include <stdio.h>
-#include <thrust/binary_search.h>
-#include <thrust/device_vector.h>
-#include <thrust/functional.h>
-#include <thrust/random.h>
-#include <thrust/sort.h>
-#include <thrust/transform_reduce.h>
 
 namespace BucketSelect {
 using namespace std;
@@ -273,13 +268,24 @@ T phaseTwo(T *d_vector, int length, int K, int blocks, int threads, double maxVa
   T *d_Kth_val;
   cudaMalloc(&d_Kth_val, sizeof(T));
 
-  thrust::device_ptr<T> dev_ptr(d_vector);
   // if max == min, then we know that it must not have had the values passed in.
   if (maxValue == minValue) {
-    thrust::pair<thrust::device_ptr<T>, thrust::device_ptr<T>> result =
-        thrust::minmax_element(dev_ptr, dev_ptr + length);
-    minValue = *result.first;
-    maxValue = *result.second;
+    T *      d_MinMax        = nullptr;
+    uint8_t *d_tempStorage   = nullptr;
+    size_t   tempStorageSize = 0;
+    cudaMalloc(&d_MinMax, 2 * sizeof(T));
+
+    cub::DeviceReduce::Min(d_tempStorage, tempStorageSize, d_vector, d_MinMax + 0, length);
+    cudaMalloc(&d_tempStorage, tempStorageSize);
+
+    cub::DeviceReduce::Min(d_tempStorage, tempStorageSize, d_vector, d_MinMax + 0, length);
+    cub::DeviceReduce::Max(d_tempStorage, tempStorageSize, d_vector, d_MinMax + 1, length);
+
+    cudaMemcpy(&minValue, d_MinMax + 0, sizeof(T), cudaMemcpyDeviceToHost);
+    cudaMemcpy(&maxValue, d_MinMax + 1, sizeof(T), cudaMemcpyDeviceToHost);
+
+    cudaFree(d_tempStorage);
+    cudaFree(d_MinMax);
   }
   double slope = (numBuckets - 1) / (maxValue - minValue);
   // first check is max is equal to min
@@ -355,14 +361,25 @@ T phaseOne(T *d_vector, int length, int K, int blocks, int threads, int pass = 0
   T  kthValue = 0;
   T *newInput;
 
-  // find max and min with thrust
+  // find max and min with cub
   double maximum, minimum;
 
-  thrust::device_ptr<T>                                      dev_ptr(d_vector);
-  thrust::pair<thrust::device_ptr<T>, thrust::device_ptr<T>> result = thrust::minmax_element(dev_ptr, dev_ptr + length);
+  T *      d_MinMax        = nullptr;
+  uint8_t *d_tempStorage   = nullptr;
+  size_t   tempStorageSize = 0;
+  cudaMalloc(&d_MinMax, 2 * sizeof(T));
 
-  minimum = *result.first;
-  maximum = *result.second;
+  cub::DeviceReduce::Min(d_tempStorage, tempStorageSize, d_vector, d_MinMax + 0, length);
+  cudaMalloc(&d_tempStorage, tempStorageSize);
+
+  cub::DeviceReduce::Min(d_tempStorage, tempStorageSize, d_vector, d_MinMax + 0, length);
+  cub::DeviceReduce::Max(d_tempStorage, tempStorageSize, d_vector, d_MinMax + 1, length);
+
+  cudaMemcpy(&minimum, d_MinMax + 0, sizeof(T), cudaMemcpyDeviceToHost);
+  cudaMemcpy(&maximum, d_MinMax + 1, sizeof(T), cudaMemcpyDeviceToHost);
+
+  cudaFree(d_tempStorage);
+  cudaFree(d_MinMax);
 
   // if the max and the min are the same, then we are done
   if (maximum == minimum) { return maximum; }
@@ -410,8 +427,7 @@ T phaseOne(T *d_vector, int length, int K, int blocks, int threads, int pass = 0
 
   // if we only copied one element, then we are done
   if (newInputLength == 1) {
-    thrust::device_ptr<T> new_ptr(newInput);
-    kthValue = new_ptr[0];
+    cudaMemcpy(&kthValue, newInput + 0, sizeof(T), cudaMemcpyDeviceToHost);
 
     // free all used memory
     cudaFree(elementToBucket);
