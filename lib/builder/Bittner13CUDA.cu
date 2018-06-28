@@ -176,22 +176,22 @@ __device__ CUDANodeLevel findNode2(uint32_t _n, PATCH &_bvh) {
   uint16_t       lMinIndex      = lStart;
   uint16_t       lMaxIndex      = lStart + 1;
 
-  CUDANodeLevel           lPQ_NL[CUDA_ALT_QUEUE_SIZE];
+  uint32_t                lPQ_NL[CUDA_ALT_QUEUE_SIZE];
   extern __shared__ float lPQ_CO[];
-  CUDANodeLevel           lCurrNL;
+  uint32_t                lCurrNL;
   float                   lCurrCO;
 
   // Init
   for (uint32_t i = lStart; i < lEnd; ++i) { lPQ_CO[i] = HUGE_VALF; }
 
-  lPQ_NL[lMinIndex - lStart] = {_bvh.root(), 0};
+  lPQ_NL[lMinIndex - lStart] = _bvh.root();
   lPQ_CO[lMinIndex]          = 0.0f;
   while (lMin < HUGE_VALF) {
     lCurrNL                = lPQ_NL[lMinIndex - lStart];
     lCurrCO                = lPQ_CO[lMinIndex];
     lPQ_CO[lMinIndex]      = HUGE_VALF;
-    BVHNodePatch lCurrNode = _bvh.getSubset(lCurrNL.node);
-    auto         lBBox     = _bvh.getAABB(lCurrNL.node, lCurrNL.level);
+    BVHNodePatch lCurrNode = _bvh.getSubset(lCurrNL);
+    auto         lBBox     = _bvh.getAABB(lCurrNL);
 
     if ((lCurrCO + lSArea) >= lBestCost) {
       // Early termination - not possible to further optimize
@@ -204,13 +204,13 @@ __device__ CUDANodeLevel findNode2(uint32_t _n, PATCH &_bvh) {
     if (lTotalCost < lBestCost) {
       // Merging here improves the total SAH cost
       lBestCost      = lTotalCost;
-      lBestNodeIndex = {lCurrNL.node, lCurrNL.level};
+      lBestNodeIndex = {lCurrNL, 0};
     }
 
     float lNewInduced = lTotalCost - lBBox.sarea;
     if ((lNewInduced + lSArea) < lBestCost && !lCurrNode.isLeaf()) {
-      lPQ_NL[lMinIndex - lStart] = {lCurrNode.left, lCurrNL.level + 1};
-      lPQ_NL[lMaxIndex - lStart] = {lCurrNode.right, lCurrNL.level + 1};
+      lPQ_NL[lMinIndex - lStart] = lCurrNode.left;
+      lPQ_NL[lMaxIndex - lStart] = lCurrNode.right;
       lPQ_CO[lMinIndex]          = lNewInduced;
       lPQ_CO[lMaxIndex]          = lNewInduced;
     }

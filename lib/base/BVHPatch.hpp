@@ -192,7 +192,10 @@ class alignas(16) BVHPatch final {
 
   //! \brief Only Resets the paths
   CUDA_CALL void clearPaths() {
-    for (uint32_t i = 0; i < NPath; ++i) { vPaths[i].vPathLength = 0; }
+    for (uint32_t i = 0; i < NPath; ++i) {
+      vPaths[i].vPathLength = 0;
+      for (uint32_t j = 0; j < NAABB; ++j) { vPaths[i].vAABBPath[j] = UINT32_MAX; }
+    }
     vNumPaths = 0;
   }
 
@@ -288,17 +291,11 @@ class alignas(16) BVHPatch final {
 
   CUDA_CALL BBox getAABB(uint32_t _node) {
     static_assert(NPath == 2);
-    for (uint32_t i = 0; i < NAABB; --i) {
-      if (vPaths[1].vAABBPath[i] == _node) {
-        AABB lAABB = vPaths[1].vAABBs[i];
-        return {lAABB, lAABB.surfaceArea()};
-      }
+    for (uint32_t i = 0; i < NAABB; ++i) {
+      if (vPaths[1].vAABBPath[i] == _node) { return {vPaths[1].vAABBs[i], vPaths[1].vAABBs[i].surfaceArea()}; }
     }
-    for (uint32_t i = 0; i < NAABB; --i) {
-      if (vPaths[0].vAABBPath[i] == _node) {
-        AABB lAABB = vPaths[0].vAABBs[i];
-        return {lAABB, lAABB.surfaceArea()};
-      }
+    for (uint32_t i = 0; i < NAABB; ++i) {
+      if (vPaths[0].vAABBPath[i] == _node) { return {vPaths[0].vAABBs[i], vPaths[0].vAABBs[i].surfaceArea()}; }
     }
     BVHNode *lNode = vBVH->get(_node);
     return {lNode->bbox, lNode->surfaceArea};
