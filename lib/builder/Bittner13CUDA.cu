@@ -118,7 +118,7 @@ __device__ CUDANodeLevel findNode1(uint32_t _n, PATCH &_bvh) {
   float             lBestCost      = HUGE_VALF;
   CUDANodeLevel     lBestNodeIndex = {0, 0};
   BVHNode const *   lNode          = _bvh.getOrig(_n);
-  AABB const &      lNodeBBox      = lNode->bbox;
+  AABB              lNodeBBox      = lNode->bbox;
   float             lSArea         = lNode->surfaceArea;
   uint32_t          lSize          = 1;
   CUDAHelperStruct  lPQ[CUDA_QUEUE_SIZE];
@@ -167,7 +167,7 @@ __device__ CUDANodeLevel findNode2(uint32_t _n, PATCH &_bvh) {
   float            lBestCost      = HUGE_VALF;
   CUDANodeLevel    lBestNodeIndex = {0, 0};
   BVHNode const *  lNode          = _bvh.getOrig(_n);
-  AABB const &     lNodeBBox      = lNode->bbox;
+  AABB             lNodeBBox      = lNode->bbox;
   float            lSArea         = lNode->surfaceArea;
   float            lMin           = 0.0f;
   float            lMax           = HUGE_VALF;
