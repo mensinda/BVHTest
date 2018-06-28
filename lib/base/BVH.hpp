@@ -147,14 +147,14 @@ class BVH final {
     return bvh.isRightChild(_node) ? bvh.left[bvh.parent[_node]] : bvh.right[bvh.parent[_node]];
   }
 
-  CUDA_CALL AABB *bbox(uint32_t _node) noexcept { return &bvh.bbox[_node]; }
-  CUDA_CALL uint32_t *parent(uint32_t _node) noexcept { return &bvh.parent[_node]; }
-  CUDA_CALL uint32_t *numChildren(uint32_t _node) noexcept { return &bvh.numChildren[_node]; }
-  CUDA_CALL uint32_t *left(uint32_t _node) noexcept { return &bvh.left[_node]; }
-  CUDA_CALL uint32_t *right(uint32_t _node) noexcept { return &bvh.right[_node]; }
-  CUDA_CALL uint16_t *level(uint32_t _node) noexcept { return &bvh.level[_node]; }
-  CUDA_CALL uint8_t *isLeft(uint32_t _node) noexcept { return &bvh.isLeft[_node]; }
-  CUDA_CALL float *  surfaceArea(uint32_t _node) noexcept { return &bvh.surfaceArea[_node]; }
+  CUDA_CALL AABB &bbox(uint32_t _node) noexcept { return bvh.bbox[_node]; }
+  CUDA_CALL uint32_t &parent(uint32_t _node) noexcept { return bvh.parent[_node]; }
+  CUDA_CALL uint32_t &numChildren(uint32_t _node) noexcept { return bvh.numChildren[_node]; }
+  CUDA_CALL uint32_t &left(uint32_t _node) noexcept { return bvh.left[_node]; }
+  CUDA_CALL uint32_t &right(uint32_t _node) noexcept { return bvh.right[_node]; }
+  CUDA_CALL uint16_t &level(uint32_t _node) noexcept { return bvh.level[_node]; }
+  CUDA_CALL uint8_t &isLeft(uint32_t _node) noexcept { return bvh.isLeft[_node]; }
+  CUDA_CALL float &  surfaceArea(uint32_t _node) noexcept { return bvh.surfaceArea[_node]; }
 
   CUDA_CALL uint32_t beginFaces(uint32_t _node) const noexcept { return bvh.beginFaces(_node); }
   CUDA_CALL uint32_t numFaces(uint32_t _node) const noexcept { return bvh.numFaces(_node); }

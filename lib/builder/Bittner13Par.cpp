@@ -81,8 +81,8 @@ struct HelperStruct {
 Bittner13Par::NodeLevel Bittner13Par::findNode1(uint32_t _n, BVHPatch &_bvh) {
   float         lBestCost      = HUGE_VALF;
   NodeLevel     lBestNodeIndex = {0, 0};
-  AABB const &  lNodeBBox      = *_bvh.orig_bbox(_n);
-  float         lSArea         = *_bvh.orig_surfaceArea(_n);
+  AABB const &  lNodeBBox      = _bvh.orig_bbox(_n);
+  float         lSArea         = _bvh.orig_surfaceArea(_n);
   uint32_t      lSize          = 1;
   HelperStruct  lPQ[QUEUE_SIZE];
   HelperStruct *lBegin = lPQ;
@@ -113,8 +113,8 @@ Bittner13Par::NodeLevel Bittner13Par::findNode1(uint32_t _n, BVHPatch &_bvh) {
     if ((lNewInduced + lSArea) < lBestCost) {
       if (!_bvh.isLeaf(lCurrNode)) {
         assert(lSize + 2 < QUEUE_SIZE);
-        lPQ[lSize + 0] = {*_bvh.left(lCurrNode), lNewInduced, lCurr.level + 1};
-        lPQ[lSize + 1] = {*_bvh.right(lCurrNode), lNewInduced, lCurr.level + 1};
+        lPQ[lSize + 0] = {_bvh.left(lCurrNode), lNewInduced, lCurr.level + 1};
+        lPQ[lSize + 1] = {_bvh.right(lCurrNode), lNewInduced, lCurr.level + 1};
         CUDA_push_heap(lBegin, lBegin + lSize + 1);
         CUDA_push_heap(lBegin, lBegin + lSize + 2);
         lSize += 2;
@@ -128,8 +128,8 @@ Bittner13Par::NodeLevel Bittner13Par::findNode1(uint32_t _n, BVHPatch &_bvh) {
 Bittner13Par::NodeLevel Bittner13Par::findNode2(uint32_t _n, BVHPatch &_bvh) {
   float        lBestCost      = HUGE_VALF;
   NodeLevel    lBestNodeIndex = {0, 0};
-  AABB const & lNodeBBox      = *_bvh.orig_bbox(_n);
-  float        lSArea         = *_bvh.orig_surfaceArea(_n);
+  AABB const & lNodeBBox      = _bvh.orig_bbox(_n);
+  float        lSArea         = _bvh.orig_surfaceArea(_n);
   float        lMin           = 0.0f;
   float        lMax           = HUGE_VALF;
   uint32_t     lMinIndex      = 0;
@@ -163,8 +163,8 @@ Bittner13Par::NodeLevel Bittner13Par::findNode2(uint32_t _n, BVHPatch &_bvh) {
 
     float lNewInduced = lTotalCost - lBBox.sarea;
     if ((lNewInduced + lSArea) < lBestCost && !_bvh.isLeaf(lCurrNode)) {
-      lPQ[lMinIndex] = {*_bvh.left(lCurrNode), lNewInduced, lCurr.level + 1};
-      lPQ[lMaxIndex] = {*_bvh.right(lCurrNode), lNewInduced, lCurr.level + 1};
+      lPQ[lMinIndex] = {_bvh.left(lCurrNode), lNewInduced, lCurr.level + 1};
+      lPQ[lMaxIndex] = {_bvh.right(lCurrNode), lNewInduced, lCurr.level + 1};
     }
 
     lMin = HUGE_VALF;
@@ -194,12 +194,12 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, BVHPatch &_bvh, Su
   if (_bvh.orig_isLeaf(_node) || _node == _bvh.root()) { return lFalse; }
 
   uint16_t lNode             = _bvh.patchNode(_node, PINDEX_NODE);
-  uint32_t lParentIndex      = *_bvh.patch_parent(lNode);
-  uint32_t lLeftIndex        = *_bvh.patch_left(lNode);
-  uint32_t lRightIndex       = *_bvh.patch_right(lNode);
+  uint32_t lParentIndex      = _bvh.patch_parent(lNode);
+  uint32_t lLeftIndex        = _bvh.patch_left(lNode);
+  uint32_t lRightIndex       = _bvh.patch_right(lNode);
   uint16_t lParent           = _bvh.patchNode(lParentIndex, PINDEX_PARENT);
-  uint32_t lSiblingIndex     = _bvh.patch_isRightChild(lNode) ? *_bvh.patch_left(lParent) : *_bvh.patch_right(lParent);
-  uint32_t lGrandParentIndex = *_bvh.patch_parent(lParent);
+  uint32_t lSiblingIndex     = _bvh.patch_isRightChild(lNode) ? _bvh.patch_left(lParent) : _bvh.patch_right(lParent);
+  uint32_t lGrandParentIndex = _bvh.patch_parent(lParent);
   uint16_t lSibling          = _bvh.patchNode(lSiblingIndex, PINDEX_SIBLING);
   uint16_t lGrandParent      = _bvh.patchNode(lGrandParentIndex, PINDEX_GRAND_PARENT);
 
@@ -247,19 +247,19 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, BVHPatch &_bvh, Su
 
   // Remove nodes
   if (_bvh.patch_isLeftChild(lParent)) {
-    *_bvh.patch_left(lGrandParent) = lSiblingIndex;
-    *_bvh.patch_isLeft(lSibling)   = TRUE;
-    *_bvh.patch_parent(lSibling)   = lGrandParentIndex;
+    _bvh.patch_left(lGrandParent) = lSiblingIndex;
+    _bvh.patch_isLeft(lSibling)   = TRUE;
+    _bvh.patch_parent(lSibling)   = lGrandParentIndex;
   } else {
-    *_bvh.patch_right(lGrandParent) = lSiblingIndex;
-    *_bvh.patch_isLeft(lSibling)    = FALSE;
-    *_bvh.patch_parent(lSibling)    = lGrandParentIndex;
+    _bvh.patch_right(lGrandParent) = lSiblingIndex;
+    _bvh.patch_isLeft(lSibling)    = FALSE;
+    _bvh.patch_parent(lSibling)    = lGrandParentIndex;
   }
 
   // update Bounding Boxes (temporary)
   _bvh.patchAABBFrom(lGrandParentIndex);
 
-  if (*_bvh.orig_surfaceArea(lLeftIndex) > *_bvh.orig_surfaceArea(lRightIndex)) {
+  if (_bvh.orig_surfaceArea(lLeftIndex) > _bvh.orig_surfaceArea(lRightIndex)) {
     return {true, {lLeftIndex, lRightIndex}, {_node, lParentIndex}, {lGrandParentIndex, lSiblingIndex}};
   } else {
     return {true, {lRightIndex, lLeftIndex}, {_node, lParentIndex}, {lGrandParentIndex, lSiblingIndex}};
@@ -289,7 +289,7 @@ Bittner13Par::INS_RES Bittner13Par::reinsert(
 
   uint16_t lNode           = _bvh.patchNode(_node, _update ? PINDEX_1ST_INSERT : PINDEX_2ND_INSERT);
   uint16_t lUnused         = _update ? PINDEX_NODE : PINDEX_PARENT;
-  uint32_t lRootIndex      = *_bvh.patch_parent(lBest);
+  uint32_t lRootIndex      = _bvh.patch_parent(lBest);
   uint32_t lRootPatchIndex = _bvh.patchIndex(lRootIndex);
   uint16_t lRoot;
 
@@ -305,23 +305,23 @@ Bittner13Par::INS_RES Bittner13Par::reinsert(
 
   // Insert the unused node
   if (_bvh.patch_isLeftChild(lBest)) {
-    *_bvh.patch_left(lRoot)     = _unused;
-    *_bvh.patch_isLeft(lUnused) = TRUE;
+    _bvh.patch_left(lRoot)     = _unused;
+    _bvh.patch_isLeft(lUnused) = TRUE;
   } else {
-    *_bvh.patch_right(lRoot)    = _unused;
-    *_bvh.patch_isLeft(lUnused) = FALSE;
+    _bvh.patch_right(lRoot)    = _unused;
+    _bvh.patch_isLeft(lUnused) = FALSE;
   }
 
 
   // Insert the other nodes
-  *_bvh.patch_parent(lUnused) = lRootIndex;
-  *_bvh.patch_left(lUnused)   = lBestIndex;
-  *_bvh.patch_right(lUnused)  = _node;
+  _bvh.patch_parent(lUnused) = lRootIndex;
+  _bvh.patch_left(lUnused)   = lBestIndex;
+  _bvh.patch_right(lUnused)  = _node;
 
-  *_bvh.patch_parent(lBest) = _unused;
-  *_bvh.patch_isLeft(lBest) = TRUE;
-  *_bvh.patch_parent(lNode) = _unused;
-  *_bvh.patch_isLeft(lNode) = FALSE;
+  _bvh.patch_parent(lBest) = _unused;
+  _bvh.patch_isLeft(lBest) = TRUE;
+  _bvh.patch_parent(lNode) = _unused;
+  _bvh.patch_isLeft(lNode) = FALSE;
 
   if (_update) { _bvh.patchAABBFrom(_unused); }
 
@@ -332,35 +332,35 @@ void Bittner13Par::fixTree(uint32_t _node, BVH &_bvh, SumMin *_sumMin) {
   uint32_t lNode = _node;
 
   SPINN_LOCK(lNode);
-  uint32_t lLast = *_bvh.left(lNode);
+  uint32_t lLast = _bvh.left(lNode);
 
   SPINN_LOCK(lLast);
   bool     lLastWasLeft = true;
   uint32_t lCurrSibling = 0;
 
-  AABB     lBBox = *_bvh.bbox(lLast);
+  AABB     lBBox = _bvh.bbox(lLast);
   float    lSum  = SUM_OF(lLast);
   float    lMin  = MIN_OF(lLast);
-  uint32_t lNum  = *_bvh.numChildren(lLast);
+  uint32_t lNum  = _bvh.numChildren(lLast);
 
   float lSArea;
   RELEASE_LOCK(lLast);
 
   while (true) {
-    lCurrSibling = lLastWasLeft ? *_bvh.right(lNode) : *_bvh.left(lNode);
+    lCurrSibling = lLastWasLeft ? _bvh.right(lNode) : _bvh.left(lNode);
     SPINN_LOCK(lCurrSibling);
 
-    lBBox.mergeWith(*_bvh.bbox(lCurrSibling));
-    lSArea                   = lBBox.surfaceArea();
-    *_bvh.bbox(lNode)        = lBBox;
-    *_bvh.surfaceArea(lNode) = lSArea;
+    lBBox.mergeWith(_bvh.bbox(lCurrSibling));
+    lSArea                  = lBBox.surfaceArea();
+    _bvh.bbox(lNode)        = lBBox;
+    _bvh.surfaceArea(lNode) = lSArea;
 
-    lSum                     = lSum + SUM_OF(lCurrSibling) + lSArea;
-    lMin                     = min(lMin, MIN_OF(lCurrSibling));
-    lNum                     = lNum + *_bvh.numChildren(lCurrSibling) + 2;
-    SUM_OF(lNode)            = lSum;
-    MIN_OF(lNode)            = lMin;
-    *_bvh.numChildren(lNode) = lNum;
+    lSum                    = lSum + SUM_OF(lCurrSibling) + lSArea;
+    lMin                    = min(lMin, MIN_OF(lCurrSibling));
+    lNum                    = lNum + _bvh.numChildren(lCurrSibling) + 2;
+    SUM_OF(lNode)           = lSum;
+    MIN_OF(lNode)           = lMin;
+    _bvh.numChildren(lNode) = lNum;
 
     RELEASE_LOCK(lCurrSibling);
 
@@ -368,7 +368,7 @@ void Bittner13Par::fixTree(uint32_t _node, BVH &_bvh, SumMin *_sumMin) {
 
     lLastWasLeft = _bvh.isLeftChild(lNode);
     lLast        = lNode;
-    lNode        = *_bvh.parent(lNode);
+    lNode        = _bvh.parent(lNode);
 
     RELEASE_LOCK(lLast);
     SPINN_LOCK(lNode);
@@ -388,32 +388,32 @@ void Bittner13Par::initSumAndMin(BVH &_bvh, SumMin *_sumMin) {
     while (!_bvh.isLeaf(lNode)) {
       lBitStack <<= 1;
       lBitStack |= 1;
-      lNode = *_bvh.left(lNode);
+      lNode = _bvh.left(lNode);
     }
 
     // Leaf
-    SUM_OF(lNode) = *_bvh.surfaceArea(lNode);
-    MIN_OF(lNode) = *_bvh.surfaceArea(lNode);
+    SUM_OF(lNode) = _bvh.surfaceArea(lNode);
+    MIN_OF(lNode) = _bvh.surfaceArea(lNode);
 
     // Backtrack if left and right children are processed
     while ((lBitStack & 1) == 0) {
       if (lBitStack == 0 && lNode == lRoot) { return; } // We are done
-      lNode = *_bvh.parent(lNode);
+      lNode = _bvh.parent(lNode);
 
-      uint32_t lLeft  = *_bvh.left(lNode);
-      uint32_t lRight = *_bvh.right(lNode);
-      AABB     lBBox  = *_bvh.bbox(lLeft);
-      lBBox.mergeWith(*_bvh.bbox(lRight));
-      float lSArea             = lBBox.surfaceArea();
-      *_bvh.bbox(lNode)        = lBBox;
-      *_bvh.surfaceArea(lNode) = lSArea;
-      *_bvh.numChildren(lNode) = *_bvh.numChildren(lLeft) + *_bvh.numChildren(lRight) + 2;
-      SUM_OF(lNode)            = SUM_OF(lLeft) + SUM_OF(lRight) + lSArea;
-      MIN_OF(lNode)            = min(MIN_OF(lLeft), MIN_OF(lRight));
+      uint32_t lLeft  = _bvh.left(lNode);
+      uint32_t lRight = _bvh.right(lNode);
+      AABB     lBBox  = _bvh.bbox(lLeft);
+      lBBox.mergeWith(_bvh.bbox(lRight));
+      float lSArea            = lBBox.surfaceArea();
+      _bvh.bbox(lNode)        = lBBox;
+      _bvh.surfaceArea(lNode) = lSArea;
+      _bvh.numChildren(lNode) = _bvh.numChildren(lLeft) + _bvh.numChildren(lRight) + 2;
+      SUM_OF(lNode)           = SUM_OF(lLeft) + SUM_OF(lRight) + lSArea;
+      MIN_OF(lNode)           = min(MIN_OF(lLeft), MIN_OF(lRight));
       lBitStack >>= 1;
     }
 
-    lNode = *_bvh.right(*_bvh.parent(lNode));
+    lNode = _bvh.right(_bvh.parent(lNode));
     lBitStack ^= 1;
   }
 }
@@ -488,13 +488,13 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
       // === Metric selction ===
 #pragma omp parallel for
       for (uint32_t j = 0; j < _state.bvh.size(); ++j) {
-        float lSA = *_state.bvh.surfaceArea(j);
+        float lSA = _state.bvh.surfaceArea(j);
 
         bool lIsRoot       = j == _state.bvh.root();
-        bool lParentIsRoot = *_state.bvh.parent(j) == _state.bvh.root();
+        bool lParentIsRoot = _state.bvh.parent(j) == _state.bvh.root();
         bool lCanRM        = !lIsRoot && !lParentIsRoot && !_state.bvh.isLeaf(j);
 
-        float lCost = lCanRM ? ((lSA * lSA * lSA * (float)*_state.bvh.numChildren(j)) / (SUM_OF(j) * MIN_OF(j))) : 0.0f;
+        float lCost  = lCanRM ? ((lSA * lSA * lSA * (float)_state.bvh.numChildren(j)) / (SUM_OF(j) * MIN_OF(j))) : 0.0f;
         lTodoList[j] = {j, lCost};
       }
 

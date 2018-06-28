@@ -117,8 +117,8 @@ struct CUDA_INS_RES {
 __device__ CUDANodeLevel findNode1(uint32_t _n, PATCH &_bvh) {
   float             lBestCost      = HUGE_VALF;
   CUDANodeLevel     lBestNodeIndex = {0, 0};
-  AABB const &      lNodeBBox      = *_bvh.orig_bbox(_n);
-  float             lSArea         = *_bvh.orig_surfaceArea(_n);
+  AABB const &      lNodeBBox      = _bvh.orig_bbox(_n);
+  float             lSArea         = _bvh.orig_surfaceArea(_n);
   uint32_t          lSize          = 1;
   CUDAHelperStruct  lPQ[CUDA_QUEUE_SIZE];
   CUDAHelperStruct *lBegin = lPQ;
@@ -149,8 +149,8 @@ __device__ CUDANodeLevel findNode1(uint32_t _n, PATCH &_bvh) {
     if ((lNewInduced + lSArea) < lBestCost) {
       if (!_bvh.isLeaf(lCurrNode)) {
         assert(lSize + 2 < CUDA_QUEUE_SIZE);
-        lPQ[lSize + 0] = {*_bvh.left(lCurrNode), lNewInduced, lCurr.level + 1};
-        lPQ[lSize + 1] = {*_bvh.right(lCurrNode), lNewInduced, lCurr.level + 1};
+        lPQ[lSize + 0] = {_bvh.left(lCurrNode), lNewInduced, lCurr.level + 1};
+        lPQ[lSize + 1] = {_bvh.right(lCurrNode), lNewInduced, lCurr.level + 1};
         CUDA_push_heap(lBegin, lBegin + lSize + 1);
         CUDA_push_heap(lBegin, lBegin + lSize + 2);
         lSize += 2;
@@ -165,8 +165,8 @@ __device__ CUDANodeLevel findNode1(uint32_t _n, PATCH &_bvh) {
 __device__ CUDANodeLevel findNode2(uint32_t _n, PATCH &_bvh) {
   float            lBestCost      = HUGE_VALF;
   CUDANodeLevel    lBestNodeIndex = {0, 0};
-  AABB const &     lNodeBBox      = *_bvh.orig_bbox(_n);
-  float            lSArea         = *_bvh.orig_surfaceArea(_n);
+  AABB const &     lNodeBBox      = _bvh.orig_bbox(_n);
+  float            lSArea         = _bvh.orig_surfaceArea(_n);
   float            lMin           = 0.0f;
   float            lMax           = HUGE_VALF;
   uint32_t         lMinIndex      = 0;
@@ -200,8 +200,8 @@ __device__ CUDANodeLevel findNode2(uint32_t _n, PATCH &_bvh) {
 
     float lNewInduced = lTotalCost - lBBox.sarea;
     if ((lNewInduced + lSArea) < lBestCost && !_bvh.isLeaf(lCurrNode)) {
-      lPQ[lMinIndex] = {*_bvh.left(lCurrNode), lNewInduced, lCurr.level + 1};
-      lPQ[lMaxIndex] = {*_bvh.right(lCurrNode), lNewInduced, lCurr.level + 1};
+      lPQ[lMinIndex] = {_bvh.left(lCurrNode), lNewInduced, lCurr.level + 1};
+      lPQ[lMaxIndex] = {_bvh.right(lCurrNode), lNewInduced, lCurr.level + 1};
     }
 
     lMin = HUGE_VALF;
@@ -227,12 +227,12 @@ __device__ CUDA_RM_RES removeNode(uint32_t _node, PATCH &_bvh, uint32_t _lockID)
   if (_bvh.orig_isLeaf(_node) || _node == _bvh.root()) { return lFalse; }
 
   uint16_t lNode             = _bvh.patchNode(_node, PINDEX_NODE);
-  uint32_t lParentIndex      = *_bvh.patch_parent(lNode);
-  uint32_t lLeftIndex        = *_bvh.patch_left(lNode);
-  uint32_t lRightIndex       = *_bvh.patch_right(lNode);
+  uint32_t lParentIndex      = _bvh.patch_parent(lNode);
+  uint32_t lLeftIndex        = _bvh.patch_left(lNode);
+  uint32_t lRightIndex       = _bvh.patch_right(lNode);
   uint16_t lParent           = _bvh.patchNode(lParentIndex, PINDEX_PARENT);
-  uint32_t lSiblingIndex     = _bvh.patch_isRightChild(lNode) ? *_bvh.patch_left(lParent) : *_bvh.patch_right(lParent);
-  uint32_t lGrandParentIndex = *_bvh.patch_parent(lParent);
+  uint32_t lSiblingIndex     = _bvh.patch_isRightChild(lNode) ? _bvh.patch_left(lParent) : _bvh.patch_right(lParent);
+  uint32_t lGrandParentIndex = _bvh.patch_parent(lParent);
   uint16_t lSibling          = _bvh.patchNode(lSiblingIndex, PINDEX_SIBLING);
   uint16_t lGrandParent      = _bvh.patchNode(lGrandParentIndex, PINDEX_GRAND_PARENT);
 
@@ -243,19 +243,19 @@ __device__ CUDA_RM_RES removeNode(uint32_t _node, PATCH &_bvh, uint32_t _lockID)
 
   // Remove nodes
   if (_bvh.patch_isLeftChild(lParent)) {
-    *_bvh.patch_left(lGrandParent) = lSiblingIndex;
-    *_bvh.patch_isLeft(lSibling)   = TRUE;
-    *_bvh.patch_parent(lSibling)   = lGrandParentIndex;
+    _bvh.patch_left(lGrandParent) = lSiblingIndex;
+    _bvh.patch_isLeft(lSibling)   = TRUE;
+    _bvh.patch_parent(lSibling)   = lGrandParentIndex;
   } else {
-    *_bvh.patch_right(lGrandParent) = lSiblingIndex;
-    *_bvh.patch_isLeft(lSibling)    = FALSE;
-    *_bvh.patch_parent(lSibling)    = lGrandParentIndex;
+    _bvh.patch_right(lGrandParent) = lSiblingIndex;
+    _bvh.patch_isLeft(lSibling)    = FALSE;
+    _bvh.patch_parent(lSibling)    = lGrandParentIndex;
   }
 
   // update Bounding Boxes (temporary)
   _bvh.patchAABBFrom(lGrandParentIndex);
 
-  if (*_bvh.orig_surfaceArea(lLeftIndex) > *_bvh.orig_surfaceArea(lRightIndex)) {
+  if (_bvh.orig_surfaceArea(lLeftIndex) > _bvh.orig_surfaceArea(lRightIndex)) {
     return {true, {lLeftIndex, lRightIndex}, {_node, lParentIndex}, {lGrandParentIndex, lSiblingIndex}};
   } else {
     return {true, {lRightIndex, lLeftIndex}, {_node, lParentIndex}, {lGrandParentIndex, lSiblingIndex}};
@@ -281,7 +281,7 @@ __device__ CUDA_INS_RES
 
   uint16_t lNode           = _bvh.patchNode(_node, _update ? PINDEX_1ST_INSERT : PINDEX_2ND_INSERT);
   uint16_t lUnused         = _update ? PINDEX_NODE : PINDEX_PARENT;
-  uint32_t lRootIndex      = *_bvh.patch_parent(lBest);
+  uint32_t lRootIndex      = _bvh.patch_parent(lBest);
   uint32_t lRootPatchIndex = _bvh.patchIndex(lRootIndex);
   uint16_t lRoot;
 
@@ -293,23 +293,23 @@ __device__ CUDA_INS_RES
 
   // Insert the unused node
   if (_bvh.patch_isLeftChild(lBest)) {
-    *_bvh.patch_left(lRoot)     = _unused;
-    *_bvh.patch_isLeft(lUnused) = TRUE;
+    _bvh.patch_left(lRoot)     = _unused;
+    _bvh.patch_isLeft(lUnused) = TRUE;
   } else {
-    *_bvh.patch_right(lRoot)    = _unused;
-    *_bvh.patch_isLeft(lUnused) = FALSE;
+    _bvh.patch_right(lRoot)    = _unused;
+    _bvh.patch_isLeft(lUnused) = FALSE;
   }
 
 
   // Insert the other nodes
-  *_bvh.patch_parent(lUnused) = lRootIndex;
-  *_bvh.patch_left(lUnused)   = lRes.node;
-  *_bvh.patch_right(lUnused)  = _node;
+  _bvh.patch_parent(lUnused) = lRootIndex;
+  _bvh.patch_left(lUnused)   = lRes.node;
+  _bvh.patch_right(lUnused)  = _node;
 
-  *_bvh.patch_parent(lBest) = _unused;
-  *_bvh.patch_isLeft(lBest) = TRUE;
-  *_bvh.patch_parent(lNode) = _unused;
-  *_bvh.patch_isLeft(lNode) = FALSE;
+  _bvh.patch_parent(lBest) = _unused;
+  _bvh.patch_isLeft(lBest) = TRUE;
+  _bvh.patch_parent(lNode) = _unused;
+  _bvh.patch_isLeft(lNode) = FALSE;
 
   if (_update) { _bvh.patchAABBFrom(_unused); }
 

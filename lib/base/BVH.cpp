@@ -33,7 +33,7 @@ float BVH::calcSAH(float _cInner, float _cLeaf) {
     lSAH = lSAH + lCost;
   }
 
-  return (1.0f / *surfaceArea(root())) * lSAH;
+  return (1.0f / surfaceArea(root())) * lSAH;
 }
 
 void BVH::fixLevels() {
@@ -46,11 +46,11 @@ void BVH::fixLevels() {
   vMaxLevel = 0;
 
   while (true) {
-    *level(lNode) = lLevel;
+    level(lNode) = lLevel;
     if (!bvh.isLeaf(lNode)) {
       lBitStack <<= 1;
       lBitStack |= 1;
-      lNode = *left(lNode);
+      lNode = left(lNode);
       lLevel++;
       vMaxLevel = std::max(lLevel, vMaxLevel);
       continue;
@@ -59,12 +59,12 @@ void BVH::fixLevels() {
     // Backtrack
     while ((lBitStack & 1) == 0) {
       if (lBitStack == 0) { return; }
-      lNode = *parent(lNode);
+      lNode = parent(lNode);
       lBitStack >>= 1;
       lLevel--;
     }
 
-    lNode = *right(*parent(lNode));
+    lNode = right(parent(lNode));
     lBitStack ^= 1;
   }
 }
@@ -72,5 +72,5 @@ void BVH::fixLevels() {
 void BVH::fixSurfaceAreas() {
 
 #pragma omp parallel for
-  for (size_t i = 0; i < size(); ++i) { *surfaceArea(i) = bbox(i)->surfaceArea(); }
+  for (size_t i = 0; i < size(); ++i) { surfaceArea(i) = bbox(i).surfaceArea(); }
 }
