@@ -83,9 +83,9 @@ struct HelperStruct {
 };
 
 
-Bittner13Par::NodeLevel Bittner13Par::findNode1(uint32_t _n, PATCH &_bvh) {
+uint32_t Bittner13Par::findNode1(uint32_t _n, PATCH &_bvh) {
   float          lBestCost      = HUGE_VALF;
-  NodeLevel      lBestNodeIndex = {0, 0};
+  uint32_t       lBestNodeIndex = 0;
   BVHNode const *lNode          = _bvh.getOrig(_n);
   AABB const &   lNodeBBox      = lNode->bbox;
   float          lSArea         = lNode->surfaceArea;
@@ -112,7 +112,7 @@ Bittner13Par::NodeLevel Bittner13Par::findNode1(uint32_t _n, PATCH &_bvh) {
     if (lTotalCost < lBestCost) {
       // Merging here improves the total SAH cost
       lBestCost      = lTotalCost;
-      lBestNodeIndex = {lCurr.node, lCurr.level};
+      lBestNodeIndex = lCurr.node;
     }
 
     float lNewInduced = lTotalCost - lBBox.sarea;
@@ -131,9 +131,9 @@ Bittner13Par::NodeLevel Bittner13Par::findNode1(uint32_t _n, PATCH &_bvh) {
   return lBestNodeIndex;
 }
 
-Bittner13Par::NodeLevel Bittner13Par::findNode2(uint32_t _n, PATCH &_bvh) {
+uint32_t Bittner13Par::findNode2(uint32_t _n, PATCH &_bvh) {
   float          lBestCost      = HUGE_VALF;
-  NodeLevel      lBestNodeIndex = {0, 0};
+  uint32_t       lBestNodeIndex = 0;
   BVHNode const *lNode          = _bvh.getOrig(_n);
   AABB const &   lNodeBBox      = lNode->bbox;
   float          lSArea         = lNode->surfaceArea;
@@ -165,7 +165,7 @@ Bittner13Par::NodeLevel Bittner13Par::findNode2(uint32_t _n, PATCH &_bvh) {
     if (lTotalCost < lBestCost) {
       // Merging here improves the total SAH cost
       lBestCost      = lTotalCost;
-      lBestNodeIndex = {lCurr.node, lCurr.level};
+      lBestNodeIndex = lCurr.node;
     }
 
     float lNewInduced = lTotalCost - lBBox.sarea;
@@ -279,7 +279,7 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMi
 Bittner13Par::INS_RES Bittner13Par::reinsert(
     uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, SumMin *_sumMin) {
 
-  auto [lBestIndex, lLevelOfBest] = vAltFindNode ? findNode2(_node, _bvh) : findNode1(_node, _bvh);
+  uint32_t lBestIndex = vAltFindNode ? findNode2(_node, _bvh) : findNode1(_node, _bvh);
   if (lBestIndex == _bvh.root()) { return {false, 0, 0}; }
 
   uint32_t      lBestPatchIndex = _bvh.patchIndex(lBestIndex); // Check if node is already patched

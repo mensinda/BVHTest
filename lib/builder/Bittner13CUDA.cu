@@ -114,9 +114,9 @@ struct CUDA_INS_RES {
   uint32_t root;
 };
 
-__device__ CUDANodeLevel findNode1(uint32_t _n, PATCH &_bvh) {
+__device__ uint32_t findNode1(uint32_t _n, PATCH &_bvh) {
   float             lBestCost      = HUGE_VALF;
-  CUDANodeLevel     lBestNodeIndex = {0, 0};
+  uint32_t          lBestNodeIndex = 0;
   BVHNode const *   lNode          = _bvh.getOrig(_n);
   AABB              lNodeBBox      = lNode->bbox;
   float             lSArea         = lNode->surfaceArea;
@@ -143,7 +143,7 @@ __device__ CUDANodeLevel findNode1(uint32_t _n, PATCH &_bvh) {
     if (lTotalCost < lBestCost) {
       // Merging here improves the total SAH cost
       lBestCost      = lTotalCost;
-      lBestNodeIndex = {lCurr.node, lCurr.level};
+      lBestNodeIndex = lCurr.node;
     }
 
     float lNewInduced = lTotalCost - lBBox.sarea;
@@ -163,31 +163,30 @@ __device__ CUDANodeLevel findNode1(uint32_t _n, PATCH &_bvh) {
 }
 
 
-__device__ CUDANodeLevel findNode2(uint32_t _n, PATCH &_bvh) {
+__device__ uint32_t findNode2(uint32_t _n, PATCH &_bvh) {
   float          lBestCost      = HUGE_VALF;
-  CUDANodeLevel  lBestNodeIndex = {0, 0};
+  uint32_t       lBestNodeIndex = 0;
   BVHNode const *lNode          = _bvh.getOrig(_n);
   AABB           lNodeBBox      = lNode->bbox;
   float          lSArea         = lNode->surfaceArea;
   float          lMin           = 0.0f;
   float          lMax           = HUGE_VALF;
   uint16_t       lStart         = threadIdx.x * CUDA_ALT_QUEUE_SIZE;
-  uint16_t       lEnd           = (threadIdx.x + 1) * CUDA_ALT_QUEUE_SIZE;
-  uint16_t       lMinIndex      = lStart;
-  uint16_t       lMaxIndex      = lStart + 1;
+  uint16_t       lMinIndex      = 0;
+  uint16_t       lMaxIndex      = 1;
 
-  uint32_t                lPQ_NL[CUDA_ALT_QUEUE_SIZE];
-  extern __shared__ float lPQ_CO[];
-  uint32_t                lCurrNL;
-  float                   lCurrCO;
+  extern __shared__ uint32_t lPQ_NL[];
+  float                      lPQ_CO[CUDA_ALT_QUEUE_SIZE];
+  uint32_t                   lCurrNL;
+  float                      lCurrCO;
 
   // Init
-  for (uint32_t i = lStart; i < lEnd; ++i) { lPQ_CO[i] = HUGE_VALF; }
+  for (uint32_t i = 0; i < CUDA_ALT_QUEUE_SIZE; ++i) { lPQ_CO[i] = HUGE_VALF; }
 
-  lPQ_NL[lMinIndex - lStart] = _bvh.root();
+  lPQ_NL[lMinIndex + lStart] = _bvh.root();
   lPQ_CO[lMinIndex]          = 0.0f;
   while (lMin < HUGE_VALF) {
-    lCurrNL                = lPQ_NL[lMinIndex - lStart];
+    lCurrNL                = lPQ_NL[lMinIndex + lStart];
     lCurrCO                = lPQ_CO[lMinIndex];
     lPQ_CO[lMinIndex]      = HUGE_VALF;
     BVHNodePatch lCurrNode = _bvh.getSubset(lCurrNL);
@@ -204,13 +203,13 @@ __device__ CUDANodeLevel findNode2(uint32_t _n, PATCH &_bvh) {
     if (lTotalCost < lBestCost) {
       // Merging here improves the total SAH cost
       lBestCost      = lTotalCost;
-      lBestNodeIndex = {lCurrNL, 0};
+      lBestNodeIndex = lCurrNL;
     }
 
     float lNewInduced = lTotalCost - lBBox.sarea;
     if ((lNewInduced + lSArea) < lBestCost && !lCurrNode.isLeaf()) {
-      lPQ_NL[lMinIndex - lStart] = lCurrNode.left;
-      lPQ_NL[lMaxIndex - lStart] = lCurrNode.right;
+      lPQ_NL[lMinIndex + lStart] = lCurrNode.left;
+      lPQ_NL[lMaxIndex + lStart] = lCurrNode.right;
       lPQ_CO[lMinIndex]          = lNewInduced;
       lPQ_CO[lMaxIndex]          = lNewInduced;
     }
@@ -219,7 +218,7 @@ __device__ CUDANodeLevel findNode2(uint32_t _n, PATCH &_bvh) {
     lMax = 0.0f;
 
 #pragma unroll 16
-    for (uint32_t i = lStart; i < lEnd; ++i) {
+    for (uint32_t i = 0; i < CUDA_ALT_QUEUE_SIZE; ++i) {
       if (lPQ_CO[i] < lMin) {
         lMin      = lPQ_CO[i];
         lMinIndex = i;
@@ -278,14 +277,14 @@ __device__ CUDA_RM_RES removeNode(uint32_t _node, PATCH &_bvh, uint32_t _lockID)
 
 __device__ CUDA_INS_RES
            reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, uint32_t _lockID, bool _altFindNode) {
-  CUDANodeLevel lRes = _altFindNode ? findNode2(_node, _bvh) : findNode1(_node, _bvh);
-  if (lRes.node == _bvh.root()) { return {false, 0, 0}; }
+  uint32_t lBestIndex = _altFindNode ? findNode2(_node, _bvh) : findNode1(_node, _bvh);
+  if (lBestIndex == _bvh.root()) { return {false, 0, 0}; }
 
-  uint32_t      lBestPatchIndex = _bvh.patchIndex(lRes.node); // Check if node is already patched
+  uint32_t      lBestPatchIndex = _bvh.patchIndex(lBestIndex); // Check if node is already patched
   BVHNodePatch *lBest           = nullptr;
 
   if (lBestPatchIndex == UINT32_MAX) {
-    lBest = _bvh.patchNode(lRes.node, _update ? PINDEX_1ST_BEST : PINDEX_2ND_BEST);
+    lBest = _bvh.patchNode(lBestIndex, _update ? PINDEX_1ST_BEST : PINDEX_2ND_BEST);
   } else if (lBestPatchIndex == PINDEX_GRAND_PARENT) {
     lBest = _bvh.getPatchedNode(PINDEX_GRAND_PARENT);
   } else {
@@ -316,7 +315,7 @@ __device__ CUDA_INS_RES
 
   // Insert the other nodes
   lUnused->parent = lRootIndex;
-  lUnused->left   = lRes.node;
+  lUnused->left   = lBestIndex;
   lUnused->right  = _node;
 
   lBest->parent = _unused;
@@ -326,7 +325,7 @@ __device__ CUDA_INS_RES
 
   if (_update) { _bvh.patchAABBFrom(_unused); }
 
-  return {true, lRes.node, lRootIndex};
+  return {true, lBestIndex, lRootIndex};
 }
 
 
@@ -669,7 +668,7 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
   cudaError_t lRes;
   uint32_t    lNumBlocksAll   = (_data->sumMin.num + _blockSize - 1) / _blockSize;
   uint32_t    lNumBlocksChunk = (_chunkSize + _blockSize - 1) / _blockSize;
-  uint32_t    lSharedMemory   = sizeof(float) * _blockSize * CUDA_ALT_QUEUE_SIZE;
+  uint32_t    lSharedMemory   = sizeof(uint32_t) * _blockSize * CUDA_ALT_QUEUE_SIZE;
 
   kCalcCost<<<lNumBlocksAll, _blockSize>>>(
       _data->sumMin.sums, _data->sumMin.mins, _GPUbvh->nodes, _data->todoNodes.costs, _data->sumMin.num);
