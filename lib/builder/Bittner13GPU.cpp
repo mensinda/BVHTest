@@ -100,6 +100,7 @@ ErrorCode Bittner13GPU::runImpl(State &_state) {
                     vOffsetAccess,
                     vAltFindNode,
                     vAltFixTree,
+                    vSortBatch,
                     vLocalPatchCPY);
   }
 

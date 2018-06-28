@@ -71,6 +71,7 @@ void doAlgorithmStep(GPUWorkingMemory *                   _data,
                      bool                                 _offsetAccess,
                      bool                                 _altFindNode,
                      bool                                 _altFixTree,
+                     bool                                 _sort,
                      bool                                 _localPatchCPY);
 
 void doCudaDevSync();
