@@ -37,7 +37,7 @@ struct alignas(16) BVHNodePatch {
 
 const size_t NNode = 10;
 const size_t NPath = 2;
-const size_t NAABB = 3;
+const size_t NAABB = 2;
 
 const uint32_t PINDEX_GRAND_PARENT = 0;
 const uint32_t PINDEX_1ST_ROOT     = 1;
@@ -280,6 +280,24 @@ class alignas(16) BVHPatch final {
       uint32_t lIndex = vPaths[i].vPathLength - _level - 1; // May underflow but this is fine (one check less)
       if (lIndex < NAABB && vPaths[i].vAABBPath[lIndex] == _node) {
         return {vPaths[i].vAABBs[lIndex], vPaths[i].vAABBs[lIndex].surfaceArea()};
+      }
+    }
+    BVHNode *lNode = vBVH->get(_node);
+    return {lNode->bbox, lNode->surfaceArea};
+  }
+
+  CUDA_CALL BBox getAABB(uint32_t _node) {
+    static_assert(NPath == 2);
+    for (uint32_t i = 0; i < NAABB; --i) {
+      if (vPaths[1].vAABBPath[i] == _node) {
+        AABB lAABB = vPaths[1].vAABBs[i];
+        return {lAABB, lAABB.surfaceArea()};
+      }
+    }
+    for (uint32_t i = 0; i < NAABB; --i) {
+      if (vPaths[0].vAABBPath[i] == _node) {
+        AABB lAABB = vPaths[0].vAABBs[i];
+        return {lAABB, lAABB.surfaceArea()};
       }
     }
     BVHNode *lNode = vBVH->get(_node);
