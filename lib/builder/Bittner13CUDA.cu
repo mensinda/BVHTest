@@ -164,57 +164,68 @@ __device__ CUDANodeLevel findNode1(uint32_t _n, PATCH &_bvh) {
 
 
 __device__ CUDANodeLevel findNode2(uint32_t _n, PATCH &_bvh) {
-  float            lBestCost      = HUGE_VALF;
-  CUDANodeLevel    lBestNodeIndex = {0, 0};
-  BVHNode const *  lNode          = _bvh.getOrig(_n);
-  AABB             lNodeBBox      = lNode->bbox;
-  float            lSArea         = lNode->surfaceArea;
-  float            lMin           = 0.0f;
-  float            lMax           = HUGE_VALF;
-  uint32_t         lMinIndex      = 0;
-  uint32_t         lMaxIndex      = 1;
-  CUDAHelperStruct lPQ[CUDA_ALT_QUEUE_SIZE];
-  CUDAHelperStruct lCurr;
+  float          lBestCost      = HUGE_VALF;
+  CUDANodeLevel  lBestNodeIndex = {0, 0};
+  BVHNode const *lNode          = _bvh.getOrig(_n);
+  AABB           lNodeBBox      = lNode->bbox;
+  float          lSArea         = lNode->surfaceArea;
+  float          lMin           = 0.0f;
+  float          lMax           = HUGE_VALF;
+  uint16_t       lStart         = threadIdx.x * CUDA_ALT_QUEUE_SIZE;
+  uint16_t       lEnd           = (threadIdx.x + 1) * CUDA_ALT_QUEUE_SIZE;
+  uint16_t       lMinIndex      = lStart;
+  uint16_t       lMaxIndex      = lStart + 1;
+
+  CUDANodeLevel           lPQ_NL[CUDA_ALT_QUEUE_SIZE];
+  extern __shared__ float lPQ_CO[];
+  CUDANodeLevel           lCurrNL;
+  float                   lCurrCO;
 
   // Init
-  for (uint32_t i = 0; i < CUDA_ALT_QUEUE_SIZE; ++i) { lPQ[i].cost = HUGE_VALF; }
+  for (uint32_t i = lStart; i < lEnd; ++i) { lPQ_CO[i] = HUGE_VALF; }
 
-  lPQ[0] = {_bvh.root(), 0.0f, 0};
+  lPQ_NL[lMinIndex - lStart] = {_bvh.root(), 0};
+  lPQ_CO[lMinIndex]          = 0.0f;
   while (lMin < HUGE_VALF) {
-    lCurr                  = lPQ[lMinIndex];
-    lPQ[lMinIndex].cost    = HUGE_VALF;
-    BVHNodePatch lCurrNode = _bvh.getSubset(lCurr.node);
-    auto         lBBox     = _bvh.getAABB(lCurr.node, lCurr.level);
+    lCurrNL                = lPQ_NL[lMinIndex - lStart];
+    lCurrCO                = lPQ_CO[lMinIndex];
+    lPQ_CO[lMinIndex]      = HUGE_VALF;
+    BVHNodePatch lCurrNode = _bvh.getSubset(lCurrNL.node);
+    auto         lBBox     = _bvh.getAABB(lCurrNL.node, lCurrNL.level);
 
-    if ((lCurr.cost + lSArea) >= lBestCost) {
+    if ((lCurrCO + lSArea) >= lBestCost) {
       // Early termination - not possible to further optimize
       break;
     }
 
     lBBox.box.mergeWith(lNodeBBox);
     float lDirectCost = lBBox.box.surfaceArea();
-    float lTotalCost  = lCurr.cost + lDirectCost;
+    float lTotalCost  = lCurrCO + lDirectCost;
     if (lTotalCost < lBestCost) {
       // Merging here improves the total SAH cost
       lBestCost      = lTotalCost;
-      lBestNodeIndex = {lCurr.node, lCurr.level};
+      lBestNodeIndex = {lCurrNL.node, lCurrNL.level};
     }
 
     float lNewInduced = lTotalCost - lBBox.sarea;
     if ((lNewInduced + lSArea) < lBestCost && !lCurrNode.isLeaf()) {
-      lPQ[lMinIndex] = {lCurrNode.left, lNewInduced, lCurr.level + 1};
-      lPQ[lMaxIndex] = {lCurrNode.right, lNewInduced, lCurr.level + 1};
+      lPQ_NL[lMinIndex - lStart] = {lCurrNode.left, lCurrNL.level + 1};
+      lPQ_NL[lMaxIndex - lStart] = {lCurrNode.right, lCurrNL.level + 1};
+      lPQ_CO[lMinIndex]          = lNewInduced;
+      lPQ_CO[lMaxIndex]          = lNewInduced;
     }
 
     lMin = HUGE_VALF;
     lMax = 0.0f;
-    for (uint32_t i = 0; i < CUDA_ALT_QUEUE_SIZE; ++i) {
-      if (lPQ[i].cost < lMin) {
-        lMin      = lPQ[i].cost;
+
+#pragma unroll 16
+    for (uint32_t i = lStart; i < lEnd; ++i) {
+      if (lPQ_CO[i] < lMin) {
+        lMin      = lPQ_CO[i];
         lMinIndex = i;
       }
-      if (lPQ[i].cost > lMax) {
-        lMax      = lPQ[i].cost;
+      if (lPQ_CO[i] > lMax) {
+        lMax      = lPQ_CO[i];
         lMaxIndex = i;
       }
     }
@@ -658,6 +669,7 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
   cudaError_t lRes;
   uint32_t    lNumBlocksAll   = (_data->sumMin.num + _blockSize - 1) / _blockSize;
   uint32_t    lNumBlocksChunk = (_chunkSize + _blockSize - 1) / _blockSize;
+  uint32_t    lSharedMemory   = sizeof(float) * _blockSize * CUDA_ALT_QUEUE_SIZE;
 
   kCalcCost<<<lNumBlocksAll, _blockSize>>>(
       _data->sumMin.sums, _data->sumMin.mins, _GPUbvh->nodes, _data->todoNodes.costs, _data->sumMin.num);
@@ -672,24 +684,24 @@ void doAlgorithmStep(GPUWorkingMemory *    _data,
 
   for (uint32_t i = 0; i < _numChunks; ++i) {
     if (_localPatchCPY) {
-      kRemoveAndReinsert2<<<lNumBlocksChunk, _blockSize>>>(_data->todoSorted.nodes,
-                                                           _data->patches,
-                                                           _GPUbvh->bvh,
-                                                           _data->nodesToFix,
-                                                           _offsetAccess,
-                                                           i,
-                                                           _numChunks,
-                                                           _chunkSize,
-                                                           _altFindNode);
+      kRemoveAndReinsert2<<<lNumBlocksChunk, _blockSize, lSharedMemory>>>(_data->todoSorted.nodes,
+                                                                          _data->patches,
+                                                                          _GPUbvh->bvh,
+                                                                          _data->nodesToFix,
+                                                                          _offsetAccess,
+                                                                          i,
+                                                                          _numChunks,
+                                                                          _chunkSize,
+                                                                          _altFindNode);
     } else {
-      kRemoveAndReinsert1<<<lNumBlocksChunk, _blockSize>>>(_data->todoSorted.nodes,
-                                                           _data->patches,
-                                                           _data->nodesToFix,
-                                                           _offsetAccess,
-                                                           i,
-                                                           _numChunks,
-                                                           _chunkSize,
-                                                           _altFindNode);
+      kRemoveAndReinsert1<<<lNumBlocksChunk, _blockSize, lSharedMemory>>>(_data->todoSorted.nodes,
+                                                                          _data->patches,
+                                                                          _data->nodesToFix,
+                                                                          _offsetAccess,
+                                                                          i,
+                                                                          _numChunks,
+                                                                          _chunkSize,
+                                                                          _altFindNode);
     }
 
     kCheckConflicts<<<lNumBlocksChunk, _blockSize>>>(
