@@ -76,8 +76,8 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &_bvh) {
   clock_gettime(CLOCK_MONOTONIC, &lTSStart);
 #endif
 
-  __int128_t     lBitStack = 0;
-  BVHNode const *lNode     = _bvh.rootNode();
+  __int128_t lBitStack = 0;
+  uint32_t   lNode     = _bvh.root();
 
   Triangle lClosest = {0, 0, 0};
   float    lNearest = lInfinity;
@@ -89,12 +89,12 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &_bvh) {
   double lDistance;
 
   while (true) {
-    if (!lNode->isLeaf()) {
+    if (!_bvh.isLeaf(lNode)) {
       lRes.intCount++;
-      BVHNode const *lLeft     = _bvh[lNode->left];
-      BVHNode const *lRight    = _bvh[lNode->right];
-      bool           lLeftHit  = lLeft->bbox.intersect(_ray, 0.01f, lNearest + 0.01f, lMinLeft, lTemp);
-      bool           lRightHit = lRight->bbox.intersect(_ray, 0.01f, lNearest + 0.01f, lMinRight, lTemp);
+      uint32_t lLeft     = _bvh.left(lNode);
+      uint32_t lRight    = _bvh.right(lNode);
+      bool     lLeftHit  = _bvh.bbox(lLeft).intersect(_ray, 0.01f, lNearest + 0.01f, lMinLeft, lTemp);
+      bool     lRightHit = _bvh.bbox(lRight).intersect(_ray, 0.01f, lNearest + 0.01f, lMinRight, lTemp);
 
       if (lLeftHit || lRightHit) {
         lBitStack <<= 1;
@@ -109,8 +109,8 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &_bvh) {
         continue;
       }
     } else {
-      for (uint32_t i = 0; i < lNode->numFaces(); ++i) {
-        Triangle const &lTri = _mesh.faces[lNode->beginFaces() + i];
+      for (uint32_t i = 0; i < _bvh.numFaces(lNode); ++i) {
+        Triangle const &lTri = _mesh.faces[_bvh.beginFaces(lNode) + i];
 
         bool lHit = intersectRayTriangle<double>(static_cast<dvec3 const &>(_ray.getOrigin()),
                                                  static_cast<dvec3 const &>(_ray.getDirection()),
@@ -130,11 +130,11 @@ Pixel CPUTracer::trace(Ray &_ray, Mesh const &_mesh, BVH &_bvh) {
     // Backtrac
     while ((lBitStack & 1) == 0) {
       if (lBitStack == 0) { goto LABEL_END; } // I know, I know...
-      lNode = _bvh[lNode->parent];
+      lNode = _bvh.parent(lNode);
       lBitStack >>= 1;
     }
 
-    lNode = _bvh.siblingNode(lNode);
+    lNode = _bvh.sibling(lNode);
     lBitStack ^= 1;
   }
 

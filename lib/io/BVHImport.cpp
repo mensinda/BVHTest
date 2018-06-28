@@ -82,7 +82,7 @@ ErrorCode BVHImport::runImpl(State &_state) {
   }
 
   fs::path lBinaryPath = lDataDir / lControlData.at("bin").get<string>();
-  uint32_t lSize       = lControlData.at("BVHSize").get<uint32_t>();
+  uint32_t lNumNodes   = lControlData.at("BVHSize").get<uint32_t>();
   uint32_t lNumTris    = lControlData.at("numTris").get<uint32_t>();
   _state.bvh.setMaxLevel(lControlData.at("treeHeight").get<uint16_t>());
   uint32_t lCheckSumComp = lControlData.at("compressedChecksum").get<uint32_t>();
@@ -102,8 +102,9 @@ ErrorCode BVHImport::runImpl(State &_state) {
   // Read File
   auto lBeginPos = lBinaryFile.tellg();
   lBinaryFile.seekg(0, lBinaryFile.end);
-  size_t lCompSize = lBinaryFile.tellg() - lBeginPos;
-  size_t lDataSize = lSize * sizeof(BVHNode) + lNumTris * sizeof(Triangle);
+  size_t lCompSize    = lBinaryFile.tellg() - lBeginPos;
+  size_t lElementSize = sizeof(AABB) + 4 * sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint8_t) + sizeof(float);
+  size_t lDataSize    = lNumNodes * lElementSize + lNumTris * sizeof(Triangle);
   lBinaryFile.seekg(0, lBinaryFile.beg);
 
   unique_ptr<uint8_t[]> lComp = unique_ptr<uint8_t[]>(new uint8_t[lCompSize]);
@@ -136,10 +137,38 @@ ErrorCode BVHImport::runImpl(State &_state) {
     return ErrorCode::IO_ERROR;
   }
 
-  _state.bvh.resize(lSize);
+  size_t  lOffset = 0;
+  BVHNode lBVHData;
+
+  lBVHData.bbox        = static_cast<AABB *>(malloc(lNumNodes * sizeof(AABB)));
+  lBVHData.parent      = static_cast<uint32_t *>(malloc(lNumNodes * sizeof(uint32_t)));
+  lBVHData.numChildren = static_cast<uint32_t *>(malloc(lNumNodes * sizeof(uint32_t)));
+  lBVHData.left        = static_cast<uint32_t *>(malloc(lNumNodes * sizeof(uint32_t)));
+  lBVHData.right       = static_cast<uint32_t *>(malloc(lNumNodes * sizeof(uint32_t)));
+  lBVHData.isLeft      = static_cast<uint8_t *>(malloc(lNumNodes * sizeof(uint8_t)));
+  lBVHData.level       = static_cast<uint16_t *>(malloc(lNumNodes * sizeof(uint16_t)));
+  lBVHData.surfaceArea = static_cast<float *>(malloc(lNumNodes * sizeof(float)));
+
   _state.mesh.faces.resize(lNumTris);
-  memcpy(_state.bvh.data(), lData.get(), lSize * sizeof(BVHNode));
-  memcpy(_state.mesh.faces.data(), lData.get() + lSize * sizeof(BVHNode), lNumTris * sizeof(Triangle));
+  memcpy(lBVHData.bbox, lData.get() + lOffset, lNumNodes * sizeof(AABB));
+  lOffset += lNumNodes * sizeof(AABB);
+  memcpy(lBVHData.parent, lData.get() + lOffset, lNumNodes * sizeof(uint32_t));
+  lOffset += lNumNodes * sizeof(uint32_t);
+  memcpy(lBVHData.numChildren, lData.get() + lOffset, lNumNodes * sizeof(uint32_t));
+  lOffset += lNumNodes * sizeof(uint32_t);
+  memcpy(lBVHData.left, lData.get() + lOffset, lNumNodes * sizeof(uint32_t));
+  lOffset += lNumNodes * sizeof(uint32_t);
+  memcpy(lBVHData.right, lData.get() + lOffset, lNumNodes * sizeof(uint32_t));
+  lOffset += lNumNodes * sizeof(uint32_t);
+  memcpy(lBVHData.isLeft, lData.get() + lOffset, lNumNodes * sizeof(uint8_t));
+  lOffset += lNumNodes * sizeof(uint8_t);
+  memcpy(lBVHData.level, lData.get() + lOffset, lNumNodes * sizeof(uint16_t));
+  lOffset += lNumNodes * sizeof(uint16_t);
+  memcpy(lBVHData.surfaceArea, lData.get() + lOffset, lNumNodes * sizeof(float));
+  lOffset += lNumNodes * sizeof(float);
+  memcpy(_state.mesh.faces.data(), lData.get() + +lOffset, lNumTris * sizeof(Triangle));
+
+  _state.bvh.setMemory(lBVHData, lNumNodes, lNumNodes);
 
   return ErrorCode::OK;
 }

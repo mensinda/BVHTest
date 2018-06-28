@@ -113,57 +113,59 @@ struct TriWithBB {
 static const uint8_t TRUE  = 1;
 static const uint8_t FALSE = 0;
 
-struct alignas(16) BVHNode {
-  AABB     bbox;
-  uint32_t parent;      // Index of the parent
-  uint32_t numChildren; // Total number of children of the node (0 == leaf)
-  uint32_t left;        // Left child or index of first triangle when leaf
-  uint32_t right;       // Right child or number of faces when leaf
+struct BVHNode {
+  AABB *    bbox        = nullptr;
+  uint32_t *parent      = nullptr; // Index of the parent
+  uint32_t *numChildren = nullptr; // Total number of children of the node (0 == leaf)
+  uint32_t *left        = nullptr; // Left child or index of first triangle when leaf
+  uint32_t *right       = nullptr; // Right child or number of faces when leaf
 
-  uint32_t isLeft : 1;          // 1 if the Node is the left child of the parent -- 0 otherwise (right child)
-  uint32_t : 7;                 // Force alignment
-  uint32_t unused16BitInt : 16; // Find some use for this
-  uint32_t level : 8;           // Tree height of the current node
+  uint8_t * isLeft = nullptr; // 1 if the Node is the left child of the parent -- 0 otherwise (right child)
+  uint16_t *level  = nullptr; // Tree height of the current node
 
-  float surfaceArea; // TODO: Find a better use for these 4 Byte
+  float *surfaceArea = nullptr; // TODO: Find a better use for these 4 Byte
 
-  CUDA_CALL bool isLeaf() const noexcept { return numChildren == 0; }
-  CUDA_CALL uint32_t beginFaces() const noexcept { return left; }
-  CUDA_CALL uint32_t numFaces() const noexcept { return right; }
-  CUDA_CALL bool     isLeftChild() const noexcept { return isLeft != 0; }
-  CUDA_CALL bool     isRightChild() const noexcept { return isLeft == 0; }
+  CUDA_CALL bool isLeaf(uint32_t _n) const noexcept { return numChildren[_n] == 0; }
+  CUDA_CALL uint32_t beginFaces(uint32_t _n) const noexcept { return left[_n]; }
+  CUDA_CALL uint32_t numFaces(uint32_t _n) const noexcept { return right[_n]; }
+  CUDA_CALL bool     isLeftChild(uint32_t _n) const noexcept { return isLeft[_n] != 0; }
+  CUDA_CALL bool     isRightChild(uint32_t _n) const noexcept { return isLeft[_n] == 0; }
 };
 
 class BVH final {
  private:
-  BVHNode *bvh        = nullptr;
+  BVHNode  bvh;
   size_t   vSize      = 0;
   size_t   vCapacity  = 0;
   uint32_t vRootIndex = 0;
   uint16_t vMaxLevel  = 0;
 
  public:
-  CUDA_CALL ~BVH() { free(bvh); }
+  inline ~BVH() { clear(); }
 
   CUDA_CALL uint32_t sibling(uint32_t _node) const {
-    return bvh[_node].isRightChild() ? bvh[bvh[_node].parent].left : bvh[bvh[_node].parent].right;
+    return bvh.isRightChild(_node) ? bvh.left[bvh.parent[_node]] : bvh.right[bvh.parent[_node]];
   }
 
-  CUDA_CALL uint32_t sibling(BVHNode const *_node) const {
-    return _node->isRightChild() ? bvh[_node->parent].left : bvh[_node->parent].right;
-  }
+  CUDA_CALL AABB &bbox(uint32_t _node) noexcept { return bvh.bbox[_node]; }
+  CUDA_CALL uint32_t &parent(uint32_t _node) noexcept { return bvh.parent[_node]; }
+  CUDA_CALL uint32_t &numChildren(uint32_t _node) noexcept { return bvh.numChildren[_node]; }
+  CUDA_CALL uint32_t &left(uint32_t _node) noexcept { return bvh.left[_node]; }
+  CUDA_CALL uint32_t &right(uint32_t _node) noexcept { return bvh.right[_node]; }
+  CUDA_CALL uint16_t &level(uint32_t _node) noexcept { return bvh.level[_node]; }
+  CUDA_CALL uint8_t &isLeft(uint32_t _node) noexcept { return bvh.isLeft[_node]; }
+  CUDA_CALL float &  surfaceArea(uint32_t _node) noexcept { return bvh.surfaceArea[_node]; }
 
-  CUDA_CALL BVHNode *siblingNode(uint32_t _node) { return bvh + sibling(_node); }
-  CUDA_CALL BVHNode *siblingNode(BVHNode const *_node) { return bvh + sibling(_node); }
+  CUDA_CALL uint32_t beginFaces(uint32_t _node) const noexcept { return bvh.beginFaces(_node); }
+  CUDA_CALL uint32_t numFaces(uint32_t _node) const noexcept { return bvh.numFaces(_node); }
+  CUDA_CALL bool     isLeftChild(uint32_t _node) const noexcept { return bvh.isLeftChild(_node); }
+  CUDA_CALL bool     isRightChild(uint32_t _node) const noexcept { return bvh.isRightChild(_node); }
+  CUDA_CALL bool     isLeaf(uint32_t _node) const noexcept { return bvh.isLeaf(_node); }
 
   CUDA_CALL size_t size() const noexcept { return vSize; }
   CUDA_CALL bool   empty() const noexcept { return vSize == 0; }
-  CUDA_CALL BVHNode *data() { return bvh; }
-  CUDA_CALL char *   dataBin() { return reinterpret_cast<char *>(bvh); }
+  CUDA_CALL BVHNode data() { return bvh; }
   CUDA_CALL uint32_t root() const noexcept { return vRootIndex; }
-  CUDA_CALL BVHNode *rootNode() { return bvh + vRootIndex; }
-  CUDA_CALL BVHNode *get(uint32_t _node) { return bvh + _node; }
-  CUDA_CALL BVHNode *operator[](uint32_t _node) { return bvh + _node; }
   CUDA_CALL uint32_t nextNodeIndex() const noexcept { return static_cast<uint32_t>(vSize); }
   CUDA_CALL uint16_t maxLevel() const noexcept { return vMaxLevel; }
   CUDA_CALL void     setMaxLevel(uint16_t _level) noexcept { vMaxLevel = _level; }
@@ -174,14 +176,42 @@ class BVH final {
     reserve(_size);
   }
 
+  inline void clear() {
+    vSize = 0;
+    free(bvh.bbox);
+    free(bvh.parent);
+    free(bvh.numChildren);
+    free(bvh.left);
+    free(bvh.right);
+    free(bvh.isLeft);
+    free(bvh.level);
+    free(bvh.surfaceArea);
+
+    bvh.bbox        = nullptr;
+    bvh.parent      = nullptr;
+    bvh.numChildren = nullptr;
+    bvh.left        = nullptr;
+    bvh.right       = nullptr;
+    bvh.isLeft      = nullptr;
+    bvh.level       = nullptr;
+    bvh.surfaceArea = nullptr;
+  }
+
   inline void reserve(size_t _size) {
     if (_size > vCapacity) {
-      vCapacity = _size;
-      bvh       = static_cast<BVHNode *>(realloc(bvh, _size * sizeof(BVHNode)));
+      vCapacity       = _size;
+      bvh.bbox        = static_cast<AABB *>(realloc(bvh.bbox, _size * sizeof(AABB)));
+      bvh.parent      = static_cast<uint32_t *>(realloc(bvh.parent, _size * sizeof(uint32_t)));
+      bvh.numChildren = static_cast<uint32_t *>(realloc(bvh.numChildren, _size * sizeof(uint32_t)));
+      bvh.left        = static_cast<uint32_t *>(realloc(bvh.left, _size * sizeof(uint32_t)));
+      bvh.right       = static_cast<uint32_t *>(realloc(bvh.right, _size * sizeof(uint32_t)));
+      bvh.isLeft      = static_cast<uint8_t *>(realloc(bvh.isLeft, _size * sizeof(uint8_t)));
+      bvh.level       = static_cast<uint16_t *>(realloc(bvh.level, _size * sizeof(uint16_t)));
+      bvh.surfaceArea = static_cast<float *>(realloc(bvh.surfaceArea, _size * sizeof(float)));
     }
   }
 
-  CUDA_CALL void setMemory(BVHNode *_mem, size_t _numNodes, size_t _capacity) {
+  inline void setMemory(BVHNode _mem, size_t _numNodes, size_t _capacity) {
     bvh       = _mem;
     vSize     = _numNodes;
     vCapacity = _capacity;
@@ -191,19 +221,16 @@ class BVH final {
             addLeaf(AABB const &_bbox, uint32_t _parent, uint32_t _firstFace, uint32_t _numFaces, bool _isLeft) {
     assert(vSize < vCapacity);
 
-    uint16_t lLevel = empty() ? 0 : bvh[_parent].level + 1;
-    vMaxLevel       = lLevel > vMaxLevel ? lLevel : vMaxLevel;
-    bvh[vSize]      = {
-        _bbox,                  // bbox
-        _parent,                // parent
-        0,                      // numChildren
-        _firstFace,             // left
-        _numFaces,              // right
-        _isLeft ? TRUE : FALSE, // isLeft
-        0,                      // unused16BitInt
-        lLevel,                 // treeHeight
-        _bbox.surfaceArea()     // surfaceArea
-    };
+    uint16_t lLevel        = empty() ? 0 : bvh.level[_parent] + 1;
+    vMaxLevel              = lLevel > vMaxLevel ? lLevel : vMaxLevel;
+    bvh.bbox[vSize]        = _bbox;
+    bvh.parent[vSize]      = _parent;
+    bvh.numChildren[vSize] = 0;
+    bvh.left[vSize]        = _firstFace;
+    bvh.right[vSize]       = _numFaces;
+    bvh.isLeft[vSize]      = _isLeft ? TRUE : FALSE;
+    bvh.level[vSize]       = lLevel;
+    bvh.surfaceArea[vSize] = _bbox.surfaceArea();
     return vSize++;
   }
 
@@ -211,19 +238,16 @@ class BVH final {
             addInner(AABB const &_bbox, uint32_t _parent, uint32_t _numChildren, uint32_t _left, uint32_t _right, bool _isLeft) {
     assert(vSize < vCapacity);
 
-    uint16_t lLevel = empty() ? 0 : bvh[_parent].level + 1;
-    vMaxLevel       = lLevel > vMaxLevel ? lLevel : vMaxLevel;
-    bvh[vSize]      = {
-        _bbox,                  // bbox
-        _parent,                // parent
-        _numChildren,           // numChildren
-        _left,                  // left
-        _right,                 // right
-        _isLeft ? TRUE : FALSE, // isLeft
-        0,                      // unused16BitInt
-        lLevel,                 // treeHeight
-        _bbox.surfaceArea()     // surfaceArea
-    };
+    uint16_t lLevel        = empty() ? 0 : bvh.level[_parent] + 1;
+    vMaxLevel              = lLevel > vMaxLevel ? lLevel : vMaxLevel;
+    bvh.bbox[vSize]        = _bbox;
+    bvh.parent[vSize]      = _parent;
+    bvh.numChildren[vSize] = _numChildren;
+    bvh.left[vSize]        = _left;
+    bvh.right[vSize]       = _right;
+    bvh.isLeft[vSize]      = _isLeft ? TRUE : FALSE;
+    bvh.level[vSize]       = lLevel;
+    bvh.surfaceArea[vSize] = _bbox.surfaceArea();
     return vSize++;
   }
 
@@ -234,8 +258,8 @@ class BVH final {
 };
 
 struct CUDAMemoryBVHPointer {
-  BVH *    bvh      = nullptr; // CUDA device only memory
-  BVHNode *nodes    = nullptr; // CUDA device only memory
+  BVH *    bvh = nullptr; // CUDA device only memory
+  BVHNode  nodes;         // CUDA device only memory
   uint32_t numNodes = 0;
 };
 

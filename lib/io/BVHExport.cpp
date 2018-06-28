@@ -67,13 +67,33 @@ ErrorCode BVHExport::runImpl(State &_state) {
 
 
   // Compress
-  size_t                lInSize   = _state.bvh.size() * sizeof(BVHNode) + _state.mesh.faces.size() * sizeof(Triangle);
-  size_t                lCompSize = lInSize + (lInSize / 16) + 64 + 3;
-  unique_ptr<uint8_t[]> lData     = unique_ptr<uint8_t[]>(new uint8_t[lInSize]);
-  unique_ptr<uint8_t[]> lComp     = unique_ptr<uint8_t[]>(new uint8_t[lCompSize]);
+  size_t lNumNodes    = _state.bvh.size();
+  size_t lElementSize = sizeof(AABB) + 4 * sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint8_t) + sizeof(float);
+  size_t lInSize      = lNumNodes * lElementSize + _state.mesh.faces.size() * sizeof(Triangle);
+  size_t lCompSize    = lInSize + (lInSize / 16) + 64 + 3;
+  unique_ptr<uint8_t[]> lData = unique_ptr<uint8_t[]>(new uint8_t[lInSize]);
+  unique_ptr<uint8_t[]> lComp = unique_ptr<uint8_t[]>(new uint8_t[lCompSize]);
 
-  memcpy(lData.get(), reinterpret_cast<char *>(_state.bvh.data()), _state.bvh.size() * sizeof(BVHNode));
-  memcpy(lData.get() + _state.bvh.size() * sizeof(BVHNode),
+  size_t  lOffset  = 0;
+  BVHNode lBVHData = _state.bvh.data();
+
+  memcpy(lData.get() + lOffset, reinterpret_cast<char *>(lBVHData.bbox), lNumNodes * sizeof(AABB));
+  lOffset += lNumNodes * sizeof(AABB);
+  memcpy(lData.get() + lOffset, reinterpret_cast<char *>(lBVHData.parent), lNumNodes * sizeof(uint32_t));
+  lOffset += lNumNodes * sizeof(uint32_t);
+  memcpy(lData.get() + lOffset, reinterpret_cast<char *>(lBVHData.numChildren), lNumNodes * sizeof(uint32_t));
+  lOffset += lNumNodes * sizeof(uint32_t);
+  memcpy(lData.get() + lOffset, reinterpret_cast<char *>(lBVHData.left), lNumNodes * sizeof(uint32_t));
+  lOffset += lNumNodes * sizeof(uint32_t);
+  memcpy(lData.get() + lOffset, reinterpret_cast<char *>(lBVHData.right), lNumNodes * sizeof(uint32_t));
+  lOffset += lNumNodes * sizeof(uint32_t);
+  memcpy(lData.get() + lOffset, reinterpret_cast<char *>(lBVHData.isLeft), lNumNodes * sizeof(uint8_t));
+  lOffset += lNumNodes * sizeof(uint8_t);
+  memcpy(lData.get() + lOffset, reinterpret_cast<char *>(lBVHData.level), lNumNodes * sizeof(uint16_t));
+  lOffset += lNumNodes * sizeof(uint16_t);
+  memcpy(lData.get() + lOffset, reinterpret_cast<char *>(lBVHData.surfaceArea), lNumNodes * sizeof(float));
+  lOffset += lNumNodes * sizeof(float);
+  memcpy(lData.get() + lOffset,
          reinterpret_cast<char *>(_state.mesh.faces.data()),
          _state.mesh.faces.size() * sizeof(Triangle));
 

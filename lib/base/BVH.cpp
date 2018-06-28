@@ -28,12 +28,12 @@ float BVH::calcSAH(float _cInner, float _cLeaf) {
   for (size_t i = 0; i < size(); ++i) {
     if (i == root()) { continue; }
 
-    float lCost = bvh[i].surfaceArea;
-    lCost *= (bvh[i].isLeaf() ? _cLeaf : _cInner);
+    float lCost = bvh.surfaceArea[i];
+    lCost *= (bvh.isLeaf(i) ? _cLeaf : _cInner);
     lSAH = lSAH + lCost;
   }
 
-  return (1.0f / rootNode()->surfaceArea) * lSAH;
+  return (1.0f / surfaceArea(root())) * lSAH;
 }
 
 void BVH::fixLevels() {
@@ -41,16 +41,16 @@ void BVH::fixLevels() {
 
   __uint128_t lBitStack = 0;
   uint16_t    lLevel    = 0;
-  BVHNode *   lNode     = rootNode();
+  uint32_t    lNode     = root();
 
   vMaxLevel = 0;
 
   while (true) {
-    lNode->level = lLevel;
-    if (!lNode->isLeaf()) {
+    level(lNode) = lLevel;
+    if (!bvh.isLeaf(lNode)) {
       lBitStack <<= 1;
       lBitStack |= 1;
-      lNode = &bvh[lNode->left];
+      lNode = left(lNode);
       lLevel++;
       vMaxLevel = std::max(lLevel, vMaxLevel);
       continue;
@@ -59,12 +59,12 @@ void BVH::fixLevels() {
     // Backtrack
     while ((lBitStack & 1) == 0) {
       if (lBitStack == 0) { return; }
-      lNode = &bvh[lNode->parent];
+      lNode = parent(lNode);
       lBitStack >>= 1;
       lLevel--;
     }
 
-    lNode = &bvh[bvh[lNode->parent].right];
+    lNode = right(parent(lNode));
     lBitStack ^= 1;
   }
 }
@@ -72,5 +72,5 @@ void BVH::fixLevels() {
 void BVH::fixSurfaceAreas() {
 
 #pragma omp parallel for
-  for (size_t i = 0; i < size(); ++i) { bvh[i].surfaceArea = bvh[i].bbox.surfaceArea(); }
+  for (size_t i = 0; i < size(); ++i) { surfaceArea(i) = bbox(i).surfaceArea(); }
 }

@@ -26,10 +26,9 @@ Validate::~Validate() {}
 void Validate::fromJSON(const json &) {}
 json Validate::toJSON() const { return json::object(); }
 
-#define NODE lBVH[lNode]
-#define PARENT lBVH[NODE->parent]
-#define LEFT lBVH[NODE->left]
-#define RIGHT lBVH[NODE->right]
+#define PARENT lBVH.parent(lNode)
+#define LEFT lBVH.left(lNode)
+#define RIGHT lBVH.right(lNode)
 #define REQUIRE(a, cnt)                                                                                                \
   if (not(a)) {                                                                                                        \
     cnt++;                                                                                                             \
@@ -59,42 +58,42 @@ bool Validate::checkTree(State &_state) {
   vector<uint16_t> lTraversed;
   lTraversed.resize(lBVH.size(), 0);
 
-  REQUIRE(lNode == NODE->parent, lWrongParentErrors); // Loop at root
+  REQUIRE(lNode == lBVH.parent(lNode), lWrongParentErrors); // Loop at root
 
   while (true) {
     lTraversed[lNode] = 1;
-    REQUIRE(NODE->level == lLevel, lLevelErrors);
+    REQUIRE(lBVH.level(lNode) == lLevel, lLevelErrors);
     if (lNode != lBVH.root()) {
-      if (NODE->isLeftChild()) { REQUIRE(PARENT->left == lNode, lLeftRightErrors); }
-      if (NODE->isRightChild()) { REQUIRE(PARENT->right == lNode, lLeftRightErrors); }
+      if (lBVH.isLeftChild(lNode)) { REQUIRE(lBVH.left(PARENT) == lNode, lLeftRightErrors); }
+      if (lBVH.isRightChild(lNode)) { REQUIRE(lBVH.right(PARENT) == lNode, lLeftRightErrors); }
     }
 
-    if (!NODE->isLeaf()) {
-      REQUIRE(NODE->left != NODE->right, lSameChildrenErrors);
-      REQUIRE(NODE->numChildren == LEFT->numChildren + RIGHT->numChildren + 2, lWrongCildCountErrors);
+    if (!lBVH.isLeaf(lNode)) {
+      REQUIRE(LEFT != RIGHT, lSameChildrenErrors);
+      REQUIRE(lBVH.numChildren(lNode) == lBVH.numChildren(LEFT) + lBVH.numChildren(RIGHT) + 2, lWrongCildCountErrors);
       lBitStack <<= 1;
       lBitStack |= 1;
       lLastNode = lNode;
-      lNode     = NODE->left;
-      REQUIRE(NODE->parent == lLastNode, lWrongParentErrors);
+      lNode     = LEFT;
+      REQUIRE(PARENT == lLastNode, lWrongParentErrors);
       lLevel++;
       lMaxLevel = std::max(lLevel, lMaxLevel);
       continue;
     } else {
-      REQUIRE(NODE->numChildren == 0, lWrongCildCountErrors);
+      REQUIRE(lBVH.numChildren(lNode) == 0, lWrongCildCountErrors);
     }
 
     // Backtrack
     while ((lBitStack & 1) == 0) {
       if (lBitStack == 0) { goto END_LABEL; } // Yes gotos are evil. We all know that.
-      lNode = NODE->parent;
+      lNode = PARENT;
       lBitStack >>= 1;
       lLevel--;
     }
 
-    lLastNode = NODE->parent;
-    lNode     = PARENT->right;
-    REQUIRE(NODE->parent == lLastNode, lWrongParentErrors);
+    lLastNode = PARENT;
+    lNode     = lBVH.right(PARENT);
+    REQUIRE(PARENT == lLastNode, lWrongParentErrors);
     lBitStack ^= 1;
   }
 
@@ -130,11 +129,11 @@ bool Validate::checkBBoxes(State &_state) {
 
 #pragma omp parallel for
   for (uint32_t lNode = 0; lNode < lBVH.size(); ++lNode) {
-    if (!NODE->isLeaf()) {
+    if (!lBVH.isLeaf(lNode)) {
       uint32_t lErrors = 0;
-      AABB     lBBox   = NODE->bbox;
-      AABB     lLBBox  = LEFT->bbox;
-      AABB     lRBBox  = RIGHT->bbox;
+      AABB     lBBox   = lBVH.bbox(lNode);
+      AABB     lLBBox  = lBVH.bbox(LEFT);
+      AABB     lRBBox  = lBVH.bbox(RIGHT);
 
       REQUIRE(lBBox.min.x <= lLBBox.min.x, lErrors);
       REQUIRE(lBBox.min.y <= lLBBox.min.y, lErrors);
@@ -165,11 +164,11 @@ bool Validate::checkBBoxesStrict(State &_state) {
 
 #pragma omp parallel for
   for (uint32_t lNode = 0; lNode < lBVH.size(); ++lNode) {
-    if (!NODE->isLeaf()) {
+    if (!lBVH.isLeaf(lNode)) {
       uint32_t lErrors = 0;
-      AABB     lBBox   = NODE->bbox;
-      AABB     lLBBox  = LEFT->bbox;
-      AABB     lRBBox  = RIGHT->bbox;
+      AABB     lBBox   = lBVH.bbox(lNode);
+      AABB     lLBBox  = lBVH.bbox(LEFT);
+      AABB     lRBBox  = lBVH.bbox(RIGHT);
 
       REQUIRE(lBBox.min.x == min(lLBBox.min.x, lRBBox.min.x), lErrors);
       REQUIRE(lBBox.min.y == min(lLBBox.min.y, lRBBox.min.y), lErrors);
@@ -193,7 +192,7 @@ bool Validate::checkSurfaceArea(State &_state) {
 
 #pragma omp parallel for
   for (uint32_t lNode = 0; lNode < lBVH.size(); ++lNode) {
-    REQUIRE(fabs(NODE->surfaceArea - NODE->bbox.surfaceArea()) < 0.000001f, lTotalErros);
+    REQUIRE(fabs(lBVH.surfaceArea(lNode) - lBVH.bbox(lNode).surfaceArea()) < 0.000001f, lTotalErros);
   }
 
   ERROR_IF(lTotalErros, "{:<3} wrong pre-calculated surface areas");
@@ -211,11 +210,11 @@ bool Validate::checkTris(State &_state) {
 
 #pragma omp parallel for
   for (uint32_t lNode = 0; lNode < lBVH.size(); ++lNode) {
-    if (NODE->isLeaf()) {
+    if (lBVH.isLeaf(lNode)) {
       uint32_t lErrors = 0;
-      AABB     lBBox   = NODE->bbox;
-      uint32_t lStart  = NODE->beginFaces();
-      uint32_t lEnd    = lStart + NODE->numFaces();
+      AABB     lBBox   = lBVH.bbox(lNode);
+      uint32_t lStart  = lBVH.beginFaces(lNode);
+      uint32_t lEnd    = lStart + lBVH.numFaces(lNode);
 
       for (uint32_t j = lStart; j < lEnd; ++j) {
         lTraversed[j]           = 1;
