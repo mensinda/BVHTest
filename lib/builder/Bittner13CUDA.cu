@@ -138,7 +138,7 @@ __device__ uint32_t findNode1(uint32_t _n, PATCH &_bvh) {
   while (lSize > 0) {
     CUDAHelperStruct lCurr     = lPQ[0];
     BVHNodePatch     lCurrNode = _bvh.getSubset(lCurr.node);
-    auto             lBBox     = _bvh.getAABB(lCurr.node, lCurr.level);
+    auto             lBBox     = _bvh.getAABB(lCurr.node);
     CUDA_pop_heap(lBegin, lBegin + lSize);
     lSize--;
 
@@ -274,7 +274,7 @@ __device__ CUDA_RM_RES removeNode(uint32_t _node, PATCH &_bvh, uint32_t _lockID)
   }
 
   // update Bounding Boxes (temporary)
-  _bvh.patchAABBFrom(lGrandParentIndex);
+  _bvh.patchAABBFrom(lGrandParentIndex, 0);
 
   if (_bvh.getOrig(lNode->left)->surfaceArea > _bvh.getOrig(lNode->right)->surfaceArea) {
     return {true, {lNode->left, lNode->right}, {_node, lParentIndex}, {lGrandParentIndex, lSiblingIndex}};
@@ -332,7 +332,7 @@ __device__ CUDA_INS_RES
   lNode->parent = _unused;
   lNode->isLeft = FALSE;
 
-  if (_update) { _bvh.patchAABBFrom(_unused); }
+  if (_update) { _bvh.patchAABBFrom(_unused, 1); }
 
   return {true, lBestIndex, lRootIndex};
 }

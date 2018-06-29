@@ -18,6 +18,8 @@
 
 #include "BVH.hpp"
 
+#define ENABLE_AABB_PATH 0
+
 namespace BVHTest {
 namespace base {
 
@@ -97,12 +99,13 @@ class alignas(16) BVHPatch final {
  private:
   BVHNodePatch vNodes[NNode];
   uint32_t     vPatch[NNode];
-  uint32_t     vNumPaths = 0;
 
   struct AABBPath {
     uint32_t vAABBPath[NAABB];
     AABB     vAABBs[NAABB];
+#if ENABLE_AABB_PATH
     uint32_t vPathLength = 0;
+#endif
   };
 
   AABBPath vPaths[NPath];
@@ -193,10 +196,11 @@ class alignas(16) BVHPatch final {
   //! \brief Only Resets the paths
   CUDA_CALL void clearPaths() {
     for (uint32_t i = 0; i < NPath; ++i) {
+#if ENABLE_AABB_PATH
       vPaths[i].vPathLength = 0;
+#endif
       for (uint32_t j = 0; j < NAABB; ++j) { vPaths[i].vAABBPath[j] = UINT32_MAX; }
     }
-    vNumPaths = 0;
   }
 
   CUDA_CALL void clear() {
@@ -228,10 +232,11 @@ class alignas(16) BVHPatch final {
   }
 
 
+#if ENABLE_AABB_PATH
   /*!
    * \brief Fix the AABBs starting at _node in a path to the root
    */
-  CUDA_CALL void patchAABBFrom(uint32_t _node) {
+  CUDA_CALL void patchAABBFrom(uint32_t _node, uint32_t _pIDX) {
     uint32_t     lNodeIndex = _node;
     BVHNodePatch lStart     = getSubset(lNodeIndex);
     BVHNodePatch lNode      = lStart;
@@ -270,12 +275,11 @@ class alignas(16) BVHPatch final {
       // Merge with the sibling of the last processed Node
       lAABB.box.mergeWith(getAABB(lNodePairs[i].first, lNumNodes - i - 1).box);
 
-      vPaths[vNumPaths].vAABBPath[i] = lNodePairs[i].second;
-      vPaths[vNumPaths].vAABBs[i]    = lAABB.box;
+      vPaths[_pIDX].vAABBPath[i] = lNodePairs[i].second;
+      vPaths[_pIDX].vAABBs[i]    = lAABB.box;
     }
 
-    vPaths[vNumPaths].vPathLength = lNumNodes;
-    vNumPaths++;
+    vPaths[_pIDX].vPathLength = lNumNodes;
   }
 
   CUDA_CALL BBox getAABB(uint32_t _node, uint32_t _level) {
@@ -288,6 +292,37 @@ class alignas(16) BVHPatch final {
     BVHNode *lNode = vBVH->get(_node);
     return {lNode->bbox, lNode->surfaceArea};
   }
+
+#else
+
+  /*!
+   * \brief Fix the AABBs starting at _node in a path to the root
+   */
+  CUDA_CALL void patchAABBFrom(uint32_t _node, uint32_t _pIDX) {
+    uint32_t     lNodeIndex   = _node;
+    BVHNodePatch lNode        = getSubset(lNodeIndex);
+    BBox         lAABB        = getAABB(lNode.left);
+    uint32_t     lSibling     = 0;
+    bool         lLastWasLeft = true; // Always remember if we have to fetch the left or right childs bbox
+
+    // Get node index list
+    for (uint32_t i = 0; i < NAABB; ++i) {
+      // Merge with the sibling of the last processed Node
+      lSibling = lLastWasLeft ? lNode.right : lNode.left;
+
+      lAABB.box.mergeWith(getAABB(lSibling).box);
+      vPaths[_pIDX].vAABBs[i]    = lAABB.box;
+      vPaths[_pIDX].vAABBPath[i] = lNodeIndex;
+
+      lLastWasLeft = lNode.isLeftChild();
+
+      if (lNodeIndex == root()) { break; } // We processed the root ==> everything is done
+
+      lNodeIndex = lNode.parent;
+      lNode      = getSubset(lNodeIndex);
+    }
+  }
+#endif
 
   CUDA_CALL BBox getAABB(uint32_t _node) {
     static_assert(NPath == 2);

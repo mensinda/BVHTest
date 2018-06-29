@@ -97,7 +97,7 @@ uint32_t Bittner13Par::findNode1(uint32_t _n, PATCH &_bvh) {
   while (lSize > 0) {
     HelperStruct lCurr     = lPQ[0];
     BVHNodePatch lCurrNode = _bvh.getSubset(lCurr.node);
-    auto         lBBox     = _bvh.getAABB(lCurr.node, lCurr.level);
+    auto         lBBox     = _bvh.getAABB(lCurr.node);
     CUDA_pop_heap(lBegin, lBegin + lSize);
     lSize--;
 
@@ -152,7 +152,7 @@ uint32_t Bittner13Par::findNode2(uint32_t _n, PATCH &_bvh) {
     lCurr                  = lPQ[lMinIndex];
     lPQ[lMinIndex].cost    = HUGE_VALF;
     BVHNodePatch lCurrNode = _bvh.getSubset(lCurr.node);
-    auto         lBBox     = _bvh.getAABB(lCurr.node, lCurr.level);
+    auto         lBBox     = _bvh.getAABB(lCurr.node);
 
     if ((lCurr.cost + lSArea) >= lBestCost) {
       // Early termination - not possible to further optimize
@@ -266,7 +266,7 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMi
   }
 
   // update Bounding Boxes (temporary)
-  _bvh.patchAABBFrom(lGrandParentIndex);
+  _bvh.patchAABBFrom(lGrandParentIndex, 0);
 
   if (_bvh.getOrig(lNode->left)->surfaceArea > _bvh.getOrig(lNode->right)->surfaceArea) {
     return {true, {lNode->left, lNode->right}, {_node, lParentIndex}, {lGrandParentIndex, lSiblingIndex}};
@@ -332,7 +332,7 @@ Bittner13Par::INS_RES Bittner13Par::reinsert(
   lNode->parent = _unused;
   lNode->isLeft = FALSE;
 
-  if (_update) { _bvh.patchAABBFrom(_unused); }
+  if (_update) { _bvh.patchAABBFrom(_unused, 1); }
 
   return {true, lBestIndex, lRootIndex};
 }
