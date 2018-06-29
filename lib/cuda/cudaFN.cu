@@ -15,6 +15,7 @@
  */
 
 #include "cudaFN.hpp"
+#include "bucketSelect.cu"
 #include <iostream>
 
 using namespace glm;
@@ -22,6 +23,7 @@ using namespace std;
 using namespace BVHTest;
 using namespace BVHTest::base;
 using namespace BVHTest::cuda;
+using namespace BucketSelect;
 
 #define CUDA_RUN(call)                                                                                                 \
   lRes = call;                                                                                                         \
@@ -168,4 +170,124 @@ error:
   _mesh->numFaces = 0;
 
   return lRes == cudaSuccess;
+}
+
+// __global__ void findTopKthElementDevice(DeviceTensor<float, 1> _data, uint32_t k, float *_out) {
+//   float topK = warpFindTopKthElement(_data, k).k;
+//
+//   if (threadIdx.x == 0) {
+//     *_out = topK;
+//   }
+// }
+
+
+template <typename T>
+struct results_t {
+  float time;
+  T     val;
+};
+
+template <typename T>
+void setupForTiming(cudaEvent_t &start, cudaEvent_t &stop /*, T **d_vec, T* h_vec, uint size*/, results_t<T> **result) {
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+  //   cudaMalloc(d_vec, size * sizeof(T));
+  //   cudaMemcpy(*d_vec, h_vec, size * sizeof(T), cudaMemcpyHostToDevice);
+  *result = (results_t<T> *)malloc(sizeof(results_t<T>));
+}
+
+template <typename T>
+void wrapupForTiming(cudaEvent_t &start, cudaEvent_t &stop /*, T* d_vec*/, results_t<T> *result, float time, T value) {
+  //   cudaFree(d_vec);
+  cudaEventDestroy(start);
+  cudaEventDestroy(stop);
+  result->val  = value;
+  result->time = time;
+  //   cudaDeviceSynchronize();
+}
+
+extern "C" float topKThElement(float *_data, uint32_t size, uint32_t k) {
+  //   float *dResult = nullptr;
+  //   float lResult = 0.0f;
+  //
+  //   cudaMalloc(&dResult, 1 * sizeof(float));
+  //
+  //   int dataSizes[] = { (int) _num };
+  //
+  //   findTopKthElementDevice<<<1, 32>>>(DeviceTensor<float, 1>(_data, dataSizes), _k, dResult);
+  //
+  //   cudaMemcpy(&lResult, dResult, 1 * sizeof(float), cudaMemcpyDeviceToHost);
+  //   cudaFree(dResult);
+  //   return lResult;
+
+  cudaEvent_t       start, stop;
+  float             time;
+  results_t<float> *result;
+  float             retFromSelect;
+  float *           deviceVec = _data;
+  cudaDeviceProp    dp;
+  cudaGetDeviceProperties(&dp, 0);
+
+
+  setupForTiming(start, stop /*, &deviceVec, hostVec, size*/, &result);
+
+  cudaEventRecord(start, 0);
+
+  retFromSelect = bucketSelectWrapper(deviceVec, size, k, dp.multiProcessorCount, dp.maxThreadsPerBlock);
+
+  cudaEventRecord(stop, 0);
+  cudaEventSynchronize(stop);
+  cudaEventElapsedTime(&time, start, stop);
+
+
+  wrapupForTiming(start, stop /*, deviceVec*/, result, time, retFromSelect);
+  //   return result;
+
+  return retFromSelect;
+}
+
+
+
+template <typename T>
+void setupForTimingH(cudaEvent_t &start, cudaEvent_t &stop, T **d_vec, T *h_vec, uint size, results_t<T> **result) {
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+  cudaMalloc(d_vec, size * sizeof(T));
+  cudaMemcpy(*d_vec, h_vec, size * sizeof(T), cudaMemcpyHostToDevice);
+  *result = (results_t<T> *)malloc(sizeof(results_t<T>));
+}
+
+template <typename T>
+void wrapupForTimingH(cudaEvent_t &start, cudaEvent_t &stop, T *d_vec, results_t<T> *result, float time, T value) {
+  cudaFree(d_vec);
+  cudaEventDestroy(start);
+  cudaEventDestroy(stop);
+  result->val  = value;
+  result->time = time;
+  //   cudaDeviceSynchronize();
+}
+
+extern "C" float topKThElementHost(float *_data, uint32_t _num, uint32_t _k) {
+  cudaEvent_t       start, stop;
+  float             time;
+  results_t<float> *result;
+  float             retFromSelect;
+  float *           deviceVec;
+  cudaDeviceProp    dp;
+  cudaGetDeviceProperties(&dp, 0);
+
+
+  setupForTimingH(start, stop, &deviceVec, _data, _num, &result);
+
+  cudaEventRecord(start, 0);
+
+  retFromSelect = BucketSelect::bucketSelectWrapper(deviceVec, _num, _k, dp.multiProcessorCount, dp.maxThreadsPerBlock);
+
+  cudaEventRecord(stop, 0);
+  cudaEventSynchronize(stop);
+  cudaEventElapsedTime(&time, start, stop);
+
+
+  wrapupForTimingH(start, stop, deviceVec, result, time, retFromSelect);
+  return retFromSelect;
 }

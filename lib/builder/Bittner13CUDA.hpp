@@ -56,6 +56,16 @@ struct GPUWorkingMemory {
   size_t    cubSortTempStorageSize = 0;
 };
 
+struct AlgoCFG {
+  uint32_t blockSize     = 32;
+  bool     offsetAccess  = true;
+  bool     altFindNode   = true;
+  bool     altFixTree    = true;
+  bool     altSort       = true;
+  bool     sort          = true;
+  bool     localPatchCPY = true;
+};
+
 GPUWorkingMemory allocateMemory(BVHTest::base::CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize, uint32_t _numFaces);
 void             freeMemory(GPUWorkingMemory *_data);
 
@@ -67,12 +77,7 @@ void doAlgorithmStep(GPUWorkingMemory *                   _data,
                      BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh,
                      uint32_t                             _numChunks,
                      uint32_t                             _chunkSize,
-                     uint32_t                             _blockSize,
-                     bool                                 _offsetAccess,
-                     bool                                 _altFindNode,
-                     bool                                 _altFixTree,
-                     bool                                 _sort,
-                     bool                                 _localPatchCPY);
+                     AlgoCFG                              _cfg);
 
 void doCudaDevSync();
 

@@ -19,7 +19,6 @@
 #include "cuda/cudaFN.hpp"
 #include "Bittner13CUDA.hpp"
 #include "CUDAHeap.hpp"
-// #include "bucketSelect.cu"
 #include <cmath>
 #include <cub/cub.cuh>
 #include <cuda_profiler_api.h>
@@ -69,6 +68,7 @@ struct CUBNodeSlelect {
 
   __device__ __forceinline__ bool operator()(const uint32_t &a) const { return c[a] >= k; }
 };
+
 
 __global__ void kResetTodoData(uint32_t *_nodes, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
@@ -663,83 +663,99 @@ void fixTree3(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPU
 
 
 
-void doAlgorithmStep(GPUWorkingMemory *    _data,
-                     CUDAMemoryBVHPointer *_GPUbvh,
-                     uint32_t              _numChunks,
-                     uint32_t              _chunkSize,
-                     uint32_t              _blockSize,
-                     bool                  _offsetAccess,
-                     bool                  _altFindNode,
-                     bool                  _altFixTree,
-                     bool                  _sort,
-                     bool                  _localPatchCPY) {
+void doAlgorithmStep(
+    GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, uint32_t _numChunks, uint32_t _chunkSize, AlgoCFG _cfg) {
   if (!_data || !_GPUbvh) { return; }
 
   cudaError_t lRes;
-  uint32_t    lNumBlocksAll   = (_data->sumMin.num + _blockSize - 1) / _blockSize;
-  uint32_t    lNumBlocksChunk = (_chunkSize + _blockSize - 1) / _blockSize;
-  uint32_t    lSharedMemory   = sizeof(uint32_t) * _blockSize * CUDA_ALT_QUEUE_SIZE;
+  uint32_t    lNumBlocksAll   = (_data->sumMin.num + _cfg.blockSize - 1) / _cfg.blockSize;
+  uint32_t    lNumBlocksChunk = (_chunkSize + _cfg.blockSize - 1) / _cfg.blockSize;
+  uint32_t    lSharedMemory   = sizeof(uint32_t) * _cfg.blockSize * CUDA_ALT_QUEUE_SIZE;
   int *       lNumSelected    = nullptr;
 
   ALLOCATE(&lNumSelected, 1, int);
 
-  kCalcCost<<<lNumBlocksAll, _blockSize>>>(
+  kCalcCost<<<lNumBlocksAll, _cfg.blockSize>>>(
       _data->sumMin.sums, _data->sumMin.mins, _GPUbvh->nodes, _data->todoNodes.costs, _data->sumMin.num);
 
-  if (_sort || true) {
-    CUDA_RUN(cub::DeviceRadixSort::SortPairsDescending(_data->cubSortTempStorage,
-                                                       _data->cubSortTempStorageSize,
-                                                       _data->todoNodes.costs,
-                                                       _data->todoSorted.costs,
-                                                       _data->todoNodes.nodes,
-                                                       _data->todoSorted.nodes,
-                                                       _data->todoNodes.num));
-  } /* else {
-     float lKCost = BucketSelect::bucketSelectWrapper<float>(
-         _data->todoNodes.costs, _data->todoNodes.num, _numChunks * _chunkSize, lNumBlocksAll, _blockSize);
-
-     CUBNodeSlelect lSelector(_data->todoNodes.costs, lKCost);
-
-     CUDA_RUN(cub::DeviceSelect::If(_data->cubSortTempStorage,
-                                    _data->cubSortTempStorageSize,
-                                    _data->todoNodes.nodes,
-                                    _data->todoSorted.nodes,
-                                    lNumSelected,
-                                    _data->todoNodes.num,
-                                    lSelector));
-   }*/
-
-  for (uint32_t i = 0; i < _numChunks; ++i) {
-    if (_localPatchCPY) {
-      kRemoveAndReinsert2<<<lNumBlocksChunk, _blockSize, lSharedMemory>>>(_data->todoSorted.nodes,
-                                                                          _data->patches,
-                                                                          _GPUbvh->bvh,
-                                                                          _data->nodesToFix,
-                                                                          _offsetAccess,
-                                                                          i,
-                                                                          _numChunks,
-                                                                          _chunkSize,
-                                                                          _altFindNode);
+  if (_cfg.sort) {
+    if (!_cfg.altSort) {
+      CUDA_RUN(cub::DeviceRadixSort::SortPairsDescending(_data->cubSortTempStorage,
+                                                         _data->cubSortTempStorageSize,
+                                                         _data->todoNodes.costs,
+                                                         _data->todoSorted.costs,
+                                                         _data->todoNodes.nodes,
+                                                         _data->todoSorted.nodes,
+                                                         _data->todoNodes.num));
     } else {
-      kRemoveAndReinsert1<<<lNumBlocksChunk, _blockSize, lSharedMemory>>>(_data->todoSorted.nodes,
-                                                                          _data->patches,
-                                                                          _data->nodesToFix,
-                                                                          _offsetAccess,
-                                                                          i,
-                                                                          _numChunks,
-                                                                          _chunkSize,
-                                                                          _altFindNode);
+      CUDA_RUN(cub::DeviceRadixSort::SortKeysDescending(_data->cubSortTempStorage,
+                                                        _data->cubSortTempStorageSize,
+                                                        _data->todoNodes.costs,
+                                                        _data->todoSorted.costs,
+                                                        _data->todoNodes.num));
+
+      float lKCost;
+      cudaMemcpy(&lKCost, &_data->todoSorted.costs[_numChunks * _chunkSize], 1 * sizeof(float), cudaMemcpyDeviceToHost);
+
+      CUBNodeSlelect lSelector(_data->todoNodes.costs, lKCost);
+
+      CUDA_RUN(cub::DeviceSelect::If(_data->cubSortTempStorage,
+                                     _data->cubSortTempStorageSize,
+                                     _data->todoNodes.nodes,
+                                     _data->todoSorted.nodes,
+                                     lNumSelected,
+                                     _data->todoNodes.num,
+                                     lSelector));
     }
 
-    kCheckConflicts<<<lNumBlocksChunk, _blockSize>>>(
+  } else {
+    cudaDeviceProp dp;
+    cudaGetDeviceProperties(&dp, 0);
+
+    float lKCost = topKThElement(_data->todoNodes.costs, _data->sumMin.num, _numChunks * _chunkSize);
+
+    CUBNodeSlelect lSelector(_data->todoNodes.costs, lKCost);
+
+    CUDA_RUN(cub::DeviceSelect::If(_data->cubSortTempStorage,
+                                   _data->cubSortTempStorageSize,
+                                   _data->todoNodes.nodes,
+                                   _data->todoSorted.nodes,
+                                   lNumSelected,
+                                   _data->todoNodes.num,
+                                   lSelector));
+  }
+
+  for (uint32_t i = 0; i < _numChunks; ++i) {
+    if (_cfg.localPatchCPY) {
+      kRemoveAndReinsert2<<<lNumBlocksChunk, _cfg.blockSize, lSharedMemory>>>(_data->todoSorted.nodes,
+                                                                              _data->patches,
+                                                                              _GPUbvh->bvh,
+                                                                              _data->nodesToFix,
+                                                                              _cfg.offsetAccess,
+                                                                              i,
+                                                                              _numChunks,
+                                                                              _chunkSize,
+                                                                              _cfg.altFindNode);
+    } else {
+      kRemoveAndReinsert1<<<lNumBlocksChunk, _cfg.blockSize, lSharedMemory>>>(_data->todoSorted.nodes,
+                                                                              _data->patches,
+                                                                              _data->nodesToFix,
+                                                                              _cfg.offsetAccess,
+                                                                              i,
+                                                                              _numChunks,
+                                                                              _chunkSize,
+                                                                              _cfg.altFindNode);
+    }
+
+    kCheckConflicts<<<lNumBlocksChunk, _cfg.blockSize>>>(
         _data->patches, _data->sumMin.flags, _data->skipped, _data->nodesToFix, _chunkSize);
 
-    kApplyPatches<<<lNumBlocksChunk, _blockSize>>>(_data->patches, _GPUbvh->bvh, _data->sumMin.flags, _chunkSize);
+    kApplyPatches<<<lNumBlocksChunk, _cfg.blockSize>>>(_data->patches, _GPUbvh->bvh, _data->sumMin.flags, _chunkSize);
 
-    if (_altFixTree) {
-      fixTree3(_data, _GPUbvh, _blockSize);
+    if (_cfg.altFixTree) {
+      fixTree3(_data, _GPUbvh, _cfg.blockSize);
     } else {
-      fixTree1(_data, _GPUbvh, _blockSize);
+      fixTree1(_data, _GPUbvh, _cfg.blockSize);
     }
   }
 

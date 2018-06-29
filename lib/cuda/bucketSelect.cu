@@ -1,7 +1,3 @@
-/*
- * This File was copied from https://github.com/uysalere/ggks-multiSelect
- */
-
 /* Copyright 2011 Russel Steinbach, Jeffrey Blanchard, Bradley Gordon,
  *   and Toluwaloju Alabi
  *   Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +12,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cub/cub.cuh>
 #include <stdio.h>
+#include <thrust/binary_search.h>
+#include <thrust/device_vector.h>
+#include <thrust/functional.h>
+#include <thrust/random.h>
+#include <thrust/sort.h>
+#include <thrust/transform_reduce.h>
 
 namespace BucketSelect {
 using namespace std;
@@ -79,7 +80,8 @@ __global__ void assignBucket(T *    d_vector,
                              uint * bucketCount,
                              int    offset) {
 
-  int               idx = blockDim.x * blockIdx.x + threadIdx.x;
+  int               idx    = blockDim.x * blockIdx.x + threadIdx.x;
+  int               stride = blockDim.x * gridDim.x;
   int               bucketIndex;
   extern __shared__ uint sharedBuckets[];
   int                    index = threadIdx.x;
@@ -96,7 +98,7 @@ __global__ void assignBucket(T *    d_vector,
   __syncthreads();
 
   // assigning elements to buckets and incrementing the bucket counts
-  if (idx < length) {
+  for (int I = idx; I < length; I += stride) {
     int i;
     for (i = idx; i < length; i += offset) {
       // calculate the bucketIndex for each element
@@ -128,7 +130,8 @@ __global__ void reassignBucket(T *          d_vector,
                                const double minimum,
                                int          offset,
                                int          Kbucket) {
-  int               idx = blockDim.x * blockIdx.x + threadIdx.x;
+  int               idx    = blockDim.x * blockIdx.x + threadIdx.x;
+  int               stride = blockDim.x * gridDim.x;
   extern __shared__ uint sharedBuckets[];
   int                    index = threadIdx.x;
   int                    bucketIndex;
@@ -138,7 +141,7 @@ __global__ void reassignBucket(T *          d_vector,
   __syncthreads();
 
   // assigning elements to buckets and incrementing the bucket counts
-  if (idx < length) {
+  for (int I = idx; I < length; I += stride) {
     int i;
 
     for (i = idx; i < length; i += offset) {
@@ -167,9 +170,10 @@ __global__ void reassignBucket(T *          d_vector,
 template <typename T>
 __global__ void copyElement(
     T *d_vector, int length, int *elementToBucket, int bucket, T *newArray, uint *count, int offset) {
-  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int idx    = blockIdx.x * blockDim.x + threadIdx.x;
+  int stride = blockDim.x * gridDim.x;
 
-  if (idx < length) {
+  for (int I = idx; I < length; I += stride) {
     for (int i = idx; i < length; i += offset)
       // copy elements in the kth bucket to the new array
       if (elementToBucket[i] == bucket) newArray[atomicInc(count, length)] = d_vector[i];
@@ -220,11 +224,12 @@ inline int FindSmartKBucket(uint *d_counter, uint *h_counter, const int num_buck
 
 template <typename T>
 __global__ void GetKvalue(T *d_vector, int *d_bucket, const int Kbucket, const int n, T *Kvalue, int offset) {
-  uint xIndex = blockDim.x * blockIdx.x + threadIdx.x;
+  int idx    = blockDim.x * blockIdx.x + threadIdx.x;
+  int stride = blockDim.x * gridDim.x;
 
-  if (xIndex < n) {
+  for (int I = idx; I < n; I += stride) {
     int i;
-    for (i = xIndex; i < n; i += offset) {
+    for (i = idx; i < n; i += offset) {
       if (d_bucket[i] == Kbucket) Kvalue[0] = d_vector[i];
     }
   }
@@ -268,24 +273,13 @@ T phaseTwo(T *d_vector, int length, int K, int blocks, int threads, double maxVa
   T *d_Kth_val;
   cudaMalloc(&d_Kth_val, sizeof(T));
 
+  thrust::device_ptr<T> dev_ptr(d_vector);
   // if max == min, then we know that it must not have had the values passed in.
   if (maxValue == minValue) {
-    T *      d_MinMax        = nullptr;
-    uint8_t *d_tempStorage   = nullptr;
-    size_t   tempStorageSize = 0;
-    cudaMalloc(&d_MinMax, 2 * sizeof(T));
-
-    cub::DeviceReduce::Min(d_tempStorage, tempStorageSize, d_vector, d_MinMax + 0, length);
-    cudaMalloc(&d_tempStorage, tempStorageSize);
-
-    cub::DeviceReduce::Min(d_tempStorage, tempStorageSize, d_vector, d_MinMax + 0, length);
-    cub::DeviceReduce::Max(d_tempStorage, tempStorageSize, d_vector, d_MinMax + 1, length);
-
-    cudaMemcpy(&minValue, d_MinMax + 0, sizeof(T), cudaMemcpyDeviceToHost);
-    cudaMemcpy(&maxValue, d_MinMax + 1, sizeof(T), cudaMemcpyDeviceToHost);
-
-    cudaFree(d_tempStorage);
-    cudaFree(d_MinMax);
+    thrust::pair<thrust::device_ptr<T>, thrust::device_ptr<T>> result =
+        thrust::minmax_element(dev_ptr, dev_ptr + length);
+    minValue = *result.first;
+    maxValue = *result.second;
   }
   double slope = (numBuckets - 1) / (maxValue - minValue);
   // first check is max is equal to min
@@ -361,25 +355,14 @@ T phaseOne(T *d_vector, int length, int K, int blocks, int threads, int pass = 0
   T  kthValue = 0;
   T *newInput;
 
-  // find max and min with cub
+  // find max and min with thrust
   double maximum, minimum;
 
-  T *      d_MinMax        = nullptr;
-  uint8_t *d_tempStorage   = nullptr;
-  size_t   tempStorageSize = 0;
-  cudaMalloc(&d_MinMax, 2 * sizeof(T));
+  thrust::device_ptr<T>                                      dev_ptr(d_vector);
+  thrust::pair<thrust::device_ptr<T>, thrust::device_ptr<T>> result = thrust::minmax_element(dev_ptr, dev_ptr + length);
 
-  cub::DeviceReduce::Min(d_tempStorage, tempStorageSize, d_vector, d_MinMax + 0, length);
-  cudaMalloc(&d_tempStorage, tempStorageSize);
-
-  cub::DeviceReduce::Min(d_tempStorage, tempStorageSize, d_vector, d_MinMax + 0, length);
-  cub::DeviceReduce::Max(d_tempStorage, tempStorageSize, d_vector, d_MinMax + 1, length);
-
-  cudaMemcpy(&minimum, d_MinMax + 0, sizeof(T), cudaMemcpyDeviceToHost);
-  cudaMemcpy(&maximum, d_MinMax + 1, sizeof(T), cudaMemcpyDeviceToHost);
-
-  cudaFree(d_tempStorage);
-  cudaFree(d_MinMax);
+  minimum = *result.first;
+  maximum = *result.second;
 
   // if the max and the min are the same, then we are done
   if (maximum == minimum) { return maximum; }
@@ -427,7 +410,8 @@ T phaseOne(T *d_vector, int length, int K, int blocks, int threads, int pass = 0
 
   // if we only copied one element, then we are done
   if (newInputLength == 1) {
-    cudaMemcpy(&kthValue, newInput + 0, sizeof(T), cudaMemcpyDeviceToHost);
+    thrust::device_ptr<T> new_ptr(newInput);
+    kthValue = new_ptr[0];
 
     // free all used memory
     cudaFree(elementToBucket);
