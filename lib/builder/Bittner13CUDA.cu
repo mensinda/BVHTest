@@ -60,6 +60,14 @@ struct CUBLeafSelect {
   __device__ __forceinline__ bool operator()(const uint32_t &a) const { return nodes[a].numChildren == 0; }
 };
 
+struct CUBNodeSelect {
+  BVHNode *nodes;
+
+  CUB_RUNTIME_FUNCTION __forceinline__ CUBNodeSelect(BVHNode *_n) : nodes(_n) {}
+
+  __device__ __forceinline__ bool operator()(const uint32_t &a) const { return nodes[a].numChildren != 0; }
+};
+
 struct CUBNodeSlelect {
   float  k;
   float *c;
@@ -498,16 +506,14 @@ __global__ void kFixTree3_2(uint32_t *_toFix, SumMinCUDA _SMF, BVHNode *_nodes, 
 /*                                                           */
 /*                                                           */
 
-__global__ void kCalcCost(float *_sum, float *_min, BVHNode *_BVHNode, float *_costOut, uint32_t _num) {
+__global__ void kCalcCost(float *_sum, float *_min, BVHNode *_nodes, uint32_t *_nID, float *_costOut, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
   for (uint32_t i = index; i < _num; i += stride) {
-    uint32_t lParent      = _BVHNode[i].parent;
-    uint32_t lNumChildren = _BVHNode[i].numChildren;
-    float    lSA          = _BVHNode[i].surfaceArea;
-    bool     lCanRemove   = (lNumChildren != 0) && (i != lParent);
-
-    _costOut[i] = lCanRemove ? ((lSA * lSA * lSA * (float)lNumChildren) / (_sum[i] * _min[i])) : 0.0f;
+    uint    lID   = _nID[i];
+    BVHNode lNode = _nodes[lID];
+    float   lSA   = lNode.surfaceArea;
+    _costOut[i]   = (lSA * lSA * lSA * (float)lNode.numChildren) / (_sum[lID] * _min[lID]);
   }
 }
 
@@ -675,15 +681,19 @@ void doAlgorithmStep(
   if (!_data || !_GPUbvh) { return; }
 
   cudaError_t lRes;
-  uint32_t    lNumBlocksAll   = (_data->sumMin.num + _cfg.blockSize - 1) / _cfg.blockSize;
+  uint32_t    lNumBlocksAll   = (_data->todoNodes.num + _cfg.blockSize - 1) / _cfg.blockSize;
   uint32_t    lNumBlocksChunk = (_chunkSize + _cfg.blockSize - 1) / _cfg.blockSize;
   uint32_t    lSharedMemory   = sizeof(uint32_t) * _cfg.blockSize * CUDA_ALT_QUEUE_SIZE;
   int *       lNumSelected    = nullptr;
 
   ALLOCATE(&lNumSelected, 1, int);
 
-  kCalcCost<<<lNumBlocksAll, _cfg.blockSize>>>(
-      _data->sumMin.sums, _data->sumMin.mins, _GPUbvh->nodes, _data->todoNodes.costs, _data->sumMin.num);
+  kCalcCost<<<lNumBlocksAll, _cfg.blockSize>>>(_data->sumMin.sums,
+                                               _data->sumMin.mins,
+                                               _GPUbvh->nodes,
+                                               _data->todoNodes.nodes,
+                                               _data->todoNodes.costs,
+                                               _data->todoNodes.num);
 
   if (_cfg.sort) {
     if (!_cfg.altSort) {
@@ -811,14 +821,16 @@ GPUWorkingMemory allocateMemory(CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize,
   size_t      lCubTempStorage1 = 0;
   size_t      lCubTempStorage2 = 0;
   size_t      lCubTempStorage3 = 0;
+  size_t      lCubTempStorage4 = 0;
   size_t      lCubTempStorageM = 0;
   uint32_t *  lTemp            = nullptr;
 
   CUBLeafSelect lSelector(nullptr);
 
+  assert(_bvh->numNodes > _numFaces);
   lMem.sumMin.num     = _bvh->numNodes;
-  lMem.todoNodes.num  = _bvh->numNodes;
-  lMem.todoSorted.num = _bvh->numNodes;
+  lMem.todoNodes.num  = _bvh->numNodes - _numFaces;
+  lMem.todoSorted.num = _bvh->numNodes - _numFaces;
   lMem.numLeafNodes   = _numFaces;
   lMem.numPatches     = _batchSize;
   lMem.numSkipped     = _batchSize;
@@ -847,18 +859,22 @@ GPUWorkingMemory allocateMemory(CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize,
                                                      lMem.todoSorted.nodes,
                                                      lMem.todoNodes.num));
 
+  CUDA_RUN(cub::DeviceRadixSort::SortKeysDescending(
+      lMem.cubSortTempStorage, lCubTempStorage4, lMem.todoNodes.costs, lMem.todoSorted.costs, lMem.todoNodes.num));
+
   CUDA_RUN(cub::DeviceSelect::If(lMem.cubSortTempStorage,
                                  lCubTempStorage3,
                                  lMem.todoNodes.nodes,
                                  lMem.leafNodes,
                                  lTemp,
-                                 lMem.todoNodes.num,
+                                 (lMem.numLeafNodes + lMem.todoNodes.num),
                                  lSelector));
 
   CUDA_RUN(cub::DeviceReduce::Sum(lMem.cubSortTempStorage, lCubTempStorage2, lMem.skipped, lTemp, lMem.numSkipped));
 
   lCubTempStorageM            = lCubTempStorage1 > lCubTempStorage2 ? lCubTempStorage1 : lCubTempStorage2;
   lCubTempStorageM            = lCubTempStorageM > lCubTempStorage3 ? lCubTempStorageM : lCubTempStorage3;
+  lCubTempStorageM            = lCubTempStorageM > lCubTempStorage4 ? lCubTempStorageM : lCubTempStorage4;
   lMem.cubSortTempStorageSize = lCubTempStorageM;
 
   ALLOCATE(&lMem.cubSortTempStorage, lMem.cubSortTempStorageSize, uint8_t);
@@ -873,8 +889,8 @@ error:
   FREE(lMem.sumMin.flags, lMem.sumMin.num);
   FREE(lMem.todoNodes.nodes, lMem.todoNodes.num);
   FREE(lMem.todoNodes.costs, lMem.todoNodes.num);
-  FREE(lMem.todoSorted.nodes, lMem.todoNodes.num);
-  FREE(lMem.todoSorted.costs, lMem.todoNodes.num);
+  FREE(lMem.todoSorted.nodes, lMem.todoSorted.num);
+  FREE(lMem.todoSorted.costs, lMem.todoSorted.num);
   FREE(lMem.leafNodes, lMem.numLeafNodes);
   FREE(lMem.patches, lMem.numPatches);
   FREE(lMem.skipped, lMem.numSkipped);
@@ -911,9 +927,15 @@ void initData(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, uint32_t _
   uint32_t      lNumBlocksPatches = (_data->numPatches + _blockSize - 1) / _blockSize;
   uint32_t      lNumBlocksInit    = (_data->numLeafNodes + _blockSize - 1) / _blockSize;
   int *         lNumSelected      = nullptr;
-  CUBLeafSelect lSelector(_GPUbvh->nodes);
+  int           lNS1              = 0;
+  int           lNS2              = 0;
+  CUBLeafSelect lSelector1(_GPUbvh->nodes);
+  CUBNodeSelect lSelector2(_GPUbvh->nodes);
 
-  kResetTodoData<<<lNumBlocksAll, _blockSize>>>(_data->todoNodes.nodes, _data->todoNodes.num);
+  uint32_t *lTempTODOData = nullptr;
+  ALLOCATE(&lTempTODOData, (_data->numLeafNodes + _data->todoNodes.num), uint32_t); // Allocate Inner + Leaf Nodes
+
+  kResetTodoData<<<lNumBlocksAll, _blockSize>>>(lTempTODOData, (_data->numLeafNodes + _data->todoNodes.num));
   kInitPatches<<<lNumBlocksPatches, _blockSize>>>(_data->patches, _GPUbvh->bvh, _data->numPatches);
 
   CUDA_RUN(cudaMemset(_data->sumMin.flags, 0, _data->sumMin.num * sizeof(uint32_t)));
@@ -923,15 +945,31 @@ void initData(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, uint32_t _
 
   CUDA_RUN(cub::DeviceSelect::If(_data->cubSortTempStorage,
                                  _data->cubSortTempStorageSize,
-                                 _data->todoNodes.nodes,
+                                 lTempTODOData,
                                  _data->leafNodes,
                                  lNumSelected,
-                                 _data->todoNodes.num,
-                                 lSelector));
+                                 (_data->numLeafNodes + _data->todoNodes.num),
+                                 lSelector1));
+
+  CUDA_RUN(cudaMemcpy(&lNS1, lNumSelected, sizeof(int), cudaMemcpyDeviceToHost));
+
+  CUDA_RUN(cub::DeviceSelect::If(_data->cubSortTempStorage,
+                                 _data->cubSortTempStorageSize,
+                                 lTempTODOData,
+                                 _data->todoNodes.nodes,
+                                 lNumSelected,
+                                 (_data->numLeafNodes + _data->todoNodes.num),
+                                 lSelector2));
+
+  CUDA_RUN(cudaMemcpy(&lNS2, lNumSelected, sizeof(int), cudaMemcpyDeviceToHost));
+
+  cout << lNS1 << " == " << _data->numLeafNodes << endl;
+  cout << lNS2 << " == " << _data->todoNodes.num << endl;
 
   kInitSumMin<<<lNumBlocksInit, _blockSize>>>(_data->leafNodes, _data->sumMin, _GPUbvh->nodes, _data->numLeafNodes);
   CUDA_RUN(cudaMemset(_data->sumMin.flags, 0, _data->sumMin.num * sizeof(uint32_t)));
 
 error:
   cudaFree(lNumSelected);
+  cudaFree(lTempTODOData);
 }
