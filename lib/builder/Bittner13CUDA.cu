@@ -84,10 +84,10 @@ __global__ void kResetTodoData(uint32_t *_nodes, uint32_t _num) {
   for (uint32_t i = index; i < _num; i += stride) { _nodes[i] = i; }
 }
 
-__global__ void kInitPatches(PATCH *_patches, BVH *_bvh, uint32_t _num) {
+__global__ void kInitPatches(BVHPatch *_patches, BVH *_bvh, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
-  for (uint32_t i = index; i < _num; i += stride) { new (_patches + i) PATCH(_bvh); }
+  for (uint32_t i = index; i < _num; i += stride) { new (_patches + i) BVHPatch(_bvh); }
 }
 
 __global__ void kGenerateFlags(float *_costs, uint8_t *_flagsOut, float *k, uint32_t _num) {
@@ -138,7 +138,7 @@ struct CUDA_INS_RES {
   uint32_t root;
 };
 
-__device__ uint32_t findNode1(uint32_t _n, PATCH &_bvh) {
+__device__ uint32_t findNode1(uint32_t _n, BVHPatch &_bvh) {
   float             lBestCost      = HUGE_VALF;
   uint32_t          lBestNodeIndex = 0;
   BVHNode const *   lNode          = _bvh.getOrig(_n);
@@ -191,7 +191,7 @@ __device__ uint32_t findNode1(uint32_t _n, PATCH &_bvh) {
 }
 
 
-__device__ uint32_t findNode2(uint32_t _n, PATCH &_bvh) {
+__device__ uint32_t findNode2(uint32_t _n, BVHPatch &_bvh) {
   float          lBestCost      = HUGE_VALF;
   uint32_t       lBestNodeIndex = 0;
   BVHNode const *lNode          = _bvh.getOrig(_n);
@@ -264,7 +264,7 @@ __device__ uint32_t findNode2(uint32_t _n, PATCH &_bvh) {
 }
 
 
-__device__ CUDA_RM_RES removeNode(uint32_t _node, PATCH &_bvh, uint32_t _lockID) {
+__device__ CUDA_RM_RES removeNode(uint32_t _node, BVHPatch &_bvh, uint32_t _lockID) {
   CUDA_RM_RES lFalse = {false, {0, 0}, {0, 0}, {0, 0}};
   if (_bvh.getOrig(_node)->isLeaf() || _node == _bvh.root()) { return lFalse; }
 
@@ -306,7 +306,7 @@ __device__ CUDA_RM_RES removeNode(uint32_t _node, PATCH &_bvh, uint32_t _lockID)
 
 
 __device__ CUDA_INS_RES
-           reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, uint32_t _lockID, bool _altFindNode) {
+           reinsert(uint32_t _node, uint32_t _unused, BVHPatch &_bvh, bool _update, uint32_t _lockID, bool _altFindNode) {
   uint32_t lBestIndex = _altFindNode ? findNode2(_node, _bvh) : findNode1(_node, _bvh);
   if (lBestIndex == _bvh.root()) { return {false, 0, 0}; }
 
@@ -526,7 +526,7 @@ __global__ void kCalcCost(float *_sum, float *_min, BVHNode *_nodes, uint32_t *_
 
 
 __global__ void kRemoveAndReinsert1(uint32_t *_todoList,
-                                    PATCH *   _patches,
+                                    BVHPatch *_patches,
                                     uint32_t *_toFix,
                                     bool      _offsetAccess,
                                     uint32_t  _chunk,
@@ -556,7 +556,7 @@ __global__ void kRemoveAndReinsert1(uint32_t *_todoList,
 }
 
 __global__ void kRemoveAndReinsert2(uint32_t *_todoList,
-                                    PATCH *   _patches,
+                                    BVHPatch *_patches,
                                     BVH *     _bvh,
                                     uint32_t *_toFix,
                                     bool      _offsetAccess,
@@ -569,7 +569,7 @@ __global__ void kRemoveAndReinsert2(uint32_t *_todoList,
   uint32_t lLockID = index + 1;
 
   for (int32_t k = index; k < _chunkSize; k += stride) {
-    PATCH        lPatch(_bvh);
+    BVHPatch     lPatch(_bvh);
     uint32_t     lNodeIndex = _todoList[_offsetAccess ? k * _numChunks + _chunk : _chunk * _chunkSize + k];
     CUDA_RM_RES  lRmRes     = removeNode(lNodeIndex, lPatch, lLockID);
     CUDA_INS_RES lR1, lR2;
@@ -590,7 +590,7 @@ __global__ void kRemoveAndReinsert2(uint32_t *_todoList,
 }
 
 
-__global__ void kCheckConflicts(PATCH *_patches, uint32_t *_flags, uint32_t *_skip, uint32_t *_toFix, uint32_t _num) {
+__global__ void kCheckConflicts(BVHPatch *_patches, uint32_t *_flags, uint32_t *_skip, uint32_t *_toFix, uint32_t _num) {
   uint32_t index   = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride  = blockDim.x * gridDim.x;
   uint32_t lLockID = index + 1;
@@ -634,7 +634,7 @@ __global__ void kCheckConflicts(PATCH *_patches, uint32_t *_flags, uint32_t *_sk
 }
 
 
-__global__ void kApplyPatches(PATCH *_patches, BVH *_bvh, uint32_t *_flags, uint32_t _num) {
+__global__ void kApplyPatches(BVHPatch *_patches, BVH *_bvh, uint32_t *_flags, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
   for (uint32_t k = index; k < _num; k += stride) {
@@ -854,7 +854,7 @@ GPUWorkingMemory allocateMemory(CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize,
   ALLOCATE(&lMem.todoSorted.costs, lMem.numInnerNodes, float);
   ALLOCATE(&lMem.leafNodes, lMem.numLeafNodes, uint32_t);
   ALLOCATE(&lMem.deviceSelectFlags, lMem.numLeafNodes, uint8_t);
-  ALLOCATE(&lMem.patches, lMem.numPatches, PATCH);
+  ALLOCATE(&lMem.patches, lMem.numPatches, BVHPatch);
   ALLOCATE(&lMem.skipped, lMem.numSkipped, uint32_t);
   ALLOCATE(&lMem.nodesToFix, lMem.numNodesToFix, uint32_t);
 

@@ -24,7 +24,7 @@ namespace BVHTest::builder {
 
 class Bittner13Par final : public OptimizerBase {
  public:
-  typedef base::BVHPatch PATCH;
+  typedef std::pair<uint32_t, float> TUP;
 
   struct SumMin {
     float            sum;
@@ -63,11 +63,17 @@ class Bittner13Par final : public OptimizerBase {
   bool     vShuffleList  = true;
   bool     vAltFindNode  = false;
 
-  uint32_t findNode1(uint32_t _n, PATCH &_bvh);
-  uint32_t findNode2(uint32_t _n, PATCH &_bvh);
+  std::vector<TUP>            lTodoList;
+  std::vector<base::BVHPatch> lPatches;
+  std::vector<bool>           lSkipp;
+  std::vector<uint32_t>       lFixList;
+  std::unique_ptr<SumMin[]>   lSumMin;
 
-  RM_RES  removeNode(uint32_t _node, PATCH &_bvh, SumMin *_sumMin);
-  INS_RES reinsert(uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, SumMin *_sumMin);
+  uint32_t findNode1(uint32_t _n, base::BVHPatch &_bvh);
+  uint32_t findNode2(uint32_t _n, base::BVHPatch &_bvh);
+
+  RM_RES  removeNode(uint32_t _node, base::BVHPatch &_bvh, SumMin *_sumMin);
+  INS_RES reinsert(uint32_t _node, uint32_t _unused, base::BVHPatch &_bvh, bool _update, SumMin *_sumMin);
   void    fixTree(uint32_t _node, base::BVH &_bvh, SumMin *_sumMin);
   void    initSumAndMin(base::BVH &_bvh, SumMin *_sumMin);
 
@@ -78,7 +84,9 @@ class Bittner13Par final : public OptimizerBase {
   inline std::string getName() const override { return "bittner13Par"; }
   inline std::string getDesc() const override { return "parallel BVH optimizer based on Bittner et al. 2013"; }
 
+  base::ErrorCode setup(base::State &_state) override;
   base::ErrorCode runImpl(base::State &_state) override;
+  void            teardown(base::State &_state) override;
 
   void fromJSON(const json &_j) override;
   json toJSON() const override;

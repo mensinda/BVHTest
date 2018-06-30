@@ -81,6 +81,8 @@ ErrorCode Bittner13GPU::setup(State &_state) {
   vWorkingMemory      = allocateMemory(&_state.cudaMem.bvh, lChunkSize, _state.cudaMem.rawMesh.numFaces);
 
   if (!vWorkingMemory.result) { return ErrorCode::CUDA_ERROR; }
+
+  initData(&vWorkingMemory, &_state.cudaMem.bvh, vCUDABlockSize);
   return ErrorCode::OK;
 }
 
@@ -88,8 +90,6 @@ ErrorCode Bittner13GPU::runImpl(State &_state) {
   uint32_t lNumNodes  = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
   uint32_t lChunkSize = lNumNodes / vNumChunks;
   lNumNodes           = lChunkSize * vNumChunks;
-
-  initData(&vWorkingMemory, &_state.cudaMem.bvh, vCUDABlockSize);
 
   AlgoCFG lCFG;
   lCFG.blockSize     = vCUDABlockSize;

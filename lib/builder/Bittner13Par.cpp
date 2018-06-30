@@ -83,7 +83,7 @@ struct HelperStruct {
 };
 
 
-uint32_t Bittner13Par::findNode1(uint32_t _n, PATCH &_bvh) {
+uint32_t Bittner13Par::findNode1(uint32_t _n, BVHPatch &_bvh) {
   float          lBestCost      = HUGE_VALF;
   uint32_t       lBestNodeIndex = 0;
   BVHNode const *lNode          = _bvh.getOrig(_n);
@@ -133,7 +133,7 @@ uint32_t Bittner13Par::findNode1(uint32_t _n, PATCH &_bvh) {
   return lBestNodeIndex;
 }
 
-uint32_t Bittner13Par::findNode2(uint32_t _n, PATCH &_bvh) {
+uint32_t Bittner13Par::findNode2(uint32_t _n, BVHPatch &_bvh) {
   float          lBestCost      = HUGE_VALF;
   uint32_t       lBestNodeIndex = 0;
   BVHNode const *lNode          = _bvh.getOrig(_n);
@@ -200,7 +200,7 @@ uint32_t Bittner13Par::findNode2(uint32_t _n, PATCH &_bvh) {
 #define IF_NOT_LOCK(N) if (_sumMin[N].flag.test_and_set(memory_order_acquire))
 #define RELEASE_LOCK(N) _sumMin[N].flag.clear(memory_order_release);
 
-Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMin *_sumMin) {
+Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, BVHPatch &_bvh, SumMin *_sumMin) {
   RM_RES lFalse = {false, {0, 0}, {0, 0}, {0, 0}};
   if (_bvh.getOrig(_node)->isLeaf() || _node == _bvh.root()) { return lFalse; }
 
@@ -281,7 +281,7 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, PATCH &_bvh, SumMi
 
 
 Bittner13Par::INS_RES Bittner13Par::reinsert(
-    uint32_t _node, uint32_t _unused, PATCH &_bvh, bool _update, SumMin *_sumMin) {
+    uint32_t _node, uint32_t _unused, BVHPatch &_bvh, bool _update, SumMin *_sumMin) {
 
   uint32_t lBestIndex = vAltFindNode ? findNode2(_node, _bvh) : findNode1(_node, _bvh);
   if (lBestIndex == _bvh.root()) { return {false, 0, 0}; }
@@ -435,30 +435,16 @@ void Bittner13Par::initSumAndMin(BVH &_bvh, SumMin *_sumMin) {
 }
 
 
-
-
-ErrorCode Bittner13Par::runImpl(State &_state) {
-  typedef pair<uint32_t, float> TUP;
-
-  unique_ptr<SumMin[]> lSumMin(new SumMin[_state.bvh.size()]);
-  SumMin *             _sumMin = lSumMin.get();
-  initSumAndMin(_state.bvh, _sumMin);
-
+ErrorCode Bittner13Par::setup(State &_state) {
   uint32_t lNumNodes  = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
   uint32_t lChunkSize = lNumNodes / vNumChunks;
-  lNumNodes           = lChunkSize * vNumChunks;
-  auto lComp          = [](TUP const &_l, TUP const &_r) -> bool { return _l.second > _r.second; };
 
-  vector<TUP>      lTodoList;
-  vector<PATCH>    lPatches;
-  vector<bool>     lSkipp;
-  vector<uint32_t> lFixList;
   lTodoList.resize(_state.bvh.size());
-  lPatches.resize(lChunkSize, PATCH(&_state.bvh));
+  lPatches.resize(lChunkSize, BVHPatch(&_state.bvh));
   lSkipp.resize(lChunkSize);
   lFixList.resize(lChunkSize * 3);
-
-  uint32_t lSkipped = 0;
+  lSumMin         = unique_ptr<SumMin[]>(new SumMin[_state.bvh.size()]);
+  SumMin *_sumMin = lSumMin.get();
 
   // Init List
 #pragma omp parallel for
@@ -466,6 +452,19 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
     lTodoList[i] = {i, 0.0f};
     RELEASE_LOCK(i);
   }
+
+  initSumAndMin(_state.bvh, _sumMin);
+  return ErrorCode::OK;
+}
+
+ErrorCode Bittner13Par::runImpl(State &_state) {
+  uint32_t lNumNodes  = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
+  uint32_t lChunkSize = lNumNodes / vNumChunks;
+  lNumNodes           = lChunkSize * vNumChunks;
+  SumMin *_sumMin     = lSumMin.get();
+  auto    lComp       = [](TUP const &_l, TUP const &_r) -> bool { return _l.second > _r.second; };
+
+  uint32_t lSkipped = 0;
 
   random_device                      lRD;
   mt19937                            lPRNG(lRD());
@@ -636,3 +635,5 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
   _state.bvh.fixLevels();
   return ErrorCode::OK;
 }
+
+void Bittner13Par::teardown(State &) { lSumMin = nullptr; }
