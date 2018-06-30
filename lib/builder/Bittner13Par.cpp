@@ -97,7 +97,7 @@ uint32_t Bittner13Par::findNode1(uint32_t _n, PATCH &_bvh) {
   while (lSize > 0) {
     HelperStruct lCurr     = lPQ[0];
     BVHNodePatch lCurrNode = _bvh.getSubset(lCurr.node);
-    auto         lBBox     = _bvh.getAABB(lCurr.node);
+    AABB         lBBox     = _bvh.getAABB(lCurr.node);
     CUDA_pop_heap(lBegin, lBegin + lSize);
     lSize--;
 
@@ -106,8 +106,10 @@ uint32_t Bittner13Par::findNode1(uint32_t _n, PATCH &_bvh) {
       break;
     }
 
-    lBBox.box.mergeWith(lNodeBBox);
-    float lDirectCost = lBBox.box.surfaceArea();
+    float lNewInduced = -1 * lBBox.surfaceArea();
+
+    lBBox.mergeWith(lNodeBBox);
+    float lDirectCost = lBBox.surfaceArea();
     float lTotalCost  = lCurr.cost + lDirectCost;
     if (lTotalCost < lBestCost) {
       // Merging here improves the total SAH cost
@@ -115,7 +117,7 @@ uint32_t Bittner13Par::findNode1(uint32_t _n, PATCH &_bvh) {
       lBestNodeIndex = lCurr.node;
     }
 
-    float lNewInduced = lTotalCost - lBBox.sarea;
+    lNewInduced += lTotalCost;
     if ((lNewInduced + lSArea) < lBestCost) {
       if (!lCurrNode.isLeaf()) {
         assert(lSize + 2 < QUEUE_SIZE);
@@ -159,8 +161,10 @@ uint32_t Bittner13Par::findNode2(uint32_t _n, PATCH &_bvh) {
       break;
     }
 
-    lBBox.box.mergeWith(lNodeBBox);
-    float lDirectCost = lBBox.box.surfaceArea();
+    float lNewInduced = -1 * lBBox.surfaceArea();
+
+    lBBox.mergeWith(lNodeBBox);
+    float lDirectCost = lBBox.surfaceArea();
     float lTotalCost  = lCurr.cost + lDirectCost;
     if (lTotalCost < lBestCost) {
       // Merging here improves the total SAH cost
@@ -168,7 +172,7 @@ uint32_t Bittner13Par::findNode2(uint32_t _n, PATCH &_bvh) {
       lBestNodeIndex = lCurr.node;
     }
 
-    float lNewInduced = lTotalCost - lBBox.sarea;
+    lNewInduced += lTotalCost;
     if ((lNewInduced + lSArea) < lBestCost && !lCurrNode.isLeaf()) {
       lPQ[lMinIndex] = {lCurrNode.left, lNewInduced, lCurr.level + 1};
       lPQ[lMaxIndex] = {lCurrNode.right, lNewInduced, lCurr.level + 1};

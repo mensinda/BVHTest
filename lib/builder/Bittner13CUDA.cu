@@ -136,19 +136,23 @@ __device__ uint32_t findNode1(uint32_t _n, PATCH &_bvh) {
 
   lPQ[0] = {_bvh.root(), 0.0f, 0};
   while (lSize > 0) {
-    CUDAHelperStruct lCurr     = lPQ[0];
-    BVHNodePatch     lCurrNode = _bvh.getSubset(lCurr.node);
-    auto             lBBox     = _bvh.getAABB(lCurr.node);
-    CUDA_pop_heap(lBegin, lBegin + lSize);
-    lSize--;
+    CUDAHelperStruct lCurr = lPQ[0];
 
     if ((lCurr.cost + lSArea) >= lBestCost) {
       // Early termination - not possible to further optimize
       break;
     }
 
-    lBBox.box.mergeWith(lNodeBBox);
-    float lDirectCost = lBBox.box.surfaceArea();
+    CUDA_pop_heap(lBegin, lBegin + lSize);
+    lSize--;
+
+    BVHNodePatch lCurrNode = _bvh.getSubset(lCurr.node);
+    AABB         lBBox     = _bvh.getAABB(lCurr.node);
+
+    float lNewInduced = -1 * lBBox.surfaceArea();
+
+    lBBox.mergeWith(lNodeBBox);
+    float lDirectCost = lBBox.surfaceArea();
     float lTotalCost  = lCurr.cost + lDirectCost;
     if (lTotalCost < lBestCost) {
       // Merging here improves the total SAH cost
@@ -156,7 +160,7 @@ __device__ uint32_t findNode1(uint32_t _n, PATCH &_bvh) {
       lBestNodeIndex = lCurr.node;
     }
 
-    float lNewInduced = lTotalCost - lBBox.sarea;
+    lNewInduced += lTotalCost;
     if ((lNewInduced + lSArea) < lBestCost) {
       if (!lCurrNode.isLeaf()) {
         assert(lSize + 2 < CUDA_QUEUE_SIZE);
@@ -196,19 +200,22 @@ __device__ uint32_t findNode2(uint32_t _n, PATCH &_bvh) {
   lPQ_NL[lMinIndex + lStart] = _bvh.root();
   lPQ_CO[lMinIndex]          = 0.0f;
   while (lMin < HUGE_VALF) {
-    lCurrNL                = lPQ_NL[lMinIndex + lStart];
-    lCurrCO                = lPQ_CO[lMinIndex];
-    lPQ_CO[lMinIndex]      = HUGE_VALF;
-    BVHNodePatch lCurrNode = _bvh.getSubset(lCurrNL);
-    auto         lBBox     = _bvh.getAABB(lCurrNL);
+    lCurrNL           = lPQ_NL[lMinIndex + lStart];
+    lCurrCO           = lPQ_CO[lMinIndex];
+    lPQ_CO[lMinIndex] = HUGE_VALF;
 
     if ((lCurrCO + lSArea) >= lBestCost) {
       // Early termination - not possible to further optimize
       break;
     }
 
-    lBBox.box.mergeWith(lNodeBBox);
-    float lDirectCost = lBBox.box.surfaceArea();
+    BVHNodePatch lCurrNode = _bvh.getSubset(lCurrNL);
+    AABB         lBBox     = _bvh.getAABB(lCurrNL);
+
+    float lNewInduced = -1 * lBBox.surfaceArea();
+
+    lBBox.mergeWith(lNodeBBox);
+    float lDirectCost = lBBox.surfaceArea();
     float lTotalCost  = lCurrCO + lDirectCost;
     if (lTotalCost < lBestCost) {
       // Merging here improves the total SAH cost
@@ -216,7 +223,7 @@ __device__ uint32_t findNode2(uint32_t _n, PATCH &_bvh) {
       lBestNodeIndex = lCurrNL;
     }
 
-    float lNewInduced = lTotalCost - lBBox.sarea;
+    lNewInduced += lTotalCost;
     if ((lNewInduced + lSArea) < lBestCost && !lCurrNode.isLeaf()) {
       lPQ_NL[lMinIndex + lStart] = lCurrNode.left;
       lPQ_NL[lMaxIndex + lStart] = lCurrNode.right;
