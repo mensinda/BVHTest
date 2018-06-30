@@ -97,12 +97,18 @@ ioInc = files([
 tracerSrc = files([
   'tracer/BruteForceTracer.cpp',
   'tracer/CPUTracer.cpp',
+  'tracer/CUDATracer.cpp',
   'tracer/TracerBase.cpp'
+])
+
+tracerCU = files([
+  'tracer/CUDAKernels.cu'
 ])
 
 tracerInc = files([
   'tracer/BruteForceTracer.hpp',
   'tracer/CPUTracer.hpp',
+  'tracer/CUDATracer.hpp',
   'tracer/TracerBase.hpp'
 ])
 
@@ -209,7 +215,12 @@ builderLib = static_library('builder', builderSrc + builderCuda,
   dependencies: baseDeps,
 )
 
-tracerLib = static_library('tracer', tracerSrc,
+tracerCuda = []
+foreach i : tracerCU
+  tracerCuda += nvccCompiler.process(i, extra_args: ['--std=c++14'] + cuInclude)
+endforeach
+
+tracerLib = static_library('tracer', tracerSrc + tracerCuda,
   include_directories: incDirs,
   install: true,
   link_with: [baseLib, miscLib, enum2StrLib, externalsLib],

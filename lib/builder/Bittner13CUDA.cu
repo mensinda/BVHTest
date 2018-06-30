@@ -78,19 +78,19 @@ struct CUBNodeSlelect {
 };
 
 
-__global__ void kResetTodoData(uint32_t *_nodes, uint32_t _num) {
+extern "C" __global__ void kResetTodoData(uint32_t *_nodes, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
   for (uint32_t i = index; i < _num; i += stride) { _nodes[i] = i; }
 }
 
-__global__ void kInitPatches(BVHPatch *_patches, BVH *_bvh, uint32_t _num) {
+extern "C" __global__ void kInitPatches(BVHPatch *_patches, BVH *_bvh, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
   for (uint32_t i = index; i < _num; i += stride) { new (_patches + i) BVHPatch(_bvh); }
 }
 
-__global__ void kGenerateFlags(float *_costs, uint8_t *_flagsOut, float *k, uint32_t _num) {
+extern "C" __global__ void kGenerateFlags(float *_costs, uint8_t *_flagsOut, float *k, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
   for (uint32_t i = index; i < _num; i += stride) { _flagsOut[i] = _costs[i] >= *k ? 1 : 0; }
@@ -371,7 +371,7 @@ __device__ CUDA_INS_RES
 /*                                      */
 
 
-__global__ void kInitSumMin(uint32_t *_leaf, SumMinCUDA _SMF, BVHNode *_nodes, uint32_t _num) {
+extern "C" __global__ void kInitSumMin(uint32_t *_leaf, SumMinCUDA _SMF, BVHNode *_nodes, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
 
@@ -405,7 +405,7 @@ __global__ void kInitSumMin(uint32_t *_leaf, SumMinCUDA _SMF, BVHNode *_nodes, u
 }
 
 
-__global__ void kFixTree1(uint32_t *_leaf, SumMinCUDA _SMF, BVHNode *_nodes, uint32_t _num) {
+extern "C" __global__ void kFixTree1(uint32_t *_leaf, SumMinCUDA _SMF, BVHNode *_nodes, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
 
@@ -447,7 +447,7 @@ __global__ void kFixTree1(uint32_t *_leaf, SumMinCUDA _SMF, BVHNode *_nodes, uin
 }
 
 
-__global__ void kFixTree3_1(uint32_t *_toFix, SumMinCUDA _SMF, BVHNode *_nodes, uint32_t _num) {
+extern "C" __global__ void kFixTree3_1(uint32_t *_toFix, SumMinCUDA _SMF, BVHNode *_nodes, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
 
@@ -465,7 +465,7 @@ __global__ void kFixTree3_1(uint32_t *_toFix, SumMinCUDA _SMF, BVHNode *_nodes, 
   }
 }
 
-__global__ void kFixTree3_2(uint32_t *_toFix, SumMinCUDA _SMF, BVHNode *_nodes, uint32_t _num) {
+extern "C" __global__ void kFixTree3_2(uint32_t *_toFix, SumMinCUDA _SMF, BVHNode *_nodes, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
 
@@ -512,7 +512,8 @@ __global__ void kFixTree3_2(uint32_t *_toFix, SumMinCUDA _SMF, BVHNode *_nodes, 
 /*                                                           */
 /*                                                           */
 
-__global__ void kCalcCost(float *_sum, float *_min, BVHNode *_nodes, uint32_t *_nID, float *_costOut, uint32_t _num) {
+extern "C" __global__ void kCalcCost(
+    float *_sum, float *_min, BVHNode *_nodes, uint32_t *_nID, float *_costOut, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
   for (uint32_t i = index; i < _num; i += stride) {
@@ -525,14 +526,14 @@ __global__ void kCalcCost(float *_sum, float *_min, BVHNode *_nodes, uint32_t *_
 
 
 
-__global__ void kRemoveAndReinsert1(uint32_t *_todoList,
-                                    BVHPatch *_patches,
-                                    uint32_t *_toFix,
-                                    bool      _offsetAccess,
-                                    uint32_t  _chunk,
-                                    uint32_t  _numChunks,
-                                    uint32_t  _chunkSize,
-                                    bool      _altFindNode) {
+extern "C" __global__ void kRemoveAndReinsert1(uint32_t *_todoList,
+                                               BVHPatch *_patches,
+                                               uint32_t *_toFix,
+                                               bool      _offsetAccess,
+                                               uint32_t  _chunk,
+                                               uint32_t  _numChunks,
+                                               uint32_t  _chunkSize,
+                                               bool      _altFindNode) {
   uint32_t index   = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride  = blockDim.x * gridDim.x;
   uint32_t lLockID = index + 1;
@@ -555,15 +556,15 @@ __global__ void kRemoveAndReinsert1(uint32_t *_todoList,
   }
 }
 
-__global__ void kRemoveAndReinsert2(uint32_t *_todoList,
-                                    BVHPatch *_patches,
-                                    BVH *     _bvh,
-                                    uint32_t *_toFix,
-                                    bool      _offsetAccess,
-                                    uint32_t  _chunk,
-                                    uint32_t  _numChunks,
-                                    uint32_t  _chunkSize,
-                                    bool      _altFindNode) {
+extern "C" __global__ void kRemoveAndReinsert2(uint32_t *_todoList,
+                                               BVHPatch *_patches,
+                                               BVH *     _bvh,
+                                               uint32_t *_toFix,
+                                               bool      _offsetAccess,
+                                               uint32_t  _chunk,
+                                               uint32_t  _numChunks,
+                                               uint32_t  _chunkSize,
+                                               bool      _altFindNode) {
   uint32_t index   = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride  = blockDim.x * gridDim.x;
   uint32_t lLockID = index + 1;
@@ -590,7 +591,8 @@ __global__ void kRemoveAndReinsert2(uint32_t *_todoList,
 }
 
 
-__global__ void kCheckConflicts(BVHPatch *_patches, uint32_t *_flags, uint32_t *_skip, uint32_t *_toFix, uint32_t _num) {
+extern "C" __global__ void kCheckConflicts(
+    BVHPatch *_patches, uint32_t *_flags, uint32_t *_skip, uint32_t *_toFix, uint32_t _num) {
   uint32_t index   = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride  = blockDim.x * gridDim.x;
   uint32_t lLockID = index + 1;
@@ -634,7 +636,7 @@ __global__ void kCheckConflicts(BVHPatch *_patches, uint32_t *_flags, uint32_t *
 }
 
 
-__global__ void kApplyPatches(BVHPatch *_patches, BVH *_bvh, uint32_t *_flags, uint32_t _num) {
+extern "C" __global__ void kApplyPatches(BVHPatch *_patches, BVH *_bvh, uint32_t *_flags, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
   for (uint32_t k = index; k < _num; k += stride) {

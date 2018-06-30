@@ -37,6 +37,7 @@
 #include "misc/Validate.hpp"
 #include "tracer/BruteForceTracer.hpp"
 #include "tracer/CPUTracer.hpp"
+#include "tracer/CUDATracer.hpp"
 #include "viewer/Viewer.hpp"
 #include "Enum2Str.hpp"
 #include "minilzo-2.10/minilzo.h"
@@ -53,9 +54,9 @@ using namespace Enum2Str;
 using namespace nlohmann;
 
 const vector<string> gCommandList = {
-    "import",       "load",      "export",     "BVHExport", "BVHImport", "camExport", "camImport",
-    "writeImg",     "copyToGPU", "copyToHost", "median",    "wald07",    "bittner13", "bittner13Par",
-    "bittner13GPU", "CPUTracer", "bruteForce", "status",    "validate",  "sleep",     "viewer"};
+    "import",     "load",       "export", "BVHExport", "BVHImport", "camExport",    "camImport",    "writeImg",
+    "copyToGPU",  "copyToHost", "median", "wald07",    "bittner13", "bittner13Par", "bittner13GPU", "CPUTracer",
+    "CUDATracer", "bruteForce", "status", "validate",  "sleep",     "viewer"};
 
 // String command to object
 Config::CMD_PTR fromString(string _s) {
@@ -76,6 +77,7 @@ Config::CMD_PTR fromString(string _s) {
     case "bittner13Par"_h: return make_shared<builder::Bittner13Par>();
     case "bittner13GPU"_h: return make_shared<builder::Bittner13GPU>();
     case "CPUTracer"_h: return make_shared<tracer::CPUTracer>();
+    case "CUDATracer"_h: return make_shared<tracer::CUDATracer>();
     case "bruteForce"_h: return make_shared<tracer::BruteForceTracer>();
     case "status"_h: return make_shared<base::StatusDump>();
     case "validate"_h: return make_shared<misc::Validate>();
