@@ -35,7 +35,6 @@ struct SumMinCUDA {
 struct TodoStruct {
   uint32_t *nodes = nullptr;
   float *   costs = nullptr;
-  uint32_t  num   = 0;
 };
 
 struct GPUWorkingMemory {
@@ -45,11 +44,13 @@ struct GPUWorkingMemory {
   TodoStruct todoSorted;
 
   uint32_t *leafNodes              = nullptr;
+  uint8_t * deviceSelectFlags      = nullptr;
   PATCH *   patches                = nullptr;
   uint32_t *skipped                = nullptr;
   uint32_t *nodesToFix             = nullptr;
   void *    cubSortTempStorage     = nullptr;
   uint32_t  numLeafNodes           = 0;
+  uint32_t  numInnerNodes          = 0;
   uint32_t  numPatches             = 0;
   uint32_t  numSkipped             = 0;
   uint32_t  numNodesToFix          = 0;

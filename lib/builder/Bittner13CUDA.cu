@@ -90,6 +90,12 @@ __global__ void kInitPatches(PATCH *_patches, BVH *_bvh, uint32_t _num) {
   for (uint32_t i = index; i < _num; i += stride) { new (_patches + i) PATCH(_bvh); }
 }
 
+__global__ void kGenerateFlags(float *_costs, uint8_t *_flagsOut, float *k, uint32_t _num) {
+  uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t stride = blockDim.x * gridDim.x;
+  for (uint32_t i = index; i < _num; i += stride) { _flagsOut[i] = _costs[i] >= *k ? 1 : 0; }
+}
+
 
 /*  ______                                                _            _                     _     */
 /*  | ___ \                                              | |          (_)                   | |    */
@@ -681,7 +687,7 @@ void doAlgorithmStep(
   if (!_data || !_GPUbvh) { return; }
 
   cudaError_t lRes;
-  uint32_t    lNumBlocksAll   = (_data->todoNodes.num + _cfg.blockSize - 1) / _cfg.blockSize;
+  uint32_t    lNumBlocksAll   = (_data->numInnerNodes + _cfg.blockSize - 1) / _cfg.blockSize;
   uint32_t    lNumBlocksChunk = (_chunkSize + _cfg.blockSize - 1) / _cfg.blockSize;
   uint32_t    lSharedMemory   = sizeof(uint32_t) * _cfg.blockSize * CUDA_ALT_QUEUE_SIZE;
   int *       lNumSelected    = nullptr;
@@ -693,7 +699,7 @@ void doAlgorithmStep(
                                                _GPUbvh->nodes,
                                                _data->todoNodes.nodes,
                                                _data->todoNodes.costs,
-                                               _data->todoNodes.num);
+                                               _data->numInnerNodes);
 
   if (_cfg.sort) {
     if (!_cfg.altSort) {
@@ -703,29 +709,30 @@ void doAlgorithmStep(
                                                          _data->todoSorted.costs,
                                                          _data->todoNodes.nodes,
                                                          _data->todoSorted.nodes,
-                                                         _data->todoNodes.num));
+                                                         _data->numInnerNodes));
     } else {
       CUDA_RUN(cub::DeviceRadixSort::SortKeysDescending(_data->cubSortTempStorage,
                                                         _data->cubSortTempStorageSize,
                                                         _data->todoNodes.costs,
                                                         _data->todoSorted.costs,
-                                                        _data->todoNodes.num));
+                                                        _data->numInnerNodes));
 
-      float lKCost;
-      cudaMemcpy(&lKCost, &_data->todoSorted.costs[_numChunks * _chunkSize], 1 * sizeof(float), cudaMemcpyDeviceToHost);
+      kGenerateFlags<<<lNumBlocksAll, _cfg.blockSize>>>(_data->todoNodes.costs,
+                                                        _data->deviceSelectFlags,
+                                                        _data->todoSorted.costs + _numChunks * _chunkSize,
+                                                        _data->numInnerNodes);
 
-      CUBNodeSlelect lSelector(_data->todoNodes.costs, lKCost);
-
-      CUDA_RUN(cub::DeviceSelect::If(_data->cubSortTempStorage,
-                                     _data->cubSortTempStorageSize,
-                                     _data->todoNodes.nodes,
-                                     _data->todoSorted.nodes,
-                                     lNumSelected,
-                                     _data->todoNodes.num,
-                                     lSelector));
+      CUDA_RUN(cub::DeviceSelect::Flagged(_data->cubSortTempStorage,
+                                          _data->cubSortTempStorageSize,
+                                          _data->todoNodes.nodes,
+                                          _data->deviceSelectFlags,
+                                          _data->todoSorted.nodes,
+                                          lNumSelected,
+                                          _data->numInnerNodes));
     }
 
   } else {
+#if 0
     cudaDeviceProp dp;
     cudaGetDeviceProperties(&dp, 0);
 
@@ -738,8 +745,11 @@ void doAlgorithmStep(
                                    _data->todoNodes.nodes,
                                    _data->todoSorted.nodes,
                                    lNumSelected,
-                                   _data->todoNodes.num,
+                                   _data->numInnerNodes,
                                    lSelector));
+#else
+    cerr << "ERROR: topKThElement is currently not supported (set option to sort)" << endl;
+#endif
   }
 
   for (uint32_t i = 0; i < _numChunks; ++i) {
@@ -828,22 +838,22 @@ GPUWorkingMemory allocateMemory(CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize,
   CUBLeafSelect lSelector(nullptr);
 
   assert(_bvh->numNodes > _numFaces);
-  lMem.sumMin.num     = _bvh->numNodes;
-  lMem.todoNodes.num  = _bvh->numNodes - _numFaces;
-  lMem.todoSorted.num = _bvh->numNodes - _numFaces;
-  lMem.numLeafNodes   = _numFaces;
-  lMem.numPatches     = _batchSize;
-  lMem.numSkipped     = _batchSize;
-  lMem.numNodesToFix  = _batchSize * 3;
+  lMem.sumMin.num    = _bvh->numNodes;
+  lMem.numLeafNodes  = _numFaces;
+  lMem.numInnerNodes = _bvh->numNodes - _numFaces;
+  lMem.numPatches    = _batchSize;
+  lMem.numSkipped    = _batchSize;
+  lMem.numNodesToFix = _batchSize * 3;
 
   ALLOCATE(&lMem.sumMin.sums, lMem.sumMin.num, float);
   ALLOCATE(&lMem.sumMin.mins, lMem.sumMin.num, float);
   ALLOCATE(&lMem.sumMin.flags, lMem.sumMin.num, uint32_t);
-  ALLOCATE(&lMem.todoNodes.nodes, lMem.todoNodes.num, uint32_t);
-  ALLOCATE(&lMem.todoNodes.costs, lMem.todoNodes.num, float);
-  ALLOCATE(&lMem.todoSorted.nodes, lMem.todoSorted.num, uint32_t);
-  ALLOCATE(&lMem.todoSorted.costs, lMem.todoSorted.num, float);
+  ALLOCATE(&lMem.todoNodes.nodes, lMem.numInnerNodes, uint32_t);
+  ALLOCATE(&lMem.todoNodes.costs, lMem.numInnerNodes, float);
+  ALLOCATE(&lMem.todoSorted.nodes, lMem.numInnerNodes, uint32_t);
+  ALLOCATE(&lMem.todoSorted.costs, lMem.numInnerNodes, float);
   ALLOCATE(&lMem.leafNodes, lMem.numLeafNodes, uint32_t);
+  ALLOCATE(&lMem.deviceSelectFlags, lMem.numLeafNodes, uint8_t);
   ALLOCATE(&lMem.patches, lMem.numPatches, PATCH);
   ALLOCATE(&lMem.skipped, lMem.numSkipped, uint32_t);
   ALLOCATE(&lMem.nodesToFix, lMem.numNodesToFix, uint32_t);
@@ -857,17 +867,17 @@ GPUWorkingMemory allocateMemory(CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize,
                                                      lMem.todoSorted.costs,
                                                      lMem.todoNodes.nodes,
                                                      lMem.todoSorted.nodes,
-                                                     lMem.todoNodes.num));
+                                                     lMem.numInnerNodes));
 
   CUDA_RUN(cub::DeviceRadixSort::SortKeysDescending(
-      lMem.cubSortTempStorage, lCubTempStorage4, lMem.todoNodes.costs, lMem.todoSorted.costs, lMem.todoNodes.num));
+      lMem.cubSortTempStorage, lCubTempStorage4, lMem.todoNodes.costs, lMem.todoSorted.costs, lMem.numInnerNodes));
 
   CUDA_RUN(cub::DeviceSelect::If(lMem.cubSortTempStorage,
                                  lCubTempStorage3,
                                  lMem.todoNodes.nodes,
                                  lMem.leafNodes,
                                  lTemp,
-                                 (lMem.numLeafNodes + lMem.todoNodes.num),
+                                 (lMem.numLeafNodes + lMem.numInnerNodes),
                                  lSelector));
 
   CUDA_RUN(cub::DeviceReduce::Sum(lMem.cubSortTempStorage, lCubTempStorage2, lMem.skipped, lTemp, lMem.numSkipped));
@@ -887,11 +897,12 @@ error:
   FREE(lMem.sumMin.sums, lMem.sumMin.num);
   FREE(lMem.sumMin.mins, lMem.sumMin.num);
   FREE(lMem.sumMin.flags, lMem.sumMin.num);
-  FREE(lMem.todoNodes.nodes, lMem.todoNodes.num);
-  FREE(lMem.todoNodes.costs, lMem.todoNodes.num);
-  FREE(lMem.todoSorted.nodes, lMem.todoSorted.num);
-  FREE(lMem.todoSorted.costs, lMem.todoSorted.num);
+  FREE(lMem.todoNodes.nodes, lMem.numInnerNodes);
+  FREE(lMem.todoNodes.costs, lMem.numInnerNodes);
+  FREE(lMem.todoSorted.nodes, lMem.numInnerNodes);
+  FREE(lMem.todoSorted.costs, lMem.numInnerNodes);
   FREE(lMem.leafNodes, lMem.numLeafNodes);
+  FREE(lMem.deviceSelectFlags, lMem.numLeafNodes);
   FREE(lMem.patches, lMem.numPatches);
   FREE(lMem.skipped, lMem.numSkipped);
   FREE(lMem.nodesToFix, lMem.numNodesToFix);
@@ -906,11 +917,12 @@ void freeMemory(GPUWorkingMemory *_data) {
   FREE(_data->sumMin.sums, _data->sumMin.num);
   FREE(_data->sumMin.mins, _data->sumMin.num);
   FREE(_data->sumMin.flags, _data->sumMin.num);
-  FREE(_data->todoNodes.nodes, _data->todoNodes.num);
-  FREE(_data->todoNodes.costs, _data->todoNodes.num);
-  FREE(_data->todoSorted.nodes, _data->todoSorted.num);
-  FREE(_data->todoSorted.costs, _data->todoSorted.num);
+  FREE(_data->todoNodes.nodes, _data->numInnerNodes);
+  FREE(_data->todoNodes.costs, _data->numInnerNodes);
+  FREE(_data->todoSorted.nodes, _data->numInnerNodes);
+  FREE(_data->todoSorted.costs, _data->numInnerNodes);
   FREE(_data->leafNodes, _data->numLeafNodes);
+  FREE(_data->deviceSelectFlags, _data->numLeafNodes);
   FREE(_data->patches, _data->numPatches);
   FREE(_data->skipped, _data->numSkipped);
   FREE(_data->nodesToFix, _data->numNodesToFix);
@@ -923,7 +935,7 @@ void initData(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, uint32_t _
   if (!_data || !_GPUbvh) { return; }
 
   cudaError_t   lRes;
-  uint32_t      lNumBlocksAll     = (_data->todoNodes.num + _blockSize - 1) / _blockSize;
+  uint32_t      lNumBlocksAll     = (_data->numInnerNodes + _blockSize - 1) / _blockSize;
   uint32_t      lNumBlocksPatches = (_data->numPatches + _blockSize - 1) / _blockSize;
   uint32_t      lNumBlocksInit    = (_data->numLeafNodes + _blockSize - 1) / _blockSize;
   int *         lNumSelected      = nullptr;
@@ -933,9 +945,9 @@ void initData(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, uint32_t _
   CUBNodeSelect lSelector2(_GPUbvh->nodes);
 
   uint32_t *lTempTODOData = nullptr;
-  ALLOCATE(&lTempTODOData, (_data->numLeafNodes + _data->todoNodes.num), uint32_t); // Allocate Inner + Leaf Nodes
+  ALLOCATE(&lTempTODOData, (_data->numLeafNodes + _data->numInnerNodes), uint32_t); // Allocate Inner + Leaf Nodes
 
-  kResetTodoData<<<lNumBlocksAll, _blockSize>>>(lTempTODOData, (_data->numLeafNodes + _data->todoNodes.num));
+  kResetTodoData<<<lNumBlocksAll, _blockSize>>>(lTempTODOData, (_data->numLeafNodes + _data->numInnerNodes));
   kInitPatches<<<lNumBlocksPatches, _blockSize>>>(_data->patches, _GPUbvh->bvh, _data->numPatches);
 
   CUDA_RUN(cudaMemset(_data->sumMin.flags, 0, _data->sumMin.num * sizeof(uint32_t)));
@@ -948,7 +960,7 @@ void initData(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, uint32_t _
                                  lTempTODOData,
                                  _data->leafNodes,
                                  lNumSelected,
-                                 (_data->numLeafNodes + _data->todoNodes.num),
+                                 (_data->numLeafNodes + _data->numInnerNodes),
                                  lSelector1));
 
   CUDA_RUN(cudaMemcpy(&lNS1, lNumSelected, sizeof(int), cudaMemcpyDeviceToHost));
@@ -958,13 +970,13 @@ void initData(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, uint32_t _
                                  lTempTODOData,
                                  _data->todoNodes.nodes,
                                  lNumSelected,
-                                 (_data->numLeafNodes + _data->todoNodes.num),
+                                 (_data->numLeafNodes + _data->numInnerNodes),
                                  lSelector2));
 
   CUDA_RUN(cudaMemcpy(&lNS2, lNumSelected, sizeof(int), cudaMemcpyDeviceToHost));
 
-  cout << lNS1 << " == " << _data->numLeafNodes << endl;
-  cout << lNS2 << " == " << _data->todoNodes.num << endl;
+  assert(lNS1 == _data->numLeafNodes);
+  assert(lNS2 == _data->numInnerNodes);
 
   kInitSumMin<<<lNumBlocksInit, _blockSize>>>(_data->leafNodes, _data->sumMin, _GPUbvh->nodes, _data->numLeafNodes);
   CUDA_RUN(cudaMemset(_data->sumMin.flags, 0, _data->sumMin.num * sizeof(uint32_t)));
