@@ -22,6 +22,7 @@
 #include <cmath>
 #include <cub/cub.cuh>
 #include <cuda_profiler_api.h>
+#include <cuda_runtime.h>
 #include <iostream>
 
 using namespace glm;
@@ -141,7 +142,7 @@ struct CUDA_INS_RES {
 __device__ uint32_t findNode1(uint32_t _n, BVHPatch &_bvh) {
   float             lBestCost      = HUGE_VALF;
   uint32_t          lBestNodeIndex = 0;
-  AABB const &      lNodeBBox      = _bvh.orig_bbox(_n);
+  AABB              lNodeBBox      = _bvh.orig_bbox(_n);
   float             lSArea         = _bvh.orig_surfaceArea(_n);
   uint32_t          lSize          = 1;
   CUDAHelperStruct  lPQ[CUDA_QUEUE_SIZE];
@@ -191,15 +192,15 @@ __device__ uint32_t findNode1(uint32_t _n, BVHPatch &_bvh) {
 
 
 __device__ uint32_t findNode2(uint32_t _n, BVHPatch &_bvh) {
-  float       lBestCost      = HUGE_VALF;
-  uint32_t    lBestNodeIndex = 0;
-  AABB const &lNodeBBox      = _bvh.orig_bbox(_n);
-  float       lSArea         = _bvh.orig_surfaceArea(_n);
-  float       lMin           = 0.0f;
-  uint16_t    lStart         = threadIdx.x * CUDA_ALT_QUEUE_SIZE;
-  float       lMax           = HUGE_VALF;
-  uint16_t    lMaxIndex      = 1;
-  uint16_t    lMinIndex      = 0;
+  float    lBestCost      = HUGE_VALF;
+  uint32_t lBestNodeIndex = 0;
+  AABB     lNodeBBox      = _bvh.orig_bbox(_n);
+  float    lSArea         = _bvh.orig_surfaceArea(_n);
+  float    lMin           = 0.0f;
+  uint16_t lStart         = threadIdx.x * CUDA_ALT_QUEUE_SIZE;
+  float    lMax           = HUGE_VALF;
+  uint16_t lMaxIndex      = 1;
+  uint16_t lMinIndex      = 0;
 
   extern __shared__ uint32_t lPQ_NL[];
   float                      lPQ_CO[CUDA_ALT_QUEUE_SIZE];
