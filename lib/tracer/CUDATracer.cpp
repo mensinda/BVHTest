@@ -89,7 +89,8 @@ ErrorCode CUDATracer::runImpl(State &_state) {
     generateRays(vRays, lRes.width, lRes.height, lCamData.pos, lCamData.lookAt, lCamData.up, lCamData.fov);
     tracerImage(vRays,
                 vDeviceImages[i - lOffset],
-                _state.cudaMem.bvh.bvh,
+                _state.cudaMem.bvh.nodes,
+                _state.bvh.root(),
                 _state.cudaMem.rawMesh,
                 getLightLocation(),
                 lRes.width,

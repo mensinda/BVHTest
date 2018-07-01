@@ -17,11 +17,11 @@
 #define GLM_ENABLE_EXPERIMENTAL
 
 #include <base/Ray.hpp>
+#include <glm/gtx/intersect.hpp>
+#include <glm/gtx/normal.hpp>
 #include <glm/mat4x4.hpp>
 #include "CUDAKernels.hpp"
 #include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtx/intersect.hpp>
-#include <glm/gtx/normal.hpp>
 #include <cuda_gl_interop.h>
 #include <cuda_runtime.h>
 #include <iostream>
@@ -56,7 +56,14 @@ extern "C" __global__ void kGenerateRays(
   }
 }
 
-extern "C" __global__ void kTraceRay(Ray *_rays, uint8_t *_img, BVH *_bvh, MeshRaw _mesh, vec3 _light, uint32_t _w, uint32_t _h) {
+extern "C" __global__ void kTraceRay(Ray *    _rays,
+                                     uint8_t *_img,
+                                     BVHNode *_nodes,
+                                     uint32_t _rootNode,
+                                     MeshRaw  _mesh,
+                                     vec3     _light,
+                                     uint32_t _w,
+                                     uint32_t _h) {
   uint32_t iX = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t iY = blockIdx.y * blockDim.y + threadIdx.y;
   uint32_t sX = blockDim.x * gridDim.x;
@@ -64,8 +71,8 @@ extern "C" __global__ void kTraceRay(Ray *_rays, uint8_t *_img, BVH *_bvh, MeshR
 
   for (uint32_t y = iY; y < _h; y += sY) {
     for (uint32_t x = iX; x < _w; x += sX) {
-      Ray lRay = _rays[y * _w + x];
-      CUDAPixel              lRes      = {121, 167, 229, 0};
+      Ray                lRay      = _rays[y * _w + x];
+      CUDAPixel          lRes      = {121, 167, 229, 0};
       static const float lInfinity = HUGE_VALF;
 
       /*
@@ -79,7 +86,7 @@ extern "C" __global__ void kTraceRay(Ray *_rays, uint8_t *_img, BVH *_bvh, MeshR
        */
 
       uint64_t lBitStack_lo = 0, lBitStack_hi = 0;
-      BVHNode const *lNode     = _bvh->rootNode();
+      BVHNode  lNode = _nodes[_rootNode];
 
       Triangle lClosest = {0, 0, 0};
       float    lNearest = lInfinity;
@@ -91,12 +98,12 @@ extern "C" __global__ void kTraceRay(Ray *_rays, uint8_t *_img, BVH *_bvh, MeshR
       double lDistance;
 
       while (true) {
-        if (!lNode->isLeaf()) {
+        if (!lNode.isLeaf()) {
           lRes.intCount++;
-          BVHNode const *lLeft     = _bvh->get(lNode->left);
-          BVHNode const *lRight    = _bvh->get(lNode->right);
-          bool           lLeftHit  = lLeft->bbox.intersect(lRay, 0.01f, lNearest + 0.01f, lMinLeft, lTemp);
-          bool           lRightHit = lRight->bbox.intersect(lRay, 0.01f, lNearest + 0.01f, lMinRight, lTemp);
+          BVHNode lLeft     = _nodes[lNode.left];
+          BVHNode lRight    = _nodes[lNode.right];
+          bool    lLeftHit  = lLeft.bbox.intersect(lRay, 0.01f, lNearest + 0.01f, lMinLeft, lTemp);
+          bool    lRightHit = lRight.bbox.intersect(lRay, 0.01f, lNearest + 0.01f, lMinRight, lTemp);
 
           if (lLeftHit || lRightHit) {
             lBitStack_hi = (lBitStack_hi << 1) | (lBitStack_lo >> 63);
@@ -112,8 +119,8 @@ extern "C" __global__ void kTraceRay(Ray *_rays, uint8_t *_img, BVH *_bvh, MeshR
             continue;
           }
         } else {
-          for (uint32_t i = 0; i < lNode->numFaces(); ++i) {
-            Triangle const &lTri = _mesh.faces[lNode->beginFaces() + i];
+          for (uint32_t i = 0; i < lNode.numFaces(); ++i) {
+            Triangle const &lTri = _mesh.faces[lNode.beginFaces() + i];
 
             bool lHit = intersectRayTriangle<double>(static_cast<dvec3 const &>(lRay.getOrigin()),
                                                      static_cast<dvec3 const &>(lRay.getDirection()),
@@ -133,12 +140,12 @@ extern "C" __global__ void kTraceRay(Ray *_rays, uint8_t *_img, BVH *_bvh, MeshR
         // Backtrac
         while ((lBitStack_lo & 1) == 0) {
           if (lBitStack_lo == 0 && lBitStack_hi == 0) { goto LABEL_END; } // I know, I know...
-          lNode = _bvh->get(lNode->parent);
+          lNode        = _nodes[lNode.parent];
           lBitStack_lo = (lBitStack_lo >> 1) | (lBitStack_hi << 63);
           lBitStack_hi >>= 1;
         }
 
-        lNode         = _bvh->siblingNode(lNode);
+        lNode = lNode.isRightChild() ? _nodes[_nodes[lNode.parent].left] : _nodes[_nodes[lNode.parent].right];
         lBitStack_lo ^= 1;
       }
 
@@ -155,7 +162,6 @@ extern "C" __global__ void kTraceRay(Ray *_rays, uint8_t *_img, BVH *_bvh, MeshR
       }
 
       reinterpret_cast<CUDAPixel *>(_img)[y * _w + x] = lRes;
-
     }
   }
 }
@@ -173,12 +179,19 @@ extern "C" void generateRays(Ray *_rays, uint32_t _w, uint32_t _h, vec3 _pos, ve
   kGenerateRays<<<lGrid, lBlock>>>(_rays, _w, _h, lCamToWorld, _pos, lAspectRatio, lScale);
 }
 
-extern "C" void tracerImage(Ray *_rays, uint8_t *_img, BVH *_bvh, MeshRaw _mesh, vec3 _light, uint32_t _w, uint32_t _h) {
+extern "C" void tracerImage(Ray *    _rays,
+                            uint8_t *_img,
+                            BVHNode *_nodes,
+                            uint32_t _rootNode,
+                            MeshRaw  _mesh,
+                            vec3     _light,
+                            uint32_t _w,
+                            uint32_t _h) {
   if (!_rays || !_img) { return; }
   dim3 lBlock(16, 16, 1);
   dim3 lGrid((_w + lBlock.x - 1) / lBlock.x, (_h + lBlock.y - 1) / lBlock.y);
 
-  kTraceRay<<<lGrid, lBlock>>>(_rays, _img, _bvh, _mesh, _light, _w, _h);
+  kTraceRay<<<lGrid, lBlock>>>(_rays, _img, _nodes, _rootNode, _mesh, _light, _w, _h);
 }
 
 
