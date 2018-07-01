@@ -85,8 +85,9 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
        * cgf.12259.
        */
 
-      uint64_t lBitStack_lo = 0, lBitStack_hi = 0;
-      BVHNode  lNode = _nodes[_rootNode];
+      uint64_t lBitStack_lo = 0;
+      uint64_t lBitStack_hi = 0;
+      uint32_t lNode        = _rootNode;
 
       Triangle lClosest = {0, 0, 0};
       float    lNearest = lInfinity;
@@ -98,12 +99,12 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
       double lDistance;
 
       while (true) {
-        if (!lNode.isLeaf()) {
+        if (!_nodes[lNode].isLeaf()) {
           lRes.intCount++;
-          BVHNode lLeft     = _nodes[lNode.left];
-          BVHNode lRight    = _nodes[lNode.right];
-          bool    lLeftHit  = lLeft.bbox.intersect(lRay, 0.01f, lNearest + 0.01f, lMinLeft, lTemp);
-          bool    lRightHit = lRight.bbox.intersect(lRay, 0.01f, lNearest + 0.01f, lMinRight, lTemp);
+          uint32_t lLeft     = _nodes[lNode].left;
+          uint32_t lRight    = _nodes[lNode].right;
+          bool     lLeftHit  = _nodes[lLeft].bbox.intersect(lRay, 0.01f, lNearest + 0.01f, lMinLeft, lTemp);
+          bool     lRightHit = _nodes[lRight].bbox.intersect(lRay, 0.01f, lNearest + 0.01f, lMinRight, lTemp);
 
           if (lLeftHit || lRightHit) {
             lBitStack_hi = (lBitStack_hi << 1) | (lBitStack_lo >> 63);
@@ -119,8 +120,8 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
             continue;
           }
         } else {
-          for (uint32_t i = 0; i < lNode.numFaces(); ++i) {
-            Triangle const &lTri = _mesh.faces[lNode.beginFaces() + i];
+          for (uint32_t i = 0; i < _nodes[lNode].numFaces(); ++i) {
+            Triangle lTri = _mesh.faces[_nodes[lNode].beginFaces() + i];
 
             bool lHit = intersectRayTriangle<double>(static_cast<dvec3 const &>(lRay.getOrigin()),
                                                      static_cast<dvec3 const &>(lRay.getDirection()),
@@ -140,12 +141,12 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
         // Backtrac
         while ((lBitStack_lo & 1) == 0) {
           if (lBitStack_lo == 0 && lBitStack_hi == 0) { goto LABEL_END; } // I know, I know...
-          lNode        = _nodes[lNode.parent];
+          lNode        = _nodes[lNode].parent;
           lBitStack_lo = (lBitStack_lo >> 1) | (lBitStack_hi << 63);
           lBitStack_hi >>= 1;
         }
 
-        lNode = lNode.isRightChild() ? _nodes[_nodes[lNode.parent].left] : _nodes[_nodes[lNode.parent].right];
+        lNode = _nodes[lNode].isRightChild() ? _nodes[_nodes[lNode].parent].left : _nodes[_nodes[lNode].parent].right;
         lBitStack_lo ^= 1;
       }
 
