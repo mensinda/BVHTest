@@ -62,6 +62,17 @@ class alignas(16) Ray final {
     vSign.z = vInvDir.z < 0 ? 1 : 0;
   }
 
+  CUDA_CALL void set(vec3 _pos, vec3 _dir, uint32_t _x, uint32_t _y) {
+    vPos    = _pos;
+    vDir    = _dir;
+    vPX     = _x;
+    vPY     = _y;
+    vInvDir = 1.0f / vDir;
+    vSign.x = vInvDir.x < 0 ? 1 : 0;
+    vSign.y = vInvDir.y < 0 ? 1 : 0;
+    vSign.z = vInvDir.z < 0 ? 1 : 0;
+  }
+
   CUDA_CALL vec3 const &getOrigin() const { return vPos; }
   CUDA_CALL vec3 const &getDirection() const { return vDir; }
   CUDA_CALL vec3 const &getInverseDirection() const { return vInvDir; }

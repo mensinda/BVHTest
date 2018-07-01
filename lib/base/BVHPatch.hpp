@@ -18,12 +18,14 @@
 
 #include "BVH.hpp"
 
+#define ENABLE_AABB_PATH 0
+
 namespace BVHTest {
 namespace base {
 
 const size_t NNode = 10;
 const size_t NPath = 2;
-const size_t NAABB = 3;
+const size_t NAABB = 2;
 
 const uint64_t MASK_INDEX   = (1ul << 32ul) - 1ul;
 const uint64_t MASK_CONTROL = ~MASK_INDEX;
@@ -86,11 +88,6 @@ struct alignas(16) MiniPatch final {
 
 class alignas(16) BVHPatch final {
  public:
-  struct BBox {
-    AABB  box;
-    float sarea;
-  };
-
   struct NodePair {
     uint32_t first;
     uint32_t second;
@@ -99,15 +96,13 @@ class alignas(16) BVHPatch final {
  private:
   BVHNodePatch vNodes;
   uint32_t     vPatch[NNode];
-  uint32_t     vNumPaths = 0;
 
-  struct AABBPath {
-    uint32_t vAABBPath[NAABB];
-    AABB     vAABBs[NAABB];
-    uint32_t vPathLength = 0;
-  };
+#if ENABLE_AABB_PATH
+  uint32_t vPathLength[NPath];
+#endif
 
-  AABBPath vPaths[NPath];
+  uint32_t vAABBPath[NPath * NAABB];
+  AABB     vAABBs[NPath * NAABB];
 
   BVH *vBVH;
 
@@ -234,8 +229,12 @@ class alignas(16) BVHPatch final {
 
   //! \brief Only Resets the paths
   CUDA_CALL void clearPaths() {
-    for (uint16_t i = 0; i < NPath; ++i) { vPaths[i].vPathLength = 0; }
-    vNumPaths = 0;
+    for (uint32_t i = 0; i < NPath; ++i) {
+#if ENABLE_AABB_PATH
+      vPathLength[i] = 0;
+#endif
+    }
+    for (uint32_t i = 0; i < NAABB * NPath; ++i) { vAABBPath[i] = UINT32_MAX; }
   }
 
   CUDA_CALL void clear() {
@@ -265,6 +264,7 @@ class alignas(16) BVHPatch final {
   }
 
 
+#if ENABLE_AABB_PATH
   /*!
    * \brief Fix the AABBs starting at _node in a path to the root
    */
@@ -305,24 +305,62 @@ class alignas(16) BVHPatch final {
       if (i >= lNumNodes) { break; }
 
       // Merge with the sibling of the last processed Node
-      lAABB.box.mergeWith(getAABB(lNodePairs[i].first, lNumNodes - i - 1).box);
+      lAABB.mergeWith(getAABB(lNodePairs[i].first, lNumNodes - i - 1));
 
-      vPaths[vNumPaths].vAABBPath[i] = lNodePairs[i].second;
-      vPaths[vNumPaths].vAABBs[i]    = lAABB.box;
+      vAABBPath[_pIDX * NPath + i] = lNodePairs[i].second;
+      vAABBs[_pIDX * NPath + i]    = lAABB;
     }
 
-    vPaths[vNumPaths].vPathLength = lNumNodes;
-    vNumPaths++;
+    vPathLength[_pIDX] = lNumNodes;
   }
 
-  CUDA_CALL BBox getAABB(uint32_t _node, uint32_t _level) {
-    for (int32_t i = NPath - 1; i >= 0; --i) {
-      uint32_t lIndex = vPaths[i].vPathLength - _level - 1; // May underflow but this is fine (one check less)
-      if (lIndex < NAABB && vPaths[i].vAABBPath[lIndex] == _node) {
-        return {vPaths[i].vAABBs[lIndex], vPaths[i].vAABBs[lIndex].surfaceArea()};
-      }
+  //   CUDA_CALL AABB getAABB(uint32_t _node, uint32_t _level) {
+  //     for (int32_t i = NPath - 1; i >= 0; --i) {
+  //       uint32_t lIndex = vPaths[i].vPathLength - _level - 1; // May underflow but this is fine (one check less)
+  //       if (lIndex < NAABB && vPaths[i].vAABBPath[lIndex] == _node) {
+  //         return {vPaths[i].vAABBs[lIndex], vPaths[i].vAABBs[lIndex].surfaceArea()};
+  //       }
+  //     }
+  //     BVHNode *lNode = vBVH->get(_node);
+  //     return lNode->bbox;
+  //   }
+
+#else
+
+  /*!
+   * \brief Fix the AABBs starting at _node in a path to the root
+   */
+  CUDA_CALL void patchAABBFrom(uint32_t _node, uint32_t _pIDX) {
+    uint32_t lNodeIndex   = _node;
+    uint64_t lNode        = getSubset(lNodeIndex);
+    AABB     lAABB        = getAABB(left(lNode));
+    uint32_t lSibling     = 0;
+    bool     lLastWasLeft = true; // Always remember if we have to fetch the left or right childs bbox
+
+    // Get node index list
+    for (uint32_t i = 0; i < NAABB; ++i) {
+      // Merge with the sibling of the last processed Node
+      lSibling = lLastWasLeft ? right(lNode) : left(lNode);
+
+      lAABB.mergeWith(getAABB(lSibling));
+      vAABBs[_pIDX * NPath + i]    = lAABB;
+      vAABBPath[_pIDX * NPath + i] = lNodeIndex;
+
+      lLastWasLeft = isLeftChild(lNode);
+
+      if (lNodeIndex == root()) { break; } // We processed the root ==> everything is done
+
+      lNodeIndex = parent(lNode);
+      lNode      = getSubset(lNodeIndex);
     }
-    return {vBVH->bbox(_node), vBVH->surfaceArea(_node)};
+  }
+#endif
+
+  CUDA_CALL AABB getAABB(uint32_t _node) {
+    for (uint32_t i = 0; i < NPath * NAABB; ++i) {
+      if (vAABBPath[i] == _node) { return vAABBs[i]; }
+    }
+    return vBVH->bbox(_node);
   }
 
   CUDA_CALL void genMiniPatch(MiniPatch &_out) const noexcept {

@@ -53,6 +53,7 @@ void Bittner13GPU::fromJSON(const json &_j) {
   vOffsetAccess  = _j.value("offsetAccess", vOffsetAccess);
   vAltFindNode   = _j.value("altFindNode", vAltFindNode);
   vAltFixTree    = _j.value("altFixTree", vAltFixTree);
+  vAltSort       = _j.value("altSort", vAltSort);
   vLocalPatchCPY = _j.value("localPatchCPY", vLocalPatchCPY);
 
   if (vBatchPercent <= 0.01f) vBatchPercent = 0.01f;
@@ -69,6 +70,7 @@ json Bittner13GPU::toJSON() const {
   lJSON["offsetAccess"]  = vOffsetAccess;
   lJSON["altFindNode"]   = vAltFindNode;
   lJSON["altFixTree"]    = vAltFixTree;
+  lJSON["altSort"]       = vAltSort;
   lJSON["localPatchCPY"] = vLocalPatchCPY;
   return lJSON;
 }
@@ -79,6 +81,8 @@ ErrorCode Bittner13GPU::setup(State &_state) {
   vWorkingMemory      = allocateMemory(&_state.cudaMem.bvh, lChunkSize, _state.cudaMem.rawMesh.numFaces);
 
   if (!vWorkingMemory.result) { return ErrorCode::CUDA_ERROR; }
+
+  initData(&vWorkingMemory, &_state.cudaMem.bvh, vCUDABlockSize);
   return ErrorCode::OK;
 }
 
@@ -87,20 +91,19 @@ ErrorCode Bittner13GPU::runImpl(State &_state) {
   uint32_t lChunkSize = lNumNodes / vNumChunks;
   lNumNodes           = lChunkSize * vNumChunks;
 
-  initData(&vWorkingMemory, &_state.cudaMem.bvh, vCUDABlockSize);
+  AlgoCFG lCFG;
+  lCFG.blockSize     = vCUDABlockSize;
+  lCFG.offsetAccess  = vOffsetAccess;
+  lCFG.altFindNode   = vAltFindNode;
+  lCFG.altFixTree    = vAltFixTree;
+  lCFG.altSort       = vAltSort;
+  lCFG.sort          = vSortBatch;
+  lCFG.localPatchCPY = vLocalPatchCPY;
 
   for (uint32_t i = 0; i < vMaxNumStepps; ++i) {
     //     PROGRESS(fmt::format("Stepp {:<3}; SAH: ?", i), i, vMaxNumStepps);
 
-    doAlgorithmStep(&vWorkingMemory,
-                    &_state.cudaMem.bvh,
-                    vNumChunks,
-                    lChunkSize,
-                    vCUDABlockSize,
-                    vOffsetAccess,
-                    vAltFindNode,
-                    vAltFixTree,
-                    vLocalPatchCPY);
+    doAlgorithmStep(&vWorkingMemory, &_state.cudaMem.bvh, vNumChunks, lChunkSize, lCFG);
   }
 
   //   PROGRESS("CUDA sync", vMaxNumStepps, vMaxNumStepps);

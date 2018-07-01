@@ -35,7 +35,6 @@ struct SumMinCUDA {
 struct TodoStruct {
   uint32_t *nodes = nullptr;
   float *   costs = nullptr;
-  uint32_t  num   = 0;
 };
 
 struct GPUWorkingMemory {
@@ -45,15 +44,27 @@ struct GPUWorkingMemory {
   TodoStruct todoSorted;
 
   uint32_t *leafNodes              = nullptr;
+  uint8_t * deviceSelectFlags      = nullptr;
   PATCH *   patches                = nullptr;
   uint32_t *skipped                = nullptr;
   uint32_t *nodesToFix             = nullptr;
   void *    cubSortTempStorage     = nullptr;
   uint32_t  numLeafNodes           = 0;
+  uint32_t  numInnerNodes          = 0;
   uint32_t  numPatches             = 0;
   uint32_t  numSkipped             = 0;
   uint32_t  numNodesToFix          = 0;
   size_t    cubSortTempStorageSize = 0;
+};
+
+struct AlgoCFG {
+  uint32_t blockSize     = 32;
+  bool     offsetAccess  = true;
+  bool     altFindNode   = true;
+  bool     altFixTree    = true;
+  bool     altSort       = true;
+  bool     sort          = true;
+  bool     localPatchCPY = true;
 };
 
 GPUWorkingMemory allocateMemory(BVHTest::base::CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize, uint32_t _numFaces);
@@ -67,11 +78,7 @@ void doAlgorithmStep(GPUWorkingMemory *                   _data,
                      BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh,
                      uint32_t                             _numChunks,
                      uint32_t                             _chunkSize,
-                     uint32_t                             _blockSize,
-                     bool                                 _offsetAccess,
-                     bool                                 _altFindNode,
-                     bool                                 _altFixTree,
-                     bool                                 _localPatchCPY);
+                     AlgoCFG                              _cfg);
 
 void doCudaDevSync();
 

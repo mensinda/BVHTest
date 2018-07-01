@@ -78,9 +78,9 @@ struct HelperStruct {
 };
 
 
-Bittner13Par::NodeLevel Bittner13Par::findNode1(uint32_t _n, BVHPatch &_bvh) {
+uint32_t Bittner13Par::findNode1(uint32_t _n, BVHPatch &_bvh) {
   float         lBestCost      = HUGE_VALF;
-  NodeLevel     lBestNodeIndex = {0, 0};
+  uint32_t      lBestNodeIndex = 0;
   AABB const &  lNodeBBox      = _bvh.orig_bbox(_n);
   float         lSArea         = _bvh.orig_surfaceArea(_n);
   uint32_t      lSize          = 1;
@@ -91,7 +91,7 @@ Bittner13Par::NodeLevel Bittner13Par::findNode1(uint32_t _n, BVHPatch &_bvh) {
   while (lSize > 0) {
     HelperStruct lCurr     = lPQ[0];
     uint64_t     lCurrNode = _bvh.getSubset(lCurr.node);
-    auto         lBBox     = _bvh.getAABB(lCurr.node, lCurr.level);
+    AABB         lBBox     = _bvh.getAABB(lCurr.node);
     CUDA_pop_heap(lBegin, lBegin + lSize);
     lSize--;
 
@@ -100,16 +100,18 @@ Bittner13Par::NodeLevel Bittner13Par::findNode1(uint32_t _n, BVHPatch &_bvh) {
       break;
     }
 
-    lBBox.box.mergeWith(lNodeBBox);
-    float lDirectCost = lBBox.box.surfaceArea();
+    float lNewInduced = -1 * lBBox.surfaceArea();
+
+    lBBox.mergeWith(lNodeBBox);
+    float lDirectCost = lBBox.surfaceArea();
     float lTotalCost  = lCurr.cost + lDirectCost;
     if (lTotalCost < lBestCost) {
       // Merging here improves the total SAH cost
       lBestCost      = lTotalCost;
-      lBestNodeIndex = {lCurr.node, lCurr.level};
+      lBestNodeIndex = lCurr.node;
     }
 
-    float lNewInduced = lTotalCost - lBBox.sarea;
+    lNewInduced += lTotalCost;
     if ((lNewInduced + lSArea) < lBestCost) {
       if (!_bvh.isLeaf(lCurrNode)) {
         assert(lSize + 2 < QUEUE_SIZE);
@@ -125,9 +127,9 @@ Bittner13Par::NodeLevel Bittner13Par::findNode1(uint32_t _n, BVHPatch &_bvh) {
   return lBestNodeIndex;
 }
 
-Bittner13Par::NodeLevel Bittner13Par::findNode2(uint32_t _n, BVHPatch &_bvh) {
+uint32_t Bittner13Par::findNode2(uint32_t _n, BVHPatch &_bvh) {
   float        lBestCost      = HUGE_VALF;
-  NodeLevel    lBestNodeIndex = {0, 0};
+  uint32_t     lBestNodeIndex = 0;
   AABB const & lNodeBBox      = _bvh.orig_bbox(_n);
   float        lSArea         = _bvh.orig_surfaceArea(_n);
   float        lMin           = 0.0f;
@@ -144,24 +146,26 @@ Bittner13Par::NodeLevel Bittner13Par::findNode2(uint32_t _n, BVHPatch &_bvh) {
   while (lMin < HUGE_VALF) {
     lCurr               = lPQ[lMinIndex];
     lPQ[lMinIndex].cost = HUGE_VALF;
+    auto     lBBox      = _bvh.getAABB(lCurr.node);
     uint64_t lCurrNode  = _bvh.getSubset(lCurr.node);
-    auto     lBBox      = _bvh.getAABB(lCurr.node, lCurr.level);
 
     if ((lCurr.cost + lSArea) >= lBestCost) {
       // Early termination - not possible to further optimize
       break;
     }
 
-    lBBox.box.mergeWith(lNodeBBox);
-    float lDirectCost = lBBox.box.surfaceArea();
+    float lNewInduced = -1 * lBBox.surfaceArea();
+
+    lBBox.mergeWith(lNodeBBox);
+    float lDirectCost = lBBox.surfaceArea();
     float lTotalCost  = lCurr.cost + lDirectCost;
     if (lTotalCost < lBestCost) {
       // Merging here improves the total SAH cost
       lBestCost      = lTotalCost;
-      lBestNodeIndex = {lCurr.node, lCurr.level};
+      lBestNodeIndex = lCurr.node;
     }
 
-    float lNewInduced = lTotalCost - lBBox.sarea;
+    lNewInduced += lTotalCost;
     if ((lNewInduced + lSArea) < lBestCost && !_bvh.isLeaf(lCurrNode)) {
       lPQ[lMinIndex] = {_bvh.left(lCurrNode), lNewInduced, lCurr.level + 1};
       lPQ[lMaxIndex] = {_bvh.right(lCurrNode), lNewInduced, lCurr.level + 1};
@@ -257,7 +261,7 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, BVHPatch &_bvh, Su
   }
 
   // update Bounding Boxes (temporary)
-  _bvh.patchAABBFrom(lGrandParentIndex);
+  _bvh.patchAABBFrom(lGrandParentIndex, 0);
 
   if (_bvh.orig_surfaceArea(lLeftIndex) > _bvh.orig_surfaceArea(lRightIndex)) {
     return {true, {lLeftIndex, lRightIndex}, {_node, lParentIndex}, {lGrandParentIndex, lSiblingIndex}};
@@ -270,7 +274,7 @@ Bittner13Par::RM_RES Bittner13Par::removeNode(uint32_t _node, BVHPatch &_bvh, Su
 Bittner13Par::INS_RES Bittner13Par::reinsert(
     uint32_t _node, uint32_t _unused, BVHPatch &_bvh, bool _update, SumMin *_sumMin) {
 
-  auto [lBestIndex, lLevelOfBest] = vAltFindNode ? findNode2(_node, _bvh) : findNode1(_node, _bvh);
+  uint32_t lBestIndex = vAltFindNode ? findNode2(_node, _bvh) : findNode1(_node, _bvh);
   if (lBestIndex == _bvh.root()) { return {false, 0, 0}; }
 
   uint32_t lBestPatchIndex = _bvh.patchIndex(lBestIndex); // Check if node is already patched
@@ -323,7 +327,7 @@ Bittner13Par::INS_RES Bittner13Par::reinsert(
   _bvh.patch_parent(lNode) = _unused;
   _bvh.patch_isLeft(lNode) = FALSE;
 
-  if (_update) { _bvh.patchAABBFrom(_unused); }
+  if (_update) { _bvh.patchAABBFrom(_unused, 1); }
 
   return {true, lBestIndex, lRootIndex};
 }
@@ -419,30 +423,16 @@ void Bittner13Par::initSumAndMin(BVH &_bvh, SumMin *_sumMin) {
 }
 
 
-
-
-ErrorCode Bittner13Par::runImpl(State &_state) {
-  typedef pair<uint32_t, float> TUP;
-
-  unique_ptr<SumMin[]> lSumMin(new SumMin[_state.bvh.size()]);
-  SumMin *             _sumMin = lSumMin.get();
-  initSumAndMin(_state.bvh, _sumMin);
-
+ErrorCode Bittner13Par::setup(State &_state) {
   uint32_t lNumNodes  = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
   uint32_t lChunkSize = lNumNodes / vNumChunks;
-  lNumNodes           = lChunkSize * vNumChunks;
-  auto lComp          = [](TUP const &_l, TUP const &_r) -> bool { return _l.second > _r.second; };
 
-  vector<TUP>      lTodoList;
-  vector<BVHPatch> lPatches;
-  vector<bool>     lSkipp;
-  vector<uint32_t> lFixList;
   lTodoList.resize(_state.bvh.size());
   lPatches.resize(lChunkSize, BVHPatch(&_state.bvh));
   lSkipp.resize(lChunkSize);
   lFixList.resize(lChunkSize * 3);
-
-  uint32_t lSkipped = 0;
+  lSumMin         = unique_ptr<SumMin[]>(new SumMin[_state.bvh.size()]);
+  SumMin *_sumMin = lSumMin.get();
 
   // Init List
 #pragma omp parallel for
@@ -450,6 +440,19 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
     lTodoList[i] = {i, 0.0f};
     RELEASE_LOCK(i);
   }
+
+  initSumAndMin(_state.bvh, _sumMin);
+  return ErrorCode::OK;
+}
+
+ErrorCode Bittner13Par::runImpl(State &_state) {
+  uint32_t lNumNodes  = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
+  uint32_t lChunkSize = lNumNodes / vNumChunks;
+  lNumNodes           = lChunkSize * vNumChunks;
+  SumMin *_sumMin     = lSumMin.get();
+  auto    lComp       = [](TUP const &_l, TUP const &_r) -> bool { return _l.second > _r.second; };
+
+  uint32_t lSkipped = 0;
 
   random_device                      lRD;
   mt19937                            lPRNG(lRD());
@@ -619,3 +622,5 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
   _state.bvh.fixLevels();
   return ErrorCode::OK;
 }
+
+void Bittner13Par::teardown(State &) { lSumMin = nullptr; }
