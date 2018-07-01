@@ -52,5 +52,9 @@ extern "C" void tracerImage(Ray *    _rays,
 
 extern "C" void copyImageToHost(CUDAPixel *_hostPixel, uint8_t *_cudaImg, uint32_t _w, uint32_t _h);
 
+extern "C" bool registerOGLImage(void **_resource, uint32_t _image);
+extern "C" bool copyToOGLImage(void **_resource, uint8_t *_img, uint32_t _w, uint32_t _h);
+extern "C" void unregisterOGLImage(void *_resource);
+
 extern "C" void tracerDoCudaSync();
 extern "C" void initCUDA_GL();

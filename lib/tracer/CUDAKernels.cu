@@ -24,6 +24,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <cuda_gl_interop.h>
 #include <cuda_runtime.h>
+#include <cuda_runtime_api.h>
 #include <iostream>
 
 #define CUDA_RUN(call)                                                                                                 \
@@ -189,17 +190,51 @@ extern "C" void tracerImage(Ray *    _rays,
                             uint32_t _w,
                             uint32_t _h) {
   if (!_rays || !_img) { return; }
-  dim3 lBlock(16, 16, 1);
+  dim3 lBlock(8, 8, 1);
   dim3 lGrid((_w + lBlock.x - 1) / lBlock.x, (_h + lBlock.y - 1) / lBlock.y);
 
   kTraceRay<<<lGrid, lBlock>>>(_rays, _img, _nodes, _rootNode, _mesh, _light, _w, _h);
 }
 
+extern "C" bool copyToOGLImage(void **_resource, uint8_t *_img, uint32_t _w, uint32_t _h) {
+  cudaError_t            lRes;
+  cudaArray_t            lDevArray;
+  cudaGraphicsResource **lResource = reinterpret_cast<cudaGraphicsResource **>(_resource);
+
+  CUDA_RUN(cudaPeekAtLastError());
+  CUDA_RUN(cudaGraphicsMapResources(1, lResource, 0));
+  CUDA_RUN(cudaGraphicsSubResourceGetMappedArray(&lDevArray, *lResource, 0, 0));
+
+  CUDA_RUN(cudaMemcpyToArray(lDevArray, 0, 0, _img, _w * _h * 4 * sizeof(uint8_t), cudaMemcpyDeviceToDevice));
+
+  CUDA_RUN(cudaGraphicsUnmapResources(1, lResource, 0));
+
+  return true;
+
+error:
+  return false;
+}
 
 extern "C" void copyImageToHost(CUDAPixel *_hostPixel, uint8_t *_cudaImg, uint32_t _w, uint32_t _h) {
   cudaMemcpy(_hostPixel, _cudaImg, _w * _h * sizeof(CUDAPixel), cudaMemcpyDeviceToHost);
 }
 
+
+extern "C" bool registerOGLImage(void **_resource, uint32_t _image) {
+  cudaError_t lRes;
+  CUDA_RUN(cudaGraphicsGLRegisterImage(reinterpret_cast<cudaGraphicsResource **>(_resource),
+                                       _image,
+                                       GL_TEXTURE_2D,
+                                       cudaGraphicsRegisterFlagsWriteDiscard));
+  return true;
+
+error:
+  return false;
+}
+
+extern "C" void unregisterOGLImage(void *_resource) {
+  cudaGraphicsUnregisterResource(reinterpret_cast<cudaGraphicsResource *>(_resource));
+}
 
 
 extern "C" bool allocateRays(Ray **_rays, uint32_t _num) {
@@ -232,4 +267,9 @@ extern "C" void freeImage(uint8_t *_img) {
 }
 
 extern "C" void tracerDoCudaSync() { cudaDeviceSynchronize(); }
-extern "C" void initCUDA_GL() { cudaGLSetGLDevice(0); }
+extern "C" void initCUDA_GL() {
+  cudaError_t lRes;
+  CUDA_RUN(cudaGLSetGLDevice(0));
+error:
+  return;
+}

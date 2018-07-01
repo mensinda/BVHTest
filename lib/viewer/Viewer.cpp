@@ -23,6 +23,7 @@
 #include <glm/glm.hpp>
 #include "BVHRenderer.hpp"
 #include "Enum2Str.hpp"
+#include "LiveTracer.hpp"
 #include "MeshRenderer.hpp"
 #include <GLFW/glfw3.h>
 #include <chrono>
@@ -71,7 +72,9 @@ class Text final {
   void draw() { gltDrawText2D(vText, vPosX, vPosY, vScale); }
 };
 
-Viewer::GLFWInitHelper::GLFWInitHelper() { isInit = glfwInit() == GLFW_TRUE && gl3wInit() != 0; }
+Viewer::GLFWInitHelper::GLFWInitHelper() {
+  isInit = (glfwInit() == GLFW_TRUE) && (gl3wInit() != 0) && LiveTracer::cudaInit();
+}
 Viewer::GLFWInitHelper::~GLFWInitHelper() { glfwTerminate(); }
 
 Viewer::~Viewer() {}
@@ -180,6 +183,7 @@ void Viewer::keyCallback(Window &_win, State &_state, Camera &_cam, int _key) {
     case GLFW_KEY_F1: vRState.vRendererType = Renderer::MESH; break;
     case GLFW_KEY_F2: vRState.vRendererType = Renderer::WIREFRAME; break;
     case GLFW_KEY_F3: vRState.vRendererType = Renderer::BVH; break;
+    case GLFW_KEY_F4: vRState.vRendererType = Renderer::CUDA_TRACER; break;
   }
 
   if (vRState.vSpeedLevel < 1) vRState.vSpeedLevel = 1;
@@ -279,10 +283,17 @@ ErrorCode Viewer::runImpl(State &_state) {
         case Renderer::MESH:
           vRenderer.reset();
           vRenderer = make_shared<MeshRenderer>(_state.mesh);
+          glEnable(GL_DEPTH_TEST);
           break;
         case Renderer::BVH:
           vRenderer.reset();
           vRenderer = make_shared<BVHRenderer>(_state.bvh);
+          glEnable(GL_DEPTH_TEST);
+          break;
+        case Renderer::CUDA_TRACER:
+          vRenderer.reset();
+          vRenderer = make_shared<LiveTracer>(_state, vResX, vResX);
+          glDisable(GL_DEPTH_TEST);
           break;
       }
     }

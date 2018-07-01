@@ -116,6 +116,7 @@ tracerInc = files([
 # Viewer lib
 viewerSrc = files([
   'viewer/BVHRenderer.cpp',
+  'viewer/LiveTracer.cpp',
   'viewer/MeshRenderer.cpp',
   'viewer/RendererBase.cpp',
   'viewer/Viewer.cpp',
@@ -124,6 +125,7 @@ viewerSrc = files([
 
 viewerInc = files([
   'viewer/BVHRenderer.hpp',
+  'viewer/LiveTracer.hpp',
   'viewer/MeshRenderer.hpp',
   'viewer/RendererBase.hpp',
   'viewer/Viewer.hpp',
