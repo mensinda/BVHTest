@@ -87,6 +87,13 @@ ErrorCode CUDATracer::runImpl(State &_state) {
     auto lStart   = high_resolution_clock::now();
 
     generateRays(vRays, lRes.width, lRes.height, lCamData.pos, lCamData.lookAt, lCamData.up, lCamData.fov);
+    tracerImage(vRays,
+                vDeviceImages[i - lOffset],
+                _state.cudaMem.bvh.bvh,
+                _state.cudaMem.rawMesh,
+                getLightLocation(),
+                lRes.width,
+                lRes.height);
     tracerDoCudaSync();
 
     auto lEnd  = high_resolution_clock::now();
@@ -96,4 +103,28 @@ ErrorCode CUDATracer::runImpl(State &_state) {
   return ErrorCode::OK;
 }
 
-void CUDATracer::teardown(State &_state) { freeMemory(); }
+void CUDATracer::teardown(State &_state) {
+  uint32_t               lNumPixel = vResolution.width * vResolution.height;
+  std::vector<CUDAPixel> lPixels;
+  lPixels.resize(lNumPixel);
+
+  for (uint32_t i = 0; i < vDeviceImages.size(); ++i) {
+    Image &lIMG = _state.work[_state.work.size() - vDeviceImages.size() + i].img;
+    copyImageToHost(lPixels.data(), vDeviceImages[i], vResolution.width, vResolution.height);
+
+    lIMG.name   = _state.name + "_CUDA_cam_" + to_string(i);
+    lIMG.width  = vResolution.width;
+    lIMG.height = vResolution.height;
+    lIMG.pixels.resize(lNumPixel);
+#pragma omp parallel for
+    for (uint32_t j = 0; j < lNumPixel; ++j) {
+      lIMG.pixels[j].r        = lPixels[j].r;
+      lIMG.pixels[j].g        = lPixels[j].g;
+      lIMG.pixels[j].b        = lPixels[j].b;
+      lIMG.pixels[j].intCount = lPixels[j].intCount;
+      lIMG.pixels[j].rayTime  = 0;
+    }
+  }
+
+  freeMemory();
+}
