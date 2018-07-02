@@ -28,14 +28,13 @@ bool LiveTracer::vCudaIsInit = false;
 static const char *gVertexShader = R"__GLSL__(
 #version 330 core
 
-layout (location = 0) in vec3 iVert;
-layout (location = 1) in vec2 iTexCoord;
+layout (location = 0) in vec2 iVert;
 
 out vec2 vTexCoord;
 
 void main() {
-  vTexCoord = iTexCoord;
-  gl_Position = vec4(iVert.xyz, 1.0);
+  vTexCoord = vec2((iVert.x + 1) / 2, 1 - (iVert.y + 1) / 2);
+  gl_Position = vec4(iVert.xy, 0.0, 1.0);
 }
 )__GLSL__";
 
@@ -59,26 +58,19 @@ LiveTracer::LiveTracer(State &_state, uint32_t _w, uint32_t _h) {
   allocateRays(&vRays, vWidth * vHeight);
   allocateImage(&vDeviceImage, vWidth, vHeight);
 
-  float lVert[] = {
-      /* VERT */ 1,  1,  0, /* TEX COORD */ 1, 0,
-      /* VERT */ 1,  -1, 0, /* TEX COORD */ 1, 1,
-      /* VERT */ -1, 1,  0, /* TEX COORD */ 0, 0,
-      /* VERT */ -1, -1, 0, /* TEX COORD */ 0, 1,
-  };
+  float lVert[] = {1, 1, 1, -1, -1, 1, -1, -1};
 
   uint32_t lInd[] = {/* Tri 1 */ 2, 0, 1, /* Tri 2 */ 2, 1, 3};
 
   bindVAO();
   bindVBO();
-  glBufferData(GL_ARRAY_BUFFER, (3 + 2) * 4 * sizeof(float), lVert, GL_STATIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, 2 * 4 * sizeof(float), lVert, GL_STATIC_DRAW);
 
   bindEBO();
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6 * sizeof(uint32_t), lInd, GL_STATIC_DRAW);
 
   glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, (3 + 2) * sizeof(float), (void *)0);
-  glEnableVertexAttribArray(1);
-  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, (3 + 2) * sizeof(float), (void *)(3 * sizeof(float)));
+  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *)0);
 
   unbindVAO();
 

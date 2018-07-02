@@ -292,7 +292,7 @@ ErrorCode Viewer::runImpl(State &_state) {
           break;
         case Renderer::CUDA_TRACER:
           vRenderer.reset();
-          vRenderer = make_shared<LiveTracer>(_state, vResX, vResX);
+          vRenderer = make_shared<LiveTracer>(_state, vResX, vResY);
           glDisable(GL_DEPTH_TEST);
           break;
       }
