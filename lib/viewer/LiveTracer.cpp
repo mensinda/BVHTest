@@ -48,7 +48,7 @@ out vec4 oColor;
 uniform sampler2D uTex;
 
 void main() {
-  oColor = texture(uTex, vTexCoord);
+  oColor = vec4(vec3(texture(uTex, vTexCoord)), 1.0f);
 }
 )__GLSL__";
 
@@ -57,13 +57,13 @@ LiveTracer::LiveTracer(State &_state, uint32_t _w, uint32_t _h) {
   vHeight = _h;
 
   allocateRays(&vRays, vWidth * vHeight);
-  allocateImage(&vDeviceImage, vHeight, vHeight);
+  allocateImage(&vDeviceImage, vWidth, vHeight);
 
   float lVert[] = {
-      /* VERT */ 1,  1,  0, /* TEX COORD */ 1, 1,
-      /* VERT */ 1,  -1, 0, /* TEX COORD */ 1, 0,
-      /* VERT */ -1, 1,  0, /* TEX COORD */ 0, 1,
-      /* VERT */ -1, -1, 0, /* TEX COORD */ 0, 0,
+      /* VERT */ 1,  1,  0, /* TEX COORD */ 1, 0,
+      /* VERT */ 1,  -1, 0, /* TEX COORD */ 1, 1,
+      /* VERT */ -1, 1,  0, /* TEX COORD */ 0, 0,
+      /* VERT */ -1, -1, 0, /* TEX COORD */ 0, 1,
   };
 
   uint32_t lInd[] = {/* Tri 1 */ 2, 0, 1, /* Tri 2 */ 2, 1, 3};
