@@ -21,6 +21,9 @@
 namespace BVHTest::tracer {
 
 class CUDATracer final : public TracerBase {
+ private:
+  bool vRayBundles = false;
+
   base::Ray *            vRays       = nullptr;
   base::CameraBase::RES  vResolution = {0, 0};
   std::vector<uint8_t *> vDeviceImages;
@@ -41,6 +44,9 @@ class CUDATracer final : public TracerBase {
   inline uint64_t getRequiredCommands() const override {
     return TracerBase::getRequiredCommands() | static_cast<uint64_t>(base::CommandType::CUDA_INIT);
   }
+
+  void fromJSON(const json &_j) override;
+  json toJSON() const override;
 };
 
 } // namespace BVHTest::tracer

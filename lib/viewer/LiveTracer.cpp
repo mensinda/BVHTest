@@ -107,7 +107,7 @@ void LiveTracer::render() {
   auto lCamData = lCam->getCamera();
 
   generateRays(vRays, vWidth, vHeight, lCamData.pos, lCamData.lookAt, lCamData.up, lCamData.fov);
-  tracerImage(vRays, vDeviceImage, vCudaMem.bvh.nodes, 0, vCudaMem.rawMesh, vec3(1.0f, 1.0f, 1.0f), vWidth, vHeight);
+  tracerImage(vRays, vDeviceImage, vCudaMem.bvh.nodes, 0, vCudaMem.rawMesh, vec3(1, 1, 1), vWidth, vHeight, true);
   copyToOGLImage(&vCudaRes, vDeviceImage, vWidth, vHeight);
 
   useProg();

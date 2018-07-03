@@ -71,6 +71,8 @@ bool Validate::checkTree(State &_state) {
 
     if (!NODE->isLeaf()) {
       REQUIRE(NODE->left != NODE->right, lSameChildrenErrors);
+      REQUIRE(lNode != NODE->right, lSameChildrenErrors);
+      REQUIRE(lNode != NODE->left, lSameChildrenErrors);
       REQUIRE(NODE->numChildren == LEFT->numChildren + RIGHT->numChildren + 2, lWrongCildCountErrors);
       lBitStack <<= 1;
       lBitStack |= 1;

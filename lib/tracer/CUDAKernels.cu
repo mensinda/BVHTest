@@ -57,6 +57,41 @@ extern "C" __global__ void kGenerateRays(
   }
 }
 
+struct DataShared {
+  Triangle closest;
+  float    nearest;
+
+  vec3      origin;
+  vec3      direction;
+  vec3      invDir;
+  Ray::Sign sign;
+};
+
+extern "C" __device__ __forceinline__ bool intersectRayAABB(
+    DataShared &_data, AABB &_aabb, float t0, float t1, float &tmin, float &tmax) {
+  float tymin, tymax, tzmin, tzmax;
+
+  vec3 bounds[2] = {_aabb.min, _aabb.max};
+
+  tmin  = (bounds[_data.sign.x].x - _data.origin.x) * _data.invDir.x;
+  tmax  = (bounds[1 - _data.sign.x].x - _data.origin.x) * _data.invDir.x;
+  tymin = (bounds[_data.sign.y].y - _data.origin.y) * _data.invDir.y;
+  tymax = (bounds[1 - _data.sign.y].y - _data.origin.y) * _data.invDir.y;
+
+  if ((tmin > tymax) || (tymin > tmax)) return false;
+  if (tymin > tmin) tmin = tymin;
+  if (tymax < tmax) tmax = tymax;
+
+  tzmin = (bounds[_data.sign.z].z - _data.origin.z) * _data.invDir.z;
+  tzmax = (bounds[1 - _data.sign.z].z - _data.origin.z) * _data.invDir.z;
+
+  if ((tmin > tzmax) || (tzmin > tmax)) return false;
+  if (tzmin > tmin) tmin = tzmin;
+  if (tzmax < tmax) tmax = tzmax;
+
+  return ((tmin < t1) && (tmax > t0));
+}
+
 extern "C" __global__ void kTraceRay(Ray *    _rays,
                                      uint8_t *_img,
                                      BVHNode *_nodes,
@@ -70,11 +105,21 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
   uint32_t sX = blockDim.x * gridDim.x;
   uint32_t sY = blockDim.y * gridDim.y;
 
+  uint32_t lID = threadIdx.y * 8 + threadIdx.x;
+
   for (uint32_t y = iY; y < _h; y += sY) {
     for (uint32_t x = iX; x < _w; x += sX) {
-      Ray                lRay      = _rays[y * _w + x];
-      CUDAPixel          lRes      = {121, 167, 229, 0};
-      static const float lInfinity = HUGE_VALF;
+      CUDAPixel lRes = {121, 167, 229, 0};
+
+      __shared__ DataShared lEtcData[64];
+
+      {
+        Ray lRay                = _rays[y * _w + x];
+        lEtcData[lID].origin    = lRay.getOrigin();
+        lEtcData[lID].direction = lRay.getOrigin();
+        lEtcData[lID].invDir    = lRay.getInverseDirection();
+        lEtcData[lID].sign      = lRay.getSign();
+      }
 
       /*
        * Algorithm from:
@@ -90,9 +135,8 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
       uint64_t lBitStack_hi = 0;
       uint32_t lNode        = _rootNode;
 
-      Triangle lClosest = {0, 0, 0};
-      float    lNearest = lInfinity;
-      dvec2    lBarycentricTemp;
+      lEtcData[lID].nearest = HUGE_VALF;
+      dvec2 lBarycentricTemp;
 
       float  lMinLeft;
       float  lMinRight;
@@ -102,10 +146,12 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
       while (true) {
         if (!_nodes[lNode].isLeaf()) {
           lRes.intCount++;
-          uint32_t lLeft     = _nodes[lNode].left;
-          uint32_t lRight    = _nodes[lNode].right;
-          bool     lLeftHit  = _nodes[lLeft].bbox.intersect(lRay, 0.01f, lNearest + 0.01f, lMinLeft, lTemp);
-          bool     lRightHit = _nodes[lRight].bbox.intersect(lRay, 0.01f, lNearest + 0.01f, lMinRight, lTemp);
+          uint32_t lLeft    = _nodes[lNode].left;
+          uint32_t lRight   = _nodes[lNode].right;
+          bool     lLeftHit = intersectRayAABB(
+              lEtcData[lID], _nodes[lLeft].bbox, 0.01f, lEtcData[lID].nearest + 0.01f, lMinLeft, lTemp);
+          bool lRightHit = intersectRayAABB(
+              lEtcData[lID], _nodes[lLeft].bbox, 0.01f, lEtcData[lID].nearest + 0.01f, lMinRight, lTemp);
 
           if (lLeftHit || lRightHit) {
             lBitStack_hi = (lBitStack_hi << 1) | (lBitStack_lo >> 63);
@@ -124,17 +170,17 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
           for (uint32_t i = 0; i < _nodes[lNode].numFaces(); ++i) {
             Triangle lTri = _mesh.faces[_nodes[lNode].beginFaces() + i];
 
-            bool lHit = intersectRayTriangle<double>(static_cast<dvec3 const &>(lRay.getOrigin()),
-                                                     static_cast<dvec3 const &>(lRay.getDirection()),
+            bool lHit = intersectRayTriangle<double>(static_cast<dvec3 const &>(lEtcData[lID].origin),
+                                                     static_cast<dvec3 const &>(lEtcData[lID].direction),
                                                      static_cast<dvec3 const &>(_mesh.vert[lTri.v1]),
                                                      static_cast<dvec3 const &>(_mesh.vert[lTri.v2]),
                                                      static_cast<dvec3 const &>(_mesh.vert[lTri.v3]),
                                                      lBarycentricTemp,
                                                      lDistance);
 
-            if (lHit && lDistance < lNearest) {
-              lNearest = lDistance;
-              lClosest = lTri;
+            if (lHit && lDistance < lEtcData[lID].nearest) {
+              lEtcData[lID].nearest = lDistance;
+              lEtcData[lID].closest = lTri;
             }
           }
         }
@@ -153,12 +199,13 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
 
     LABEL_END:
 
-      if (lNearest < lInfinity) {
-        vec3  lNorm     = triangleNormal(_mesh.vert[lClosest.v1], _mesh.vert[lClosest.v2], _mesh.vert[lClosest.v3]);
-        vec3  lHitPos   = lRay.getOrigin() + lNearest * lRay.getDirection();
-        vec3  lLightDir = normalize(_light - lHitPos);
-        float lDiffuse  = 1.0f + dot(lNorm, lLightDir);
-        lDiffuse        = lDiffuse > 0.0f ? lDiffuse : 0.0f;
+      if (lEtcData[lID].nearest < HUGE_VALF) {
+        Triangle lClosest  = lEtcData[lID].closest;
+        vec3     lNorm     = triangleNormal(_mesh.vert[lClosest.v1], _mesh.vert[lClosest.v2], _mesh.vert[lClosest.v3]);
+        vec3     lHitPos   = lEtcData[lID].origin + lEtcData[lID].nearest * lEtcData[lID].direction;
+        vec3     lLightDir = normalize(_light - lHitPos);
+        float    lDiffuse  = 1.0f + dot(lNorm, lLightDir);
+        lDiffuse           = lDiffuse > 0.0f ? lDiffuse : 0.0f;
 
         lRes.r = lRes.g = lRes.b = static_cast<uint8_t>(lDiffuse * 127.0f);
       }
@@ -167,6 +214,168 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
     }
   }
 }
+
+enum TRAV { TRAV_NONE = 0, TRAV_LEFT = 1, TRAV_RIGHT = 2, TRAV_BOTH = 3 };
+
+extern "C" __device__ __forceinline__ void dReduce64Resolve(int32_t *_res, uint32_t _id) {
+  __syncthreads();
+  if (_id < 32) {
+    _res[_id] += _res[_id + 32];
+    _res[_id] += _res[_id + 16];
+    _res[_id] += _res[_id + 8];
+    _res[_id] += _res[_id + 4];
+    _res[_id] += _res[_id + 2];
+    _res[_id] += _res[_id + 1];
+  }
+  __syncthreads();
+}
+
+extern "C" __global__ void kTraceRayBundle(Ray *    _rays,
+                                           uint8_t *_img,
+                                           BVHNode *_nodes,
+                                           uint32_t _rootNode,
+                                           MeshRaw  _mesh,
+                                           vec3     _light,
+                                           uint32_t _w,
+                                           uint32_t _h) {
+  uint32_t iX = blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t iY = blockIdx.y * blockDim.y + threadIdx.y;
+  uint32_t sX = blockDim.x * gridDim.x;
+  uint32_t sY = blockDim.y * gridDim.y;
+
+  uint32_t lID = threadIdx.y * 8 + threadIdx.x;
+
+  for (uint32_t y = iY; y < _h; y += sY) {
+    for (uint32_t x = iX; x < _w; x += sX) {
+      Ray       lRay = _rays[y * _w + x];
+      CUDAPixel lRes = {121, 167, 229, 0};
+
+      __shared__ BVHNode lNodes[3]; // 0: left // 1: right // 2: current
+      __shared__ int32_t lResolve[64];
+      __shared__ bool    lTravNext[4]; // 0: none // 1: left // 2: right // 3: both
+      __shared__ DataShared lEtcData[64];
+
+      uint64_t lBitStack_lo = 0;
+      uint64_t lBitStack_hi = 0;
+      uint32_t lNode        = _rootNode;
+
+      lEtcData[lID].nearest = HUGE_VALF;
+
+      while (true) {
+        if (lID == 0) { lNodes[2] = _nodes[lNode]; }
+        __syncthreads();
+
+        uint32_t lChildren[2]; // 0: left // 1: right
+        lChildren[0] = lNodes[2].left;
+        lChildren[1] = lNodes[2].right;
+
+        if (!lNodes[2].isLeaf()) {
+          lRes.intCount++;
+
+          if (lID < 2) { lNodes[lID] = _nodes[lChildren[lID]]; } // Load children into shared memory
+          __syncthreads();
+
+          float lMinLeft;
+          float lMinRight;
+          float lTemp;
+
+          uint32_t lLeftHit  = lNodes[0].bbox.intersect(lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinLeft, lTemp);
+          uint32_t lRightHit = lNodes[1].bbox.intersect(lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinRight, lTemp);
+
+          if (lID < 4) { lTravNext[lID] = false; } // Reset trav next
+          __syncthreads();
+          lTravNext[lRightHit * 2 + lLeftHit] = true;
+          __syncthreads();
+
+          // ========================
+          // = Check wat to do next =
+          // ========================
+
+          if (lTravNext[TRAV_BOTH] || (lTravNext[TRAV_LEFT] && lTravNext[TRAV_RIGHT])) {
+            // Both hit somehow
+            lBitStack_hi = (lBitStack_hi << 1) | (lBitStack_lo >> 63);
+            lBitStack_lo <<= 1;
+            lBitStack_lo |= 1;
+
+            // Set what this node wants
+            lResolve[lID] = (lLeftHit && (lMinLeft < lMinRight || !lRightHit)) - // Left is prefered --> 1
+                            (lRightHit && (lMinRight < lMinLeft || !lLeftHit));  // Right is prefered --> -1
+
+            dReduce64Resolve(lResolve, lID);
+
+            if (lResolve[0] > 0) { // Left is prefered
+              lNode = lChildren[0];
+            } else { // Right is prefered
+              lNode = lChildren[1];
+            }
+
+            continue;
+          } else if (lTravNext[TRAV_LEFT]) {
+            lBitStack_hi = (lBitStack_hi << 1) | (lBitStack_lo >> 63);
+            lBitStack_lo <<= 1;
+            lNode = lChildren[0];
+            continue;
+          } else if (lTravNext[TRAV_RIGHT]) {
+            lBitStack_hi = (lBitStack_hi << 1) | (lBitStack_lo >> 63);
+            lBitStack_lo <<= 1;
+            lNode = lChildren[1];
+            continue;
+          }
+        } else {
+          for (uint32_t i = 0; i < lChildren[1]; ++i) {
+            Triangle lTri = _mesh.faces[lChildren[0] + i];
+
+            dvec2  lBarycentricTemp;
+            double lDistance;
+
+            bool lHit = intersectRayTriangle<double>(static_cast<dvec3 const &>(lRay.getOrigin()),
+                                                     static_cast<dvec3 const &>(lRay.getDirection()),
+                                                     static_cast<dvec3 const &>(_mesh.vert[lTri.v1]),
+                                                     static_cast<dvec3 const &>(_mesh.vert[lTri.v2]),
+                                                     static_cast<dvec3 const &>(_mesh.vert[lTri.v3]),
+                                                     lBarycentricTemp,
+                                                     lDistance);
+
+            if (lHit && lDistance < lEtcData[lID].nearest) {
+              lEtcData[lID].nearest = lDistance;
+              lEtcData[lID].closest = lTri;
+            }
+          }
+        }
+
+        // Backtrac
+        while ((lBitStack_lo & 1) == 0) {
+          if (lBitStack_lo == 0 && lBitStack_hi == 0) { goto LABEL_END; } // I know, I know...
+          lNode        = lNodes[2].parent;
+          lBitStack_lo = (lBitStack_lo >> 1) | (lBitStack_hi << 63);
+          lBitStack_hi >>= 1;
+
+          if (lID == 0) { lNodes[2] = _nodes[lNode]; }
+          __syncthreads();
+        }
+
+        lNode = lNodes[2].isRightChild() ? _nodes[lNodes[2].parent].left : _nodes[lNodes[2].parent].right;
+        lBitStack_lo ^= 1;
+      }
+
+    LABEL_END:
+
+      if (lEtcData[lID].nearest < HUGE_VALF) {
+        Triangle lClosest  = lEtcData[lID].closest;
+        vec3     lNorm     = triangleNormal(_mesh.vert[lClosest.v1], _mesh.vert[lClosest.v2], _mesh.vert[lClosest.v3]);
+        vec3     lHitPos   = lRay.getOrigin() + lEtcData[lID].nearest * lRay.getDirection();
+        vec3     lLightDir = normalize(_light - lHitPos);
+        float    lDiffuse  = 1.0f + dot(lNorm, lLightDir);
+        lDiffuse           = lDiffuse > 0.0f ? lDiffuse : 0.0f;
+
+        lRes.r = lRes.g = lRes.b = static_cast<uint8_t>(lDiffuse * 127.0f);
+      }
+
+      reinterpret_cast<CUDAPixel *>(_img)[y * _w + x] = lRes;
+    }
+  }
+}
+
 
 extern "C" void generateRays(Ray *_rays, uint32_t _w, uint32_t _h, vec3 _pos, vec3 _lookAt, vec3 _up, float _fov) {
   if (!_rays) { return; }
@@ -188,12 +397,17 @@ extern "C" void tracerImage(Ray *    _rays,
                             MeshRaw  _mesh,
                             vec3     _light,
                             uint32_t _w,
-                            uint32_t _h) {
+                            uint32_t _h,
+                            bool     _bundle) {
   if (!_rays || !_img) { return; }
   dim3 lBlock(8, 8, 1);
   dim3 lGrid((_w + lBlock.x - 1) / lBlock.x, (_h + lBlock.y - 1) / lBlock.y);
 
-  kTraceRay<<<lGrid, lBlock>>>(_rays, _img, _nodes, _rootNode, _mesh, _light, _w, _h);
+  if (_bundle) {
+    kTraceRayBundle<<<lGrid, lBlock>>>(_rays, _img, _nodes, _rootNode, _mesh, _light, _w, _h);
+  } else {
+    kTraceRay<<<lGrid, lBlock>>>(_rays, _img, _nodes, _rootNode, _mesh, _light, _w, _h);
+  }
 }
 
 extern "C" bool copyToOGLImage(void **_resource, uint8_t *_img, uint32_t _w, uint32_t _h) {

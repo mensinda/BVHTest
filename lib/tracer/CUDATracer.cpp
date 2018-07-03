@@ -28,6 +28,18 @@ using namespace BVHTest::misc;
 
 CUDATracer::~CUDATracer() { freeMemory(); }
 
+void CUDATracer::fromJSON(const json &_j) {
+  TracerBase::fromJSON(_j);
+  vRayBundles = _j.value("rayBundles", vRayBundles);
+}
+
+json CUDATracer::toJSON() const {
+  json js          = TracerBase::toJSON();
+  js["rayBundles"] = vRayBundles;
+  return js;
+}
+
+
 bool CUDATracer::allocateMemory(CameraBase::RES _res, uint32_t _numImages) {
   freeMemory();
   vResolution = _res;
@@ -94,7 +106,8 @@ ErrorCode CUDATracer::runImpl(State &_state) {
                 _state.cudaMem.rawMesh,
                 getLightLocation(),
                 lRes.width,
-                lRes.height);
+                lRes.height,
+                vRayBundles);
     tracerDoCudaSync();
 
     auto lEnd  = high_resolution_clock::now();

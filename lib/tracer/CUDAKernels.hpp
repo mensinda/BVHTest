@@ -48,7 +48,8 @@ extern "C" void tracerImage(Ray *    _rays,
                             MeshRaw  _mesh,
                             vec3     _light,
                             uint32_t _w,
-                            uint32_t _h);
+                            uint32_t _h,
+                            bool     _bundle);
 
 extern "C" void copyImageToHost(CUDAPixel *_hostPixel, uint8_t *_cudaImg, uint32_t _w, uint32_t _h);
 
