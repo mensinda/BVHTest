@@ -61,29 +61,33 @@ struct DataShared {
   Triangle closest;
   float    nearest;
 
-  vec3      origin;
-  vec3      direction;
-  vec3      invDir;
-  Ray::Sign sign;
+  //   vec3      origin;
+  //   vec3      direction;
+  //   vec3      invDir;
+  //   Ray::Sign sign;
 };
 
 extern "C" __device__ __forceinline__ bool intersectRayAABB(
-    DataShared &_data, AABB &_aabb, float t0, float t1, float &tmin, float &tmax) {
+    AABB &_aabb, Ray const &_r, float t0, float t1, float &tmin, float &tmax) {
+  glm::vec3 const &lOrigin = _r.getOrigin();
+  glm::vec3 const &lInvDir = _r.getInverseDirection();
+  Ray::Sign const &lSign   = _r.getSign();
+
   float tymin, tymax, tzmin, tzmax;
 
-  vec3 bounds[2] = {_aabb.min, _aabb.max};
+  glm::vec3 bounds[2] = {_aabb.min, _aabb.max};
 
-  tmin  = (bounds[_data.sign.x].x - _data.origin.x) * _data.invDir.x;
-  tmax  = (bounds[1 - _data.sign.x].x - _data.origin.x) * _data.invDir.x;
-  tymin = (bounds[_data.sign.y].y - _data.origin.y) * _data.invDir.y;
-  tymax = (bounds[1 - _data.sign.y].y - _data.origin.y) * _data.invDir.y;
+  tmin  = (bounds[lSign.x].x - lOrigin.x) * lInvDir.x;
+  tmax  = (bounds[1 - lSign.x].x - lOrigin.x) * lInvDir.x;
+  tymin = (bounds[lSign.y].y - lOrigin.y) * lInvDir.y;
+  tymax = (bounds[1 - lSign.y].y - lOrigin.y) * lInvDir.y;
 
   if ((tmin > tymax) || (tymin > tmax)) return false;
   if (tymin > tmin) tmin = tymin;
   if (tymax < tmax) tmax = tymax;
 
-  tzmin = (bounds[_data.sign.z].z - _data.origin.z) * _data.invDir.z;
-  tzmax = (bounds[1 - _data.sign.z].z - _data.origin.z) * _data.invDir.z;
+  tzmin = (bounds[lSign.z].z - lOrigin.z) * lInvDir.z;
+  tzmax = (bounds[1 - lSign.z].z - lOrigin.z) * lInvDir.z;
 
   if ((tmin > tzmax) || (tzmin > tmax)) return false;
   if (tzmin > tmin) tmin = tzmin;
@@ -109,17 +113,18 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
 
   for (uint32_t y = iY; y < _h; y += sY) {
     for (uint32_t x = iX; x < _w; x += sX) {
+      Ray       lRay = _rays[y * _w + x];
       CUDAPixel lRes = {121, 167, 229, 0};
 
       __shared__ DataShared lEtcData[64];
 
-      {
-        Ray lRay                = _rays[y * _w + x];
-        lEtcData[lID].origin    = lRay.getOrigin();
-        lEtcData[lID].direction = lRay.getOrigin();
-        lEtcData[lID].invDir    = lRay.getInverseDirection();
-        lEtcData[lID].sign      = lRay.getSign();
-      }
+      //       {
+      //         Ray lRay                = _rays[y * _w + x];
+      //         lEtcData[lID].origin    = lRay.getOrigin();
+      //         lEtcData[lID].direction = lRay.getOrigin();
+      //         lEtcData[lID].invDir    = lRay.getInverseDirection();
+      //         lEtcData[lID].sign      = lRay.getSign();
+      //       }
 
       /*
        * Algorithm from:
@@ -146,12 +151,12 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
       while (true) {
         if (!_nodes[lNode].isLeaf()) {
           lRes.intCount++;
-          uint32_t lLeft    = _nodes[lNode].left;
-          uint32_t lRight   = _nodes[lNode].right;
-          bool     lLeftHit = intersectRayAABB(
-              lEtcData[lID], _nodes[lLeft].bbox, 0.01f, lEtcData[lID].nearest + 0.01f, lMinLeft, lTemp);
-          bool lRightHit = intersectRayAABB(
-              lEtcData[lID], _nodes[lLeft].bbox, 0.01f, lEtcData[lID].nearest + 0.01f, lMinRight, lTemp);
+          uint32_t lLeft  = _nodes[lNode].left;
+          uint32_t lRight = _nodes[lNode].right;
+          bool     lLeftHit =
+              intersectRayAABB(_nodes[lLeft].bbox, lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinLeft, lTemp);
+          bool lRightHit =
+              intersectRayAABB(_nodes[lLeft].bbox, lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinRight, lTemp);
 
           if (lLeftHit || lRightHit) {
             lBitStack_hi = (lBitStack_hi << 1) | (lBitStack_lo >> 63);
@@ -170,8 +175,8 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
           for (uint32_t i = 0; i < _nodes[lNode].numFaces(); ++i) {
             Triangle lTri = _mesh.faces[_nodes[lNode].beginFaces() + i];
 
-            bool lHit = intersectRayTriangle<double>(static_cast<dvec3 const &>(lEtcData[lID].origin),
-                                                     static_cast<dvec3 const &>(lEtcData[lID].direction),
+            bool lHit = intersectRayTriangle<double>(static_cast<dvec3 const &>(lRay.getOrigin()),
+                                                     static_cast<dvec3 const &>(lRay.getDirection()),
                                                      static_cast<dvec3 const &>(_mesh.vert[lTri.v1]),
                                                      static_cast<dvec3 const &>(_mesh.vert[lTri.v2]),
                                                      static_cast<dvec3 const &>(_mesh.vert[lTri.v3]),
@@ -202,7 +207,7 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
       if (lEtcData[lID].nearest < HUGE_VALF) {
         Triangle lClosest  = lEtcData[lID].closest;
         vec3     lNorm     = triangleNormal(_mesh.vert[lClosest.v1], _mesh.vert[lClosest.v2], _mesh.vert[lClosest.v3]);
-        vec3     lHitPos   = lEtcData[lID].origin + lEtcData[lID].nearest * lEtcData[lID].direction;
+        vec3     lHitPos   = lRay.getOrigin() + lEtcData[lID].nearest * lRay.getDirection();
         vec3     lLightDir = normalize(_light - lHitPos);
         float    lDiffuse  = 1.0f + dot(lNorm, lLightDir);
         lDiffuse           = lDiffuse > 0.0f ? lDiffuse : 0.0f;
@@ -279,8 +284,10 @@ extern "C" __global__ void kTraceRayBundle(Ray *    _rays,
           float lMinRight;
           float lTemp;
 
-          uint32_t lLeftHit  = lNodes[0].bbox.intersect(lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinLeft, lTemp);
-          uint32_t lRightHit = lNodes[1].bbox.intersect(lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinRight, lTemp);
+          uint32_t lLeftHit =
+              intersectRayAABB(lNodes[0].bbox, lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinLeft, lTemp);
+          uint32_t lRightHit =
+              intersectRayAABB(lNodes[1].bbox, lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinRight, lTemp);
 
           if (lID < 4) { lTravNext[lID] = false; } // Reset trav next
           __syncthreads();
