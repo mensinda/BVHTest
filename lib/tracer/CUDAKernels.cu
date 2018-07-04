@@ -83,8 +83,8 @@ extern "C" __device__ __forceinline__ bool intersectRayAABB(
   tzmax = (_aabb.minMax[1 - lSign.z].z - lOrigin.z) * lInvDir.z;
   if (tymin > tmin) { tmin = tymin; }
   if (tzmin > tmin) { tmin = tzmin; }
-  if (tymax < tmin) { tmax = tymax; }
-  if (tzmax < tmin) { tmax = tzmax; }
+  if (tymax < tmax) { tmax = tymax; }
+  if (tzmax < tmax) { tmax = tzmax; }
 
   return ((tmin < tmax) && (tmin < t1) && (tmax > t0));
 }
