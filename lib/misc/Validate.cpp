@@ -138,19 +138,19 @@ bool Validate::checkBBoxes(State &_state) {
       AABB     lLBBox  = LEFT->bbox;
       AABB     lRBBox  = RIGHT->bbox;
 
-      REQUIRE(lBBox.min.x <= lLBBox.min.x, lErrors);
-      REQUIRE(lBBox.min.y <= lLBBox.min.y, lErrors);
-      REQUIRE(lBBox.min.z <= lLBBox.min.z, lErrors);
-      REQUIRE(lBBox.max.x >= lLBBox.max.x, lErrors);
-      REQUIRE(lBBox.max.y >= lLBBox.max.y, lErrors);
-      REQUIRE(lBBox.max.z >= lLBBox.max.z, lErrors);
+      REQUIRE(lBBox.minMax[0].x <= lLBBox.minMax[0].x, lErrors);
+      REQUIRE(lBBox.minMax[0].y <= lLBBox.minMax[0].y, lErrors);
+      REQUIRE(lBBox.minMax[0].z <= lLBBox.minMax[0].z, lErrors);
+      REQUIRE(lBBox.minMax[1].x >= lLBBox.minMax[1].x, lErrors);
+      REQUIRE(lBBox.minMax[1].y >= lLBBox.minMax[1].y, lErrors);
+      REQUIRE(lBBox.minMax[1].z >= lLBBox.minMax[1].z, lErrors);
 
-      REQUIRE(lBBox.min.x <= lRBBox.min.x, lErrors);
-      REQUIRE(lBBox.min.y <= lRBBox.min.y, lErrors);
-      REQUIRE(lBBox.min.z <= lRBBox.min.z, lErrors);
-      REQUIRE(lBBox.max.x >= lRBBox.max.x, lErrors);
-      REQUIRE(lBBox.max.y >= lRBBox.max.y, lErrors);
-      REQUIRE(lBBox.max.z >= lRBBox.max.z, lErrors);
+      REQUIRE(lBBox.minMax[0].x <= lRBBox.minMax[0].x, lErrors);
+      REQUIRE(lBBox.minMax[0].y <= lRBBox.minMax[0].y, lErrors);
+      REQUIRE(lBBox.minMax[0].z <= lRBBox.minMax[0].z, lErrors);
+      REQUIRE(lBBox.minMax[1].x >= lRBBox.minMax[1].x, lErrors);
+      REQUIRE(lBBox.minMax[1].y >= lRBBox.minMax[1].y, lErrors);
+      REQUIRE(lBBox.minMax[1].z >= lRBBox.minMax[1].z, lErrors);
 
       if (lErrors != 0) { lTotalErros++; }
     }
@@ -173,12 +173,12 @@ bool Validate::checkBBoxesStrict(State &_state) {
       AABB     lLBBox  = LEFT->bbox;
       AABB     lRBBox  = RIGHT->bbox;
 
-      REQUIRE(lBBox.min.x == min(lLBBox.min.x, lRBBox.min.x), lErrors);
-      REQUIRE(lBBox.min.y == min(lLBBox.min.y, lRBBox.min.y), lErrors);
-      REQUIRE(lBBox.min.z == min(lLBBox.min.z, lRBBox.min.z), lErrors);
-      REQUIRE(lBBox.max.x == max(lLBBox.max.x, lRBBox.max.x), lErrors);
-      REQUIRE(lBBox.max.y == max(lLBBox.max.y, lRBBox.max.y), lErrors);
-      REQUIRE(lBBox.max.z == max(lLBBox.max.z, lRBBox.max.z), lErrors)
+      REQUIRE(lBBox.minMax[0].x == min(lLBBox.minMax[0].x, lRBBox.minMax[0].x), lErrors);
+      REQUIRE(lBBox.minMax[0].y == min(lLBBox.minMax[0].y, lRBBox.minMax[0].y), lErrors);
+      REQUIRE(lBBox.minMax[0].z == min(lLBBox.minMax[0].z, lRBBox.minMax[0].z), lErrors);
+      REQUIRE(lBBox.minMax[1].x == max(lLBBox.minMax[1].x, lRBBox.minMax[1].x), lErrors);
+      REQUIRE(lBBox.minMax[1].y == max(lLBBox.minMax[1].y, lRBBox.minMax[1].y), lErrors);
+      REQUIRE(lBBox.minMax[1].z == max(lLBBox.minMax[1].z, lRBBox.minMax[1].z), lErrors)
 
       if (lErrors != 0) { lTotalErros++; }
     }
@@ -226,26 +226,26 @@ bool Validate::checkTris(State &_state) {
         vec3 const &lV2         = _state.mesh.vert[lV2i];
         vec3 const &lV3         = _state.mesh.vert[lV3i];
 
-        REQUIRE(lBBox.min.x <= lV1.x, lErrors);
-        REQUIRE(lBBox.min.y <= lV1.y, lErrors);
-        REQUIRE(lBBox.min.z <= lV1.z, lErrors);
-        REQUIRE(lBBox.max.x >= lV1.x, lErrors);
-        REQUIRE(lBBox.max.y >= lV1.y, lErrors);
-        REQUIRE(lBBox.max.z >= lV1.z, lErrors);
+        REQUIRE(lBBox.minMax[0].x <= lV1.x, lErrors);
+        REQUIRE(lBBox.minMax[0].y <= lV1.y, lErrors);
+        REQUIRE(lBBox.minMax[0].z <= lV1.z, lErrors);
+        REQUIRE(lBBox.minMax[1].x >= lV1.x, lErrors);
+        REQUIRE(lBBox.minMax[1].y >= lV1.y, lErrors);
+        REQUIRE(lBBox.minMax[1].z >= lV1.z, lErrors);
 
-        REQUIRE(lBBox.min.x <= lV2.x, lErrors);
-        REQUIRE(lBBox.min.y <= lV2.y, lErrors);
-        REQUIRE(lBBox.min.z <= lV2.z, lErrors);
-        REQUIRE(lBBox.max.x >= lV2.x, lErrors);
-        REQUIRE(lBBox.max.y >= lV2.y, lErrors);
-        REQUIRE(lBBox.max.z >= lV2.z, lErrors);
+        REQUIRE(lBBox.minMax[0].x <= lV2.x, lErrors);
+        REQUIRE(lBBox.minMax[0].y <= lV2.y, lErrors);
+        REQUIRE(lBBox.minMax[0].z <= lV2.z, lErrors);
+        REQUIRE(lBBox.minMax[1].x >= lV2.x, lErrors);
+        REQUIRE(lBBox.minMax[1].y >= lV2.y, lErrors);
+        REQUIRE(lBBox.minMax[1].z >= lV2.z, lErrors);
 
-        REQUIRE(lBBox.min.x <= lV3.x, lErrors);
-        REQUIRE(lBBox.min.y <= lV3.y, lErrors);
-        REQUIRE(lBBox.min.z <= lV3.z, lErrors);
-        REQUIRE(lBBox.max.x >= lV3.x, lErrors);
-        REQUIRE(lBBox.max.y >= lV3.y, lErrors);
-        REQUIRE(lBBox.max.z >= lV3.z, lErrors);
+        REQUIRE(lBBox.minMax[0].x <= lV3.x, lErrors);
+        REQUIRE(lBBox.minMax[0].y <= lV3.y, lErrors);
+        REQUIRE(lBBox.minMax[0].z <= lV3.z, lErrors);
+        REQUIRE(lBBox.minMax[1].x >= lV3.x, lErrors);
+        REQUIRE(lBBox.minMax[1].y >= lV3.y, lErrors);
+        REQUIRE(lBBox.minMax[1].z >= lV3.z, lErrors);
       }
 
       if (lErrors != 0) { lTotalErros++; }

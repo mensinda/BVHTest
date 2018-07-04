@@ -47,13 +47,13 @@ std::vector<TriWithBB> BuilderBase::boundingVolumesFromMesh(Mesh const &_mesh) {
 
     lRes[i].tri = _mesh.faces[i];
 
-    lRes[i].bbox.min.x = std::min(std::min(v1.x, v2.x), v3.x) - std::numeric_limits<float>::epsilon();
-    lRes[i].bbox.min.y = std::min(std::min(v1.y, v2.y), v3.y) - std::numeric_limits<float>::epsilon();
-    lRes[i].bbox.min.z = std::min(std::min(v1.z, v2.z), v3.z) - std::numeric_limits<float>::epsilon();
+    lRes[i].bbox.minMax[0].x = std::min(std::min(v1.x, v2.x), v3.x) - std::numeric_limits<float>::epsilon();
+    lRes[i].bbox.minMax[0].y = std::min(std::min(v1.y, v2.y), v3.y) - std::numeric_limits<float>::epsilon();
+    lRes[i].bbox.minMax[0].z = std::min(std::min(v1.z, v2.z), v3.z) - std::numeric_limits<float>::epsilon();
 
-    lRes[i].bbox.max.x = std::max(std::max(v1.x, v2.x), v3.x) + std::numeric_limits<float>::epsilon();
-    lRes[i].bbox.max.y = std::max(std::max(v1.y, v2.y), v3.y) + std::numeric_limits<float>::epsilon();
-    lRes[i].bbox.max.z = std::max(std::max(v1.z, v2.z), v3.z) + std::numeric_limits<float>::epsilon();
+    lRes[i].bbox.minMax[1].x = std::max(std::max(v1.x, v2.x), v3.x) + std::numeric_limits<float>::epsilon();
+    lRes[i].bbox.minMax[1].y = std::max(std::max(v1.y, v2.y), v3.y) + std::numeric_limits<float>::epsilon();
+    lRes[i].bbox.minMax[1].z = std::max(std::max(v1.z, v2.z), v3.z) + std::numeric_limits<float>::epsilon();
 
     lRes[i].centroid = (v1 + v2 + v3) / 3.0f;
   }

@@ -57,21 +57,20 @@ struct MeshRaw final {
 };
 
 struct AABB {
-  glm::vec3 min;
-  glm::vec3 max;
+  glm::vec3 minMax[2]; // 0: min // 1: max
 
   CUDA_CALL float surfaceArea() const noexcept {
-    glm::vec3 d = max - min;
+    glm::vec3 d = minMax[1] - minMax[0];
     return 2.0f * (d.x * d.y + d.x * d.z + d.y * d.z);
   }
 
   CUDA_CALL void mergeWith(AABB const &_bbox) {
-    min.x = min.x < _bbox.min.x ? min.x : _bbox.min.x;
-    min.y = min.y < _bbox.min.y ? min.y : _bbox.min.y;
-    min.z = min.z < _bbox.min.z ? min.z : _bbox.min.z;
-    max.x = max.x > _bbox.max.x ? max.x : _bbox.max.x;
-    max.y = max.y > _bbox.max.y ? max.y : _bbox.max.y;
-    max.z = max.z > _bbox.max.z ? max.z : _bbox.max.z;
+    minMax[0].x = minMax[0].x < _bbox.minMax[0].x ? minMax[0].x : _bbox.minMax[0].x;
+    minMax[0].y = minMax[0].y < _bbox.minMax[0].y ? minMax[0].y : _bbox.minMax[0].y;
+    minMax[0].z = minMax[0].z < _bbox.minMax[0].z ? minMax[0].z : _bbox.minMax[0].z;
+    minMax[1].x = minMax[1].x > _bbox.minMax[1].x ? minMax[1].x : _bbox.minMax[1].x;
+    minMax[1].y = minMax[1].y > _bbox.minMax[1].y ? minMax[1].y : _bbox.minMax[1].y;
+    minMax[1].z = minMax[1].z > _bbox.minMax[1].z ? minMax[1].z : _bbox.minMax[1].z;
   }
 
   // Source: http://www.cs.utah.edu/~awilliam/box/
@@ -82,19 +81,17 @@ struct AABB {
 
     float tymin, tymax, tzmin, tzmax;
 
-    glm::vec3 bounds[2] = {min, max};
-
-    tmin  = (bounds[lSign.x].x - lOrigin.x) * lInvDir.x;
-    tmax  = (bounds[1 - lSign.x].x - lOrigin.x) * lInvDir.x;
-    tymin = (bounds[lSign.y].y - lOrigin.y) * lInvDir.y;
-    tymax = (bounds[1 - lSign.y].y - lOrigin.y) * lInvDir.y;
+    tmin  = (minMax[lSign.x].x - lOrigin.x) * lInvDir.x;
+    tmax  = (minMax[1 - lSign.x].x - lOrigin.x) * lInvDir.x;
+    tymin = (minMax[lSign.y].y - lOrigin.y) * lInvDir.y;
+    tymax = (minMax[1 - lSign.y].y - lOrigin.y) * lInvDir.y;
 
     if ((tmin > tymax) || (tymin > tmax)) return false;
     if (tymin > tmin) tmin = tymin;
     if (tymax < tmax) tmax = tymax;
 
-    tzmin = (bounds[lSign.z].z - lOrigin.z) * lInvDir.z;
-    tzmax = (bounds[1 - lSign.z].z - lOrigin.z) * lInvDir.z;
+    tzmin = (minMax[lSign.z].z - lOrigin.z) * lInvDir.z;
+    tzmax = (minMax[1 - lSign.z].z - lOrigin.z) * lInvDir.z;
 
     if ((tmin > tzmax) || (tzmin > tmax)) return false;
     if (tzmin > tmin) tmin = tzmin;

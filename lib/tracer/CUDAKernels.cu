@@ -75,25 +75,18 @@ extern "C" __device__ __forceinline__ bool intersectRayAABB(
 
   float tymin, tymax, tzmin, tzmax;
 
-  glm::vec3 bounds[2] = {_aabb.min, _aabb.max};
+  tmin  = (_aabb.minMax[lSign.x].x - lOrigin.x) * lInvDir.x;
+  tmax  = (_aabb.minMax[1 - lSign.x].x - lOrigin.x) * lInvDir.x;
+  tymin = (_aabb.minMax[lSign.y].y - lOrigin.y) * lInvDir.y;
+  tymax = (_aabb.minMax[1 - lSign.y].y - lOrigin.y) * lInvDir.y;
+  tzmin = (_aabb.minMax[lSign.z].z - lOrigin.z) * lInvDir.z;
+  tzmax = (_aabb.minMax[1 - lSign.z].z - lOrigin.z) * lInvDir.z;
+  if (tymin > tmin) { tmin = tymin; }
+  if (tzmin > tmin) { tmin = tzmin; }
+  if (tymax < tmin) { tmax = tymax; }
+  if (tzmax < tmin) { tmax = tzmax; }
 
-  tmin  = (bounds[lSign.x].x - lOrigin.x) * lInvDir.x;
-  tmax  = (bounds[1 - lSign.x].x - lOrigin.x) * lInvDir.x;
-  tymin = (bounds[lSign.y].y - lOrigin.y) * lInvDir.y;
-  tymax = (bounds[1 - lSign.y].y - lOrigin.y) * lInvDir.y;
-
-  if ((tmin > tymax) || (tymin > tmax)) return false;
-  if (tymin > tmin) tmin = tymin;
-  if (tymax < tmax) tmax = tymax;
-
-  tzmin = (bounds[lSign.z].z - lOrigin.z) * lInvDir.z;
-  tzmax = (bounds[1 - lSign.z].z - lOrigin.z) * lInvDir.z;
-
-  if ((tmin > tzmax) || (tzmin > tmax)) return false;
-  if (tzmin > tmin) tmin = tzmin;
-  if (tzmax < tmax) tmax = tzmax;
-
-  return ((tmin < t1) && (tmax > t0));
+  return ((tmin < tmax) && (tmin < t1) && (tmax > t0));
 }
 
 extern "C" __global__ void kTraceRay(Ray *    _rays,

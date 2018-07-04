@@ -79,8 +79,8 @@ inline void addAABB(AABB const &_aabb, size_t _num, vec3 _color, vector<VBOData>
   uint32_t lVOffset = _num * 8;
   uint32_t lIOffset = _num * 12;
 
-  vec3 const &min = _aabb.min;
-  vec3 const &max = _aabb.max;
+  vec3 const &min = _aabb.minMax[0];
+  vec3 const &max = _aabb.minMax[1];
 
   _vert[V0]           = {{min.x, min.y, min.z}, _color};
   _vert[V1]           = {{max.x, min.y, min.z}, _color};
