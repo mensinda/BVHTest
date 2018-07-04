@@ -60,20 +60,15 @@ extern "C" __global__ void kGenerateRays(
 struct DataShared {
   Triangle closest;
   float    nearest;
-
-  //   vec3      origin;
-  //   vec3      direction;
-  //   vec3      invDir;
-  //   Ray::Sign sign;
 };
 
 extern "C" __device__ __forceinline__ bool intersectRayAABB(
-    AABB &_aabb, Ray const &_r, float t0, float t1, float &tmin, float &tmax) {
+    AABB &_aabb, Ray const &_r, float t0, float t1, float &tmin) {
   glm::vec3 const &lOrigin = _r.getOrigin();
   glm::vec3 const &lInvDir = _r.getInverseDirection();
   Ray::Sign const &lSign   = _r.getSign();
 
-  float tymin, tymax, tzmin, tzmax;
+  float tymin, tymax, tzmin, tzmax, tmax;
 
   tmin  = (_aabb.minMax[lSign.x].x - lOrigin.x) * lInvDir.x;
   tmax  = (_aabb.minMax[1 - lSign.x].x - lOrigin.x) * lInvDir.x;
@@ -111,14 +106,6 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
 
       __shared__ DataShared lEtcData[64];
 
-      //       {
-      //         Ray lRay                = _rays[y * _w + x];
-      //         lEtcData[lID].origin    = lRay.getOrigin();
-      //         lEtcData[lID].direction = lRay.getOrigin();
-      //         lEtcData[lID].invDir    = lRay.getInverseDirection();
-      //         lEtcData[lID].sign      = lRay.getSign();
-      //       }
-
       /*
        * Algorithm from:
        *
@@ -138,18 +125,15 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
 
       float  lMinLeft;
       float  lMinRight;
-      float  lTemp;
       double lDistance;
 
       while (true) {
         if (!_nodes[lNode].isLeaf()) {
           lRes.intCount++;
-          uint32_t lLeft  = _nodes[lNode].left;
-          uint32_t lRight = _nodes[lNode].right;
-          bool     lLeftHit =
-              intersectRayAABB(_nodes[lLeft].bbox, lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinLeft, lTemp);
-          bool lRightHit =
-              intersectRayAABB(_nodes[lLeft].bbox, lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinRight, lTemp);
+          uint32_t lLeft = _nodes[lNode].left;
+          uint32_t lRigh = _nodes[lNode].right;
+          bool lLeftHit  = intersectRayAABB(_nodes[lLeft].bbox, lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinLeft);
+          bool lRightHit = intersectRayAABB(_nodes[lRigh].bbox, lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinRight);
 
           if (lLeftHit || lRightHit) {
             lBitStack_hi = (lBitStack_hi << 1) | (lBitStack_lo >> 63);
@@ -157,9 +141,9 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
 
             if (lLeftHit && lRightHit) {
               lBitStack_lo |= 1;
-              lNode = lMinLeft < lMinRight ? lLeft : lRight;
+              lNode = lMinLeft < lMinRight ? lLeft : lRigh;
             } else {
-              lNode = lLeftHit ? lLeft : lRight;
+              lNode = lLeftHit ? lLeft : lRigh;
             }
 
             continue;
@@ -276,12 +260,9 @@ extern "C" __global__ void kTraceRayBundle(Ray *    _rays,
 
           float lMinLeft;
           float lMinRight;
-          float lTemp;
 
-          uint32_t lLeftHit =
-              intersectRayAABB(lNodes[0].bbox, lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinLeft, lTemp);
-          uint32_t lRightHit =
-              intersectRayAABB(lNodes[1].bbox, lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinRight, lTemp);
+          uint32_t lLeftHit  = intersectRayAABB(lNodes[0].bbox, lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinLeft);
+          uint32_t lRightHit = intersectRayAABB(lNodes[1].bbox, lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinRight);
 
           if (lID < 4) { lTravNext[lID] = false; } // Reset trav next
           __syncthreads();
