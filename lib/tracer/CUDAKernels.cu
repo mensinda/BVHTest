@@ -252,6 +252,7 @@ extern "C" __global__ void kTraceRayBundle(Ray *    _rays,
       __shared__ int32_t lResolve[64];
       __shared__ bool    lTravNext[4]; // 0: none // 1: left // 2: right // 3: both
       __shared__ DataShared lEtcData[64];
+      __shared__ uint32_t lChildren[2]; // 0: left // 1: right
 
       uint64_t lBitStack_lo = 0;
       uint64_t lBitStack_hi = 0;
@@ -260,12 +261,12 @@ extern "C" __global__ void kTraceRayBundle(Ray *    _rays,
       lEtcData[lID].nearest = HUGE_VALF;
 
       while (true) {
-        if (lID == 0) { lNodes[2] = _nodes[lNode]; }
+        if (lID == 0) {
+          lNodes[2]    = _nodes[lNode];
+          lChildren[0] = lNodes[2].left;
+          lChildren[1] = lNodes[2].right;
+        }
         __syncthreads();
-
-        uint32_t lChildren[2]; // 0: left // 1: right
-        lChildren[0] = lNodes[2].left;
-        lChildren[1] = lNodes[2].right;
 
         if (!lNodes[2].isLeaf()) {
           lRes.intCount++;
