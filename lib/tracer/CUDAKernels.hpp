@@ -29,10 +29,9 @@ using BVHTest::base::Ray;
 using glm::vec3;
 
 struct CUDAPixel {
-  uint8_t r;
-  uint8_t g;
-  uint8_t b;
-  uint8_t intCount;
+  uint8_t  hit;
+  uint8_t  diffuse;
+  uint16_t intCount;
 };
 
 extern "C" bool allocateRays(Ray **_rays, uint32_t _num);

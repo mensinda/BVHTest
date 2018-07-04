@@ -21,7 +21,7 @@
 
 namespace BVHTest::view {
 
-enum class Renderer { MESH, WIREFRAME, BVH, CUDA_TRACER };
+enum class Renderer { MESH, BVH, CUDA_TRACER };
 
 class RendererBase {
  private:
@@ -32,6 +32,8 @@ class RendererBase {
   GLuint vVertexShader   = 0;
   GLuint vFragmentShader = 0;
   GLuint vShaderProg     = 0;
+
+  uint32_t vRenderMode = 0;
 
  protected:
   inline void bindVAO() { glBindVertexArray(vVAO); }
@@ -48,9 +50,18 @@ class RendererBase {
   RendererBase();
   virtual ~RendererBase();
 
-  virtual void     render()                       = 0;
-  virtual void     update(base::CameraBase *_cam) = 0;
-  virtual Renderer getType() const                = 0;
+  inline void toggleRenderMode() {
+    vRenderMode++;
+    if (vRenderMode >= numRenderModes()) { vRenderMode = 0; }
+  }
+
+  inline uint32_t getRenderMode() const noexcept { return vRenderMode; }
+
+  virtual void        render()                       = 0;
+  virtual void        update(base::CameraBase *_cam) = 0;
+  virtual Renderer    getType() const                = 0;
+  virtual uint32_t    numRenderModes()               = 0;
+  virtual std::string getRenderModeString()          = 0;
 };
 
 } // namespace BVHTest::view

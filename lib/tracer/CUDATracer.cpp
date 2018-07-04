@@ -132,9 +132,15 @@ void CUDATracer::teardown(State &_state) {
     lIMG.pixels.resize(lNumPixel);
 #pragma omp parallel for
     for (uint32_t j = 0; j < lNumPixel; ++j) {
-      lIMG.pixels[j].r        = lPixels[j].r;
-      lIMG.pixels[j].g        = lPixels[j].g;
-      lIMG.pixels[j].b        = lPixels[j].b;
+      if (lPixels[j].hit != 0) {
+        lIMG.pixels[j].r = lPixels[j].diffuse;
+        lIMG.pixels[j].g = lPixels[j].diffuse;
+        lIMG.pixels[j].b = lPixels[j].diffuse;
+      } else {
+        lIMG.pixels[j].r = 121;
+        lIMG.pixels[j].g = 167;
+        lIMG.pixels[j].b = 229;
+      }
       lIMG.pixels[j].intCount = lPixels[j].intCount;
       lIMG.pixels[j].rayTime  = 0;
     }

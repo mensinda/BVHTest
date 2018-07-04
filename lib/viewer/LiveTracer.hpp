@@ -33,7 +33,10 @@ class LiveTracer : public RendererBase {
   uint32_t vWidth;
   uint32_t vHeight;
 
-  static bool vCudaIsInit;
+  bool vBundle  = false;
+  bool vBVHView = false;
+
+  GLint vUniformLocation = 0;
 
  public:
   LiveTracer(base::State &_state, uint32_t _w, uint32_t _h);
@@ -41,9 +44,11 @@ class LiveTracer : public RendererBase {
 
   static bool cudaInit();
 
-  void     render() override;
-  void     update(base::CameraBase *_cam) override;
-  Renderer getType() const override { return Renderer::CUDA_TRACER; }
+  void        render() override;
+  void        update(base::CameraBase *_cam) override;
+  Renderer    getType() const override { return Renderer::CUDA_TRACER; }
+  uint32_t    numRenderModes() override { return 4; }
+  std::string getRenderModeString() override;
 };
 
 } // namespace BVHTest::view

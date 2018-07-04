@@ -96,6 +96,12 @@ void MeshRenderer::update(CameraBase *_cam) {
 
   useProg();
   glUniformMatrix4fv(vUniformLoc, 1, GL_FALSE, glm::value_ptr(lCam->getViewProjection()));
+
+  if (getRenderMode() == 0) {
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  } else {
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  }
 }
 
 void MeshRenderer::render() {
@@ -104,3 +110,5 @@ void MeshRenderer::render() {
   glDrawElements(GL_TRIANGLES, vNumIndex, GL_UNSIGNED_INT, 0);
   unbindVAO();
 }
+
+std::string MeshRenderer::getRenderModeString() { return getRenderMode() == 0 ? "Faces" : "Wireframe"; }

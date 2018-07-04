@@ -32,9 +32,11 @@ class BVHRenderer : public RendererBase {
   BVHRenderer(base::BVH &_bvh);
   ~BVHRenderer();
 
-  void     render() override;
-  void     update(base::CameraBase *_cam) override;
-  Renderer getType() const override { return Renderer::BVH; }
+  void        render() override;
+  void        update(base::CameraBase *_cam) override;
+  Renderer    getType() const override { return Renderer::BVH; }
+  uint32_t    numRenderModes() override { return 1; }
+  std::string getRenderModeString() override { return "Normal"; }
 };
 
 } // namespace BVHTest::view

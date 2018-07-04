@@ -128,7 +128,7 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
   for (uint32_t y = iY; y < _h; y += sY) {
     for (uint32_t x = iX; x < _w; x += sX) {
       Ray       lRay = _rays[y * _w + x];
-      CUDAPixel lRes = {121, 167, 229, 0};
+      CUDAPixel lRes = {0, 0, 0};
 
       __shared__ DataShared lEtcData[64];
 
@@ -212,7 +212,8 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
         float    lDiffuse  = 1.0f + dot(lNorm, lLightDir);
         lDiffuse           = lDiffuse > 0.0f ? lDiffuse : 0.0f;
 
-        lRes.r = lRes.g = lRes.b = static_cast<uint8_t>(lDiffuse * 127.0f);
+        lRes.hit     = 1;
+        lRes.diffuse = static_cast<uint8_t>(lDiffuse * 127.0f);
       }
 
       reinterpret_cast<CUDAPixel *>(_img)[y * _w + x] = lRes;
@@ -253,7 +254,7 @@ extern "C" __global__ void kTraceRayBundle(Ray *    _rays,
   for (uint32_t y = iY; y < _h; y += sY) {
     for (uint32_t x = iX; x < _w; x += sX) {
       Ray       lRay = _rays[y * _w + x];
-      CUDAPixel lRes = {121, 167, 229, 0};
+      CUDAPixel lRes = {0, 0, 0};
 
       __shared__ BVHNode lNodes[3]; // 0: left // 1: right // 2: current
       __shared__ int32_t lResolve[64];
@@ -371,7 +372,8 @@ extern "C" __global__ void kTraceRayBundle(Ray *    _rays,
         float    lDiffuse  = 1.0f + dot(lNorm, lLightDir);
         lDiffuse           = lDiffuse > 0.0f ? lDiffuse : 0.0f;
 
-        lRes.r = lRes.g = lRes.b = static_cast<uint8_t>(lDiffuse * 127.0f);
+        lRes.hit     = 1;
+        lRes.diffuse = static_cast<uint8_t>(lDiffuse * 127.0f);
       }
 
       reinterpret_cast<CUDAPixel *>(_img)[y * _w + x] = lRes;

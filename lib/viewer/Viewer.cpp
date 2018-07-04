@@ -72,9 +72,7 @@ class Text final {
   void draw() { gltDrawText2D(vText, vPosX, vPosY, vScale); }
 };
 
-Viewer::GLFWInitHelper::GLFWInitHelper() {
-  isInit = (glfwInit() == GLFW_TRUE) && (gl3wInit() != 0) && LiveTracer::cudaInit();
-}
+Viewer::GLFWInitHelper::GLFWInitHelper() { isInit = (glfwInit() == GLFW_TRUE) && (gl3wInit() != 0); }
 Viewer::GLFWInitHelper::~GLFWInitHelper() { glfwTerminate(); }
 
 Viewer::~Viewer() {}
@@ -181,9 +179,12 @@ void Viewer::keyCallback(Window &_win, State &_state, Camera &_cam, int _key) {
     case GLFW_KEY_D: vRState.vCurrCam = UINT32_MAX; break;
 
     case GLFW_KEY_F1: vRState.vRendererType = Renderer::MESH; break;
-    case GLFW_KEY_F2: vRState.vRendererType = Renderer::WIREFRAME; break;
-    case GLFW_KEY_F3: vRState.vRendererType = Renderer::BVH; break;
-    case GLFW_KEY_F4: vRState.vRendererType = Renderer::CUDA_TRACER; break;
+    case GLFW_KEY_F2: vRState.vRendererType = Renderer::BVH; break;
+    case GLFW_KEY_F3: vRState.vRendererType = Renderer::CUDA_TRACER; break;
+
+    case GLFW_KEY_R:
+      if (vRenderer) { vRenderer->toggleRenderMode(); }
+      break;
   }
 
   if (vRState.vSpeedLevel < 1) vRState.vSpeedLevel = 1;
@@ -246,7 +247,7 @@ ErrorCode Viewer::runImpl(State &_state) {
   gltViewport(lScreenWidth, lScreenHeight);
   lFPSText.setLine(0);
   lControl.setLine(1);
-  lUsage.setPos(0, static_cast<float>(lScreenHeight) - lUsage.lineHeight() * 7);
+  lUsage.setPos(0, static_cast<float>(lScreenHeight) - lUsage.lineHeight() * 8);
 
   lUsage.set(
       "Movemet:   WASD + Mouse + Scroll wheel    ###   Movement Speed: KP +/-"
@@ -255,11 +256,11 @@ ErrorCode Viewer::runImpl(State &_state) {
       "\n - Add: ENTER"
       "\n - Delete: DELETE"
       "\nToggle overlay: BACKSPACE"
-      "\nSwitch modes: Function keys (F1, F2, etc.)");
+      "\nSwitch Renderes: Function keys (F1, F2, etc.)"
+      "\nToggle Render mode: R");
 
   auto lCurr         = high_resolution_clock::now();
   auto lFPSTimeStamp = high_resolution_clock::now();
-  bool lWireframeOn  = false;
 
   // main loop
   while (lWindow.pollAndSwap()) {
@@ -269,17 +270,8 @@ ErrorCode Viewer::runImpl(State &_state) {
 
     processInput(lWindow, lCam, lFrameTime);
 
-    if (vRenderer && vRenderer->getType() == Renderer::MESH && vRState.vRendererType == Renderer::WIREFRAME) {
-      if (!lWireframeOn) {
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        lWireframeOn = true;
-      }
-    } else if (!vRenderer || vRState.vRendererType != vRenderer->getType()) {
+    if (!vRenderer || vRState.vRendererType != vRenderer->getType()) {
       switch (vRState.vRendererType) {
-        case Renderer::WIREFRAME:
-          glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-          lWireframeOn = true;
-          [[fallthrough]];
         case Renderer::MESH:
           vRenderer.reset();
           vRenderer = make_shared<MeshRenderer>(_state.mesh);
@@ -298,11 +290,6 @@ ErrorCode Viewer::runImpl(State &_state) {
       }
     }
 
-    if (lWireframeOn && vRState.vRendererType != Renderer::WIREFRAME) {
-      glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-      lWireframeOn = false;
-    }
-
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     vRenderer->update(&lCam);
     vRenderer->render();
@@ -315,11 +302,12 @@ ErrorCode Viewer::runImpl(State &_state) {
       }
 
       lFPSText.set(fmt::format("FPS: {}; Frametime: {}ms", lFPS, lFrameTime));
-      lControl.set(fmt::format("Speed level: {}\nSaved cameras: {}\nCurrent camera: {}\nRender Mode: {}",
+      lControl.set(fmt::format("Speed level: {}\nSaved cameras: {}\nCurrent camera: {}\nRenderer: {}  -- Mode: {}",
                                vRState.vSpeedLevel,
                                _state.cameras.size(),
                                vRState.vCurrCam == UINT32_MAX ? "-" : to_string(vRState.vCurrCam),
-                               toStr(vRState.vRendererType)));
+                               toStr(vRState.vRendererType),
+                               vRenderer->getRenderModeString()));
       lFPSText.draw();
       lControl.draw();
       lUsage.draw();

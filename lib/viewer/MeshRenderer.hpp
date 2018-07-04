@@ -32,9 +32,11 @@ class MeshRenderer : public RendererBase {
   MeshRenderer(base::Mesh const &_mesh);
   ~MeshRenderer();
 
-  void     render() override;
-  void     update(base::CameraBase *_cam) override;
-  Renderer getType() const override { return Renderer::MESH; }
+  void        render() override;
+  void        update(base::CameraBase *_cam) override;
+  Renderer    getType() const override { return Renderer::MESH; }
+  uint32_t    numRenderModes() override { return 2; }
+  std::string getRenderModeString() override;
 };
 
 } // namespace BVHTest::view
