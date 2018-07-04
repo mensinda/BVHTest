@@ -16,8 +16,8 @@
 
 #define GLM_ENABLE_EXPERIMENTAL
 
+#include "BVHTestCfg.hpp"
 #include <base/Ray.hpp>
-#include <glm/gtx/intersect.hpp>
 #include <glm/gtx/normal.hpp>
 #include <glm/mat4x4.hpp>
 #include "CUDAKernels.hpp"
@@ -59,29 +59,55 @@ extern "C" __global__ void kGenerateRays(
 
 struct DataShared {
   Triangle closest;
-  float    nearest;
 };
 
-extern "C" __device__ __forceinline__ bool intersectRayAABB(
-    AABB &_aabb, Ray const &_r, float t0, float t1, float &tmin) {
+// source: https://github.com/hpicgs/cgsee/wiki/Ray-Box-Intersection-on-the-GPU
+extern "C" __device__ __forceinline__ bool intersectRayAABB(AABB &_box, Ray const &_r, float t0, float t1, float &tmin) {
   glm::vec3 const &lOrigin = _r.getOrigin();
   glm::vec3 const &lInvDir = _r.getInverseDirection();
   Ray::Sign const &lSign   = _r.getSign();
 
   float tymin, tymax, tzmin, tzmax, tmax;
 
-  tmin  = (_aabb.minMax[lSign.x].x - lOrigin.x) * lInvDir.x;
-  tmax  = (_aabb.minMax[1 - lSign.x].x - lOrigin.x) * lInvDir.x;
-  tymin = (_aabb.minMax[lSign.y].y - lOrigin.y) * lInvDir.y;
-  tymax = (_aabb.minMax[1 - lSign.y].y - lOrigin.y) * lInvDir.y;
-  tzmin = (_aabb.minMax[lSign.z].z - lOrigin.z) * lInvDir.z;
-  tzmax = (_aabb.minMax[1 - lSign.z].z - lOrigin.z) * lInvDir.z;
+  tmin  = (_box.minMax[lSign.x].x - lOrigin.x) * lInvDir.x;
+  tmax  = (_box.minMax[1 - lSign.x].x - lOrigin.x) * lInvDir.x;
+  tymin = (_box.minMax[lSign.y].y - lOrigin.y) * lInvDir.y;
+  tymax = (_box.minMax[1 - lSign.y].y - lOrigin.y) * lInvDir.y;
+  tzmin = (_box.minMax[lSign.z].z - lOrigin.z) * lInvDir.z;
+  tzmax = (_box.minMax[1 - lSign.z].z - lOrigin.z) * lInvDir.z;
   if (tymin > tmin) { tmin = tymin; }
   if (tzmin > tmin) { tmin = tzmin; }
   if (tymax < tmax) { tmax = tymax; }
   if (tzmax < tmax) { tmax = tzmax; }
 
   return ((tmin < tmax) && (tmin < t1) && (tmax > t0));
+}
+
+// Stolen from GLM -- then optimized for CUDA
+extern "C" __device__ __forceinline__ bool intersectRayTriangle2(
+    vec3 const &orig, vec3 const &dir, vec3 const &vert0, vec3 const &vert1, vec3 const &vert2, float &distance) {
+  vec3 const edge1 = vert1 - vert0;
+  vec3 const edge2 = vert2 - vert0;
+
+  vec3 const  p   = glm::cross(dir, edge2);
+  float const det = glm::dot(edge1, p);
+
+  vec3 const tvec = orig - vert0;
+  vec3 const qvec = glm::cross(tvec, edge1);
+
+  float const inv_det = __fdividef(1.0f, det); // __fdividef is fast division
+
+  float const u = glm::dot(tvec, p);
+  float const v = glm::dot(dir, qvec);
+
+  distance = glm::dot(edge2, qvec) * inv_det;
+
+#if CUDA_FACE_CULLING
+  return ((det > 0.0f) && ((u >= 0.0f && u <= det) && (v >= 0.0f && (u + v) <= det)));
+#else
+  return ((det > 0.0f) && ((u >= 0.0f && u <= det) && (v >= 0.0f && (u + v) <= det))) ||
+         ((det < 0.0f) && ((u <= 0.0f && u >= det) && (v <= 0.0f && (u + v) >= det)));
+#endif
 }
 
 extern "C" __global__ void kTraceRay(Ray *    _rays,
@@ -120,20 +146,18 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
       uint64_t lBitStack_hi = 0;
       uint32_t lNode        = _rootNode;
 
-      lEtcData[lID].nearest = HUGE_VALF;
-      dvec2 lBarycentricTemp;
-
-      float  lMinLeft;
-      float  lMinRight;
-      double lDistance;
+      float lMinLeft;
+      float lMinRight;
+      float lDistance;
+      float lNearest = HUGE_VALF;
 
       while (true) {
         if (!_nodes[lNode].isLeaf()) {
           lRes.intCount++;
-          uint32_t lLeft = _nodes[lNode].left;
-          uint32_t lRigh = _nodes[lNode].right;
-          bool lLeftHit  = intersectRayAABB(_nodes[lLeft].bbox, lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinLeft);
-          bool lRightHit = intersectRayAABB(_nodes[lRigh].bbox, lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinRight);
+          uint32_t lLeft     = _nodes[lNode].left;
+          uint32_t lRigh     = _nodes[lNode].right;
+          bool     lLeftHit  = intersectRayAABB(_nodes[lLeft].bbox, lRay, 0.01f, lNearest + 0.01f, lMinLeft);
+          bool     lRightHit = intersectRayAABB(_nodes[lRigh].bbox, lRay, 0.01f, lNearest + 0.01f, lMinRight);
 
           if (lLeftHit || lRightHit) {
             lBitStack_hi = (lBitStack_hi << 1) | (lBitStack_lo >> 63);
@@ -152,16 +176,15 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
           for (uint32_t i = 0; i < _nodes[lNode].numFaces(); ++i) {
             Triangle lTri = _mesh.faces[_nodes[lNode].beginFaces() + i];
 
-            bool lHit = intersectRayTriangle<double>(static_cast<dvec3 const &>(lRay.getOrigin()),
-                                                     static_cast<dvec3 const &>(lRay.getDirection()),
-                                                     static_cast<dvec3 const &>(_mesh.vert[lTri.v1]),
-                                                     static_cast<dvec3 const &>(_mesh.vert[lTri.v2]),
-                                                     static_cast<dvec3 const &>(_mesh.vert[lTri.v3]),
-                                                     lBarycentricTemp,
-                                                     lDistance);
+            bool lHit = intersectRayTriangle2(lRay.getOrigin(),
+                                              lRay.getDirection(),
+                                              _mesh.vert[lTri.v1],
+                                              _mesh.vert[lTri.v2],
+                                              _mesh.vert[lTri.v3],
+                                              lDistance);
 
-            if (lHit && lDistance < lEtcData[lID].nearest) {
-              lEtcData[lID].nearest = lDistance;
+            if (lHit && lDistance < lNearest) {
+              lNearest              = lDistance;
               lEtcData[lID].closest = lTri;
             }
           }
@@ -181,10 +204,10 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
 
     LABEL_END:
 
-      if (lEtcData[lID].nearest < HUGE_VALF) {
+      if (lNearest < HUGE_VALF) {
         Triangle lClosest  = lEtcData[lID].closest;
         vec3     lNorm     = triangleNormal(_mesh.vert[lClosest.v1], _mesh.vert[lClosest.v2], _mesh.vert[lClosest.v3]);
-        vec3     lHitPos   = lRay.getOrigin() + lEtcData[lID].nearest * lRay.getDirection();
+        vec3     lHitPos   = lRay.getOrigin() + lNearest * lRay.getDirection();
         vec3     lLightDir = normalize(_light - lHitPos);
         float    lDiffuse  = 1.0f + dot(lNorm, lLightDir);
         lDiffuse           = lDiffuse > 0.0f ? lDiffuse : 0.0f;
@@ -242,7 +265,7 @@ extern "C" __global__ void kTraceRayBundle(Ray *    _rays,
       uint64_t lBitStack_hi = 0;
       uint32_t lNode        = _rootNode;
 
-      lEtcData[lID].nearest = HUGE_VALF;
+      float lNearest = HUGE_VALF;
 
       while (true) {
         if (lID == 0) {
@@ -261,8 +284,8 @@ extern "C" __global__ void kTraceRayBundle(Ray *    _rays,
           float lMinLeft;
           float lMinRight;
 
-          uint32_t lLeftHit  = intersectRayAABB(lNodes[0].bbox, lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinLeft);
-          uint32_t lRightHit = intersectRayAABB(lNodes[1].bbox, lRay, 0.01f, lEtcData[lID].nearest + 0.01f, lMinRight);
+          uint32_t lLeftHit  = intersectRayAABB(lNodes[0].bbox, lRay, 0.01f, lNearest + 0.01f, lMinLeft);
+          uint32_t lRightHit = intersectRayAABB(lNodes[1].bbox, lRay, 0.01f, lNearest + 0.01f, lMinRight);
 
           if (lID < 4) { lTravNext[lID] = false; } // Reset trav next
           __syncthreads();
@@ -307,19 +330,17 @@ extern "C" __global__ void kTraceRayBundle(Ray *    _rays,
           for (uint32_t i = 0; i < lChildren[1]; ++i) {
             Triangle lTri = _mesh.faces[lChildren[0] + i];
 
-            dvec2  lBarycentricTemp;
-            double lDistance;
+            float lDistance;
 
-            bool lHit = intersectRayTriangle<double>(static_cast<dvec3 const &>(lRay.getOrigin()),
-                                                     static_cast<dvec3 const &>(lRay.getDirection()),
-                                                     static_cast<dvec3 const &>(_mesh.vert[lTri.v1]),
-                                                     static_cast<dvec3 const &>(_mesh.vert[lTri.v2]),
-                                                     static_cast<dvec3 const &>(_mesh.vert[lTri.v3]),
-                                                     lBarycentricTemp,
-                                                     lDistance);
+            bool lHit = intersectRayTriangle2(lRay.getOrigin(),
+                                              lRay.getDirection(),
+                                              _mesh.vert[lTri.v1],
+                                              _mesh.vert[lTri.v2],
+                                              _mesh.vert[lTri.v3],
+                                              lDistance);
 
-            if (lHit && lDistance < lEtcData[lID].nearest) {
-              lEtcData[lID].nearest = lDistance;
+            if (lHit && lDistance < lNearest) {
+              lNearest              = lDistance;
               lEtcData[lID].closest = lTri;
             }
           }
@@ -342,10 +363,10 @@ extern "C" __global__ void kTraceRayBundle(Ray *    _rays,
 
     LABEL_END:
 
-      if (lEtcData[lID].nearest < HUGE_VALF) {
+      if (lNearest < HUGE_VALF) {
         Triangle lClosest  = lEtcData[lID].closest;
         vec3     lNorm     = triangleNormal(_mesh.vert[lClosest.v1], _mesh.vert[lClosest.v2], _mesh.vert[lClosest.v3]);
-        vec3     lHitPos   = lRay.getOrigin() + lEtcData[lID].nearest * lRay.getDirection();
+        vec3     lHitPos   = lRay.getOrigin() + lNearest * lRay.getDirection();
         vec3     lLightDir = normalize(_light - lHitPos);
         float    lDiffuse  = 1.0f + dot(lNorm, lLightDir);
         lDiffuse           = lDiffuse > 0.0f ? lDiffuse : 0.0f;

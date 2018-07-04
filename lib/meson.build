@@ -172,6 +172,8 @@ foreach i : incDirsRaw
   cuInclude += '-I' + i
 endforeach
 
+cuInclude += '-I' + meson.build_root()
+
 enum2StrLib = static_library('enum2Str', enum2Str,
   include_directories: incDirs,
   install: true,

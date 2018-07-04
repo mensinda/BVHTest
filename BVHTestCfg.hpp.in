@@ -18,13 +18,17 @@
 
 #define SPDLOG_FMT_EXTERNAL
 
+#ifndef __CUDACC__
 #include <spdlog/spdlog.h>
 
 namespace spd = spdlog;
+#endif
 
 #mesondefine BVHTEST_VERSION
 #mesondefine LOGGER_NAME
+#mesondefine CUDA_FACE_CULLING
 
+#ifndef __CUDACC__
 namespace BVHTest {
 
 inline auto getLogger() {
@@ -37,3 +41,4 @@ inline auto getLogger() {
 }
 
 } // namespace BVHTest
+#endif
