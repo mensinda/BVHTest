@@ -35,26 +35,28 @@ struct CUDAPixel {
 };
 
 extern "C" bool allocateRays(Ray **_rays, uint32_t _num);
-extern "C" bool allocateImage(uint8_t **_img, uint32_t _w, uint32_t _h);
+extern "C" bool allocateImage(CUDAPixel **_img, uint32_t _w, uint32_t _h);
 extern "C" void freeRays(Ray **_rays);
-extern "C" void freeImage(uint8_t *_img);
+extern "C" void freeImage(CUDAPixel *_img);
 
 extern "C" void generateRays(Ray *_rays, uint32_t _w, uint32_t _h, vec3 _pos, vec3 _lookAt, vec3 _up, float _fov);
-extern "C" void tracerImage(Ray *    _rays,
-                            uint8_t *_img,
-                            BVHNode *_nodes,
-                            uint32_t _rootNode,
-                            MeshRaw  _mesh,
-                            vec3     _light,
-                            uint32_t _w,
-                            uint32_t _h,
-                            bool     _bundle);
+extern "C" void tracerImage(Ray *      _rays,
+                            CUDAPixel *_img,
+                            BVHNode *  _nodes,
+                            uint32_t   _rootNode,
+                            MeshRaw    _mesh,
+                            vec3       _light,
+                            uint32_t   _w,
+                            uint32_t   _h,
+                            bool       _bundle);
 
-extern "C" void copyImageToHost(CUDAPixel *_hostPixel, uint8_t *_cudaImg, uint32_t _w, uint32_t _h);
+extern "C" void copyImageToHost(CUDAPixel *_hostPixel, CUDAPixel *_cudaImg, uint32_t _w, uint32_t _h);
 
 extern "C" bool registerOGLImage(void **_resource, uint32_t _image);
-extern "C" bool copyToOGLImage(void **_resource, uint8_t *_img, uint32_t _w, uint32_t _h);
+extern "C" bool copyToOGLImage(void **_resource, CUDAPixel *_img, uint32_t _w, uint32_t _h);
 extern "C" void unregisterOGLImage(void *_resource);
+
+extern "C" uint16_t calcIntCountPercentile(CUDAPixel *_devImage, uint32_t _w, uint32_t _h, float _percent);
 
 extern "C" void tracerDoCudaSync();
 extern "C" void initCUDA_GL();

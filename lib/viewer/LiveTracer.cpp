@@ -44,6 +44,7 @@ out vec4 oColor;
 
 uniform usampler2D uTex;
 uniform uint       uIntCount;
+uniform uint       uMaxCount;
 
 // Color gradiant from https://stackoverflow.com/questions/22607043/color-gradient-algorithm
 vec3 InverseSrgbCompanding(vec3 c) {
@@ -106,7 +107,7 @@ void main() {
       oColor = vec4(lPixelData.g / 255.0f, lPixelData.g / 255.0f, lPixelData.g / 255.0f, 1.0f);
     }
   } else {
-    oColor = vec4(genColor(((lPixelData.a << 8) + lPixelData.b) / 255.0f), 1.0f);
+    oColor = vec4(genColor(((lPixelData.a << 8) + lPixelData.b) / float(uMaxCount)), 1.0f);
   }
 }
 )__GLSL__";
@@ -149,7 +150,8 @@ LiveTracer::LiveTracer(State &_state, uint32_t _w, uint32_t _h) {
 
   if (!compileShaders(gVertexShader, gFragmentShader)) { return; }
 
-  vUniformLocation = getLocation("uIntCount");
+  vIntCountLocation = getLocation("uIntCount");
+  vMaxCountLocation = getLocation("uMaxCount");
 
   registerOGLImage(&vCudaRes, vTexture);
   vCudaMem = _state.cudaMem;
@@ -173,7 +175,8 @@ void LiveTracer::render() {
   copyToOGLImage(&vCudaRes, vDeviceImage, vWidth, vHeight);
 
   useProg();
-  glUniform1ui(vUniformLocation, vBVHView ? 1u : 0u);
+  glUniform1ui(vIntCountLocation, vBVHView ? 1u : 0u);
+  glUniform1ui(vMaxCountLocation, vMaxCount);
   glBindTexture(GL_TEXTURE_2D, vTexture);
   bindVAO();
   glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -185,22 +188,20 @@ void LiveTracer::update(CameraBase *_cam) {
   vCam           = _cam;
   uint32_t lMode = getRenderMode();
 
-  if (lMode >= 2) {
-    lMode -= 2;
-    vBundle = true;
-  } else {
-    vBundle = false;
-  }
+  vBundle  = lMode & 0b010;
+  vBVHView = lMode & 0b001;
 
-  if (lMode == 0) {
-    vBVHView = false;
-  } else {
-    vBVHView = true;
+  if (vBVHView) {
+    TimePoint lNow = std::chrono::system_clock::now();
+    if (lNow - vPercentileRecalc > std::chrono::milliseconds(1000)) {
+      vPercentileRecalc = lNow;
+      vMaxCount         = calcIntCountPercentile(vDeviceImage, vWidth, vHeight, 0.99f);
+    }
   }
 }
 
 std::string LiveTracer::getRenderModeString() {
   std::string lRet = vBundle ? "BUNDLE -- " : "NORMAL -- ";
-  lRet += vBVHView ? "Traversal Depth" : "Pixel";
+  lRet += vBVHView ? "MAX int count: " + std::to_string(vMaxCount) : "Diffuse";
   return lRet;
 }

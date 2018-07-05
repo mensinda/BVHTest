@@ -22,6 +22,7 @@
 #include <glm/mat4x4.hpp>
 #include "CUDAKernels.hpp"
 #include <glm/gtc/matrix_transform.hpp>
+#include <cub/cub.cuh>
 #include <cuda_gl_interop.h>
 #include <cuda_runtime.h>
 #include <cuda_runtime_api.h>
@@ -110,14 +111,14 @@ extern "C" __device__ __forceinline__ bool intersectRayTriangle2(
 #endif
 }
 
-extern "C" __global__ void kTraceRay(Ray *    _rays,
-                                     uint8_t *_img,
-                                     BVHNode *_nodes,
-                                     uint32_t _rootNode,
-                                     MeshRaw  _mesh,
-                                     vec3     _light,
-                                     uint32_t _w,
-                                     uint32_t _h) {
+extern "C" __global__ void kTraceRay(Ray *      _rays,
+                                     CUDAPixel *_img,
+                                     BVHNode *  _nodes,
+                                     uint32_t   _rootNode,
+                                     MeshRaw    _mesh,
+                                     vec3       _light,
+                                     uint32_t   _w,
+                                     uint32_t   _h) {
   uint32_t iX = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t iY = blockIdx.y * blockDim.y + threadIdx.y;
   uint32_t sX = blockDim.x * gridDim.x;
@@ -216,7 +217,7 @@ extern "C" __global__ void kTraceRay(Ray *    _rays,
         lRes.diffuse = static_cast<uint8_t>(lDiffuse * 127.0f);
       }
 
-      reinterpret_cast<CUDAPixel *>(_img)[y * _w + x] = lRes;
+      _img[y * _w + x] = lRes;
     }
   }
 }
@@ -236,14 +237,14 @@ extern "C" __device__ __forceinline__ void dReduce64Resolve(int32_t *_res, uint3
   __syncthreads();
 }
 
-extern "C" __global__ void kTraceRayBundle(Ray *    _rays,
-                                           uint8_t *_img,
-                                           BVHNode *_nodes,
-                                           uint32_t _rootNode,
-                                           MeshRaw  _mesh,
-                                           vec3     _light,
-                                           uint32_t _w,
-                                           uint32_t _h) {
+extern "C" __global__ void kTraceRayBundle(Ray *      _rays,
+                                           CUDAPixel *_img,
+                                           BVHNode *  _nodes,
+                                           uint32_t   _rootNode,
+                                           MeshRaw    _mesh,
+                                           vec3       _light,
+                                           uint32_t   _w,
+                                           uint32_t   _h) {
   uint32_t iX = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t iY = blockIdx.y * blockDim.y + threadIdx.y;
   uint32_t sX = blockDim.x * gridDim.x;
@@ -376,7 +377,7 @@ extern "C" __global__ void kTraceRayBundle(Ray *    _rays,
         lRes.diffuse = static_cast<uint8_t>(lDiffuse * 127.0f);
       }
 
-      reinterpret_cast<CUDAPixel *>(_img)[y * _w + x] = lRes;
+      _img[y * _w + x] = lRes;
     }
   }
 }
@@ -395,15 +396,15 @@ extern "C" void generateRays(Ray *_rays, uint32_t _w, uint32_t _h, vec3 _pos, ve
   kGenerateRays<<<lGrid, lBlock>>>(_rays, _w, _h, lCamToWorld, _pos, lAspectRatio, lScale);
 }
 
-extern "C" void tracerImage(Ray *    _rays,
-                            uint8_t *_img,
-                            BVHNode *_nodes,
-                            uint32_t _rootNode,
-                            MeshRaw  _mesh,
-                            vec3     _light,
-                            uint32_t _w,
-                            uint32_t _h,
-                            bool     _bundle) {
+extern "C" void tracerImage(Ray *      _rays,
+                            CUDAPixel *_img,
+                            BVHNode *  _nodes,
+                            uint32_t   _rootNode,
+                            MeshRaw    _mesh,
+                            vec3       _light,
+                            uint32_t   _w,
+                            uint32_t   _h,
+                            bool       _bundle) {
   if (!_rays || !_img) { return; }
   dim3 lBlock(8, 8, 1);
   dim3 lGrid((_w + lBlock.x - 1) / lBlock.x, (_h + lBlock.y - 1) / lBlock.y);
@@ -415,7 +416,45 @@ extern "C" void tracerImage(Ray *    _rays,
   }
 }
 
-extern "C" bool copyToOGLImage(void **_resource, uint8_t *_img, uint32_t _w, uint32_t _h) {
+extern "C" __global__ void kExtractIntCountFromIMG(CUDAPixel *_devImage, uint16_t *_out, uint32_t _num) {
+  for (uint32_t i = blockIdx.x * blockDim.x + threadIdx.x; i < _num; i += blockDim.x * gridDim.x) {
+    _out[i] = _devImage[i].intCount;
+  }
+}
+
+extern "C" uint16_t calcIntCountPercentile(CUDAPixel *_devImage, uint32_t _w, uint32_t _h, float _percent) {
+  cudaError_t lRes;
+  uint16_t    lResult             = UINT16_MAX;
+  void *      lCubTempStorage     = nullptr;
+  size_t      lCubTempStorageSize = 0;
+  uint32_t    lNum                = _w * _h;
+
+  uint16_t *lSortIn  = nullptr;
+  uint16_t *lSortOut = nullptr;
+
+  _percent = min(_percent, 0.9999f);
+  _percent = max(_percent, 0.0009f);
+
+  CUDA_RUN(cudaMalloc(&lSortIn, lNum * sizeof(uint16_t)));
+  CUDA_RUN(cudaMalloc(&lSortOut, lNum * sizeof(uint16_t)));
+
+  kExtractIntCountFromIMG<<<(lNum + 256 - 1) / 256, 256>>>(_devImage, lSortIn, lNum);
+
+  CUDA_RUN(cub::DeviceRadixSort::SortKeys(lCubTempStorage, lCubTempStorageSize, lSortIn, lSortOut, lNum));
+  CUDA_RUN(cudaMalloc(&lCubTempStorage, lCubTempStorageSize));
+  CUDA_RUN(cub::DeviceRadixSort::SortKeys(lCubTempStorage, lCubTempStorageSize, lSortIn, lSortOut, lNum));
+  CUDA_RUN(cudaMemcpy(&lResult, lSortOut + (size_t)((lNum)*_percent), sizeof(uint16_t), cudaMemcpyDeviceToHost));
+
+error:
+  cudaFree(lSortIn);
+  cudaFree(lSortOut);
+  cudaFree(lCubTempStorage);
+
+  return lResult;
+}
+
+
+extern "C" bool copyToOGLImage(void **_resource, CUDAPixel *_img, uint32_t _w, uint32_t _h) {
   cudaError_t            lRes;
   cudaArray_t            lDevArray;
   cudaGraphicsResource **lResource = reinterpret_cast<cudaGraphicsResource **>(_resource);
@@ -424,7 +463,7 @@ extern "C" bool copyToOGLImage(void **_resource, uint8_t *_img, uint32_t _w, uin
   CUDA_RUN(cudaGraphicsMapResources(1, lResource, 0));
   CUDA_RUN(cudaGraphicsSubResourceGetMappedArray(&lDevArray, *lResource, 0, 0));
 
-  CUDA_RUN(cudaMemcpyToArray(lDevArray, 0, 0, _img, _w * _h * 4 * sizeof(uint8_t), cudaMemcpyDeviceToDevice));
+  CUDA_RUN(cudaMemcpyToArray(lDevArray, 0, 0, _img, _w * _h * sizeof(CUDAPixel), cudaMemcpyDeviceToDevice));
 
   CUDA_RUN(cudaGraphicsUnmapResources(1, lResource, 0));
 
@@ -434,7 +473,7 @@ error:
   return false;
 }
 
-extern "C" void copyImageToHost(CUDAPixel *_hostPixel, uint8_t *_cudaImg, uint32_t _w, uint32_t _h) {
+extern "C" void copyImageToHost(CUDAPixel *_hostPixel, CUDAPixel *_cudaImg, uint32_t _w, uint32_t _h) {
   cudaMemcpy(_hostPixel, _cudaImg, _w * _h * sizeof(CUDAPixel), cudaMemcpyDeviceToHost);
 }
 
@@ -465,7 +504,7 @@ error:
   return false;
 }
 
-extern "C" bool allocateImage(uint8_t **_img, uint32_t _w, uint32_t _h) {
+extern "C" bool allocateImage(CUDAPixel **_img, uint32_t _w, uint32_t _h) {
   cudaError_t lRes;
   CUDA_RUN(cudaMalloc(_img, _w * _h * sizeof(CUDAPixel)));
   return true;
@@ -481,7 +520,7 @@ extern "C" void freeRays(Ray **_rays) {
   }
 }
 
-extern "C" void freeImage(uint8_t *_img) {
+extern "C" void freeImage(CUDAPixel *_img) {
   if (_img) { cudaFree(_img); }
 }
 

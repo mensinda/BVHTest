@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "CUDAKernels.hpp"
 #include "TracerBase.hpp"
 
 namespace BVHTest::tracer {
@@ -24,9 +25,9 @@ class CUDATracer final : public TracerBase {
  private:
   bool vRayBundles = false;
 
-  base::Ray *            vRays       = nullptr;
-  base::CameraBase::RES  vResolution = {0, 0};
-  std::vector<uint8_t *> vDeviceImages;
+  base::Ray *              vRays       = nullptr;
+  base::CameraBase::RES    vResolution = {0, 0};
+  std::vector<CUDAPixel *> vDeviceImages;
 
  public:
   CUDATracer() = default;

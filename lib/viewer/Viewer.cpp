@@ -302,7 +302,7 @@ ErrorCode Viewer::runImpl(State &_state) {
       }
 
       lFPSText.set(fmt::format("FPS: {}; Frametime: {}ms", lFPS, lFrameTime));
-      lControl.set(fmt::format("Speed level: {}\nSaved cameras: {}\nCurrent camera: {}\nRenderer: {}  -- Mode: {}",
+      lControl.set(fmt::format("Speed level: {}\nSaved cameras: {}\nCurrent camera: {}\nRenderer: {}\nMode: {}",
                                vRState.vSpeedLevel,
                                _state.cameras.size(),
                                vRState.vCurrCam == UINT32_MAX ? "-" : to_string(vRState.vCurrCam),

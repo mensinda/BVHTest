@@ -17,15 +17,20 @@
 #pragma once
 
 #include "base/State.hpp"
+#include "tracer/CUDAKernels.hpp"
 #include "RendererBase.hpp"
+#include <chrono>
 
 namespace BVHTest::view {
 
 class LiveTracer : public RendererBase {
+ public:
+  typedef std::chrono::time_point<std::chrono::system_clock> TimePoint;
+
  private:
   GLuint                  vTexture;
   void *                  vCudaRes     = nullptr;
-  uint8_t *               vDeviceImage = nullptr;
+  CUDAPixel *             vDeviceImage = nullptr;
   base::Ray *             vRays        = nullptr;
   base::CameraBase *      vCam         = nullptr;
   base::State::CudaMemory vCudaMem;
@@ -36,7 +41,11 @@ class LiveTracer : public RendererBase {
   bool vBundle  = false;
   bool vBVHView = false;
 
-  GLint vUniformLocation = 0;
+  GLint vIntCountLocation = 0;
+  GLint vMaxCountLocation = 0;
+
+  TimePoint vPercentileRecalc = std::chrono::system_clock::now();
+  uint32_t  vMaxCount         = 255;
 
  public:
   LiveTracer(base::State &_state, uint32_t _w, uint32_t _h);

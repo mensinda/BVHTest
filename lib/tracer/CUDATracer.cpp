@@ -51,8 +51,8 @@ bool CUDATracer::allocateMemory(CameraBase::RES _res, uint32_t _numImages) {
   }
 
   for (uint32_t i = 0; i < _numImages; ++i) {
-    uint8_t *lCUDAImage = nullptr;
-    lRes                = allocateImage(&lCUDAImage, vResolution.width, vResolution.height);
+    CUDAPixel *lCUDAImage = nullptr;
+    lRes                  = allocateImage(&lCUDAImage, vResolution.width, vResolution.height);
     if (!lRes) {
       freeMemory();
       return false;
@@ -67,7 +67,7 @@ void CUDATracer::freeMemory() {
   freeRays(&vRays);
   vResolution = {0, 0};
 
-  for (uint8_t *i : vDeviceImages) { freeImage(i); }
+  for (auto *i : vDeviceImages) { freeImage(i); }
   vDeviceImages.clear();
 }
 
