@@ -22,6 +22,7 @@ using namespace glm;
 using namespace std;
 using namespace BVHTest;
 using namespace BVHTest::view;
+using namespace BVHTest::base;
 
 RendererBase::RendererBase() {
   glGenVertexArrays(1, &vVAO);
@@ -107,3 +108,5 @@ bool RendererBase::generateVBOData(uint32_t _numVert) {
 bool RendererBase::copyVBODataDevice2Device(vec3 *_data, uint32_t _size) {
   return copyToOGLBuffer(&vCUDABuffer, _data, _size);
 }
+
+void RendererBase::updateMesh(State &, CameraBase *, uint32_t) {}

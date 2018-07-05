@@ -14,8 +14,12 @@
  * limitations under the License.
  */
 
+#define GLM_ENABLE_EXPERIMENTAL
+
 #include "MeshRenderer.hpp"
+#include "cuda/cudaFN.hpp"
 #include "misc/Camera.hpp"
+#include <glm/gtx/transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <string>
@@ -58,9 +62,14 @@ void main() {
 MeshRenderer::MeshRenderer(State &_state) {
   auto const &lMesh = _state.mesh;
 
+  vRawMesh = _state.cudaMem.rawMesh;
+  vNumVert = vRawMesh.numVert * sizeof(vec3);
+  cuda::runMalloc((void **)&vDevOriginalVert, vNumVert);
+  cuda::runMemcpy(vDevOriginalVert, vRawMesh.vert, vNumVert, MemcpyKind::Dev2Dev);
+
   bindVAO();
-  generateVBOData(_state.mesh.vert.size());
-  copyVBODataDevice2Device(_state.cudaMem.rawMesh.vert, _state.cudaMem.rawMesh.numVert);
+  generateVBOData(vRawMesh.numVert);
+  copyVBODataDevice2Device(vRawMesh.vert, vRawMesh.numVert);
 
   bindNBO();
   glBufferData(GL_ARRAY_BUFFER, lMesh.norm.size() * sizeof(vec3), lMesh.norm.data(), GL_STATIC_DRAW);
@@ -84,7 +93,10 @@ MeshRenderer::MeshRenderer(State &_state) {
   vUniformLoc = getLocation("uMVP");
 }
 
-MeshRenderer::~MeshRenderer() {}
+MeshRenderer::~MeshRenderer() {
+  cuda::runMemcpy(vRawMesh.vert, vDevOriginalVert, vNumVert, MemcpyKind::Dev2Dev);
+  cuda::runFree(vDevOriginalVert);
+}
 
 void MeshRenderer::update(CameraBase *_cam) {
   Camera *lCam = dynamic_cast<Camera *>(_cam);
@@ -99,6 +111,23 @@ void MeshRenderer::update(CameraBase *_cam) {
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   }
 }
+
+void MeshRenderer::updateMesh(State &_state, CameraBase *_cam, uint32_t _offsetIndex) {
+  Camera *lCam = dynamic_cast<Camera *>(_cam);
+  if (!lCam) { return; }
+
+  auto lData = lCam->getCamera();
+  auto lOffs = _state.meshOffsets[_offsetIndex];
+
+  mat4 lMat = translate(lData.pos);
+
+  cuda::transformVecs(vDevOriginalVert + lOffs.vertOffset,
+                      _state.cudaMem.rawMesh.vert + lOffs.vertOffset,
+                      _state.cudaMem.rawMesh.numVert - lOffs.vertOffset,
+                      lMat);
+  copyVBODataDevice2Device(_state.cudaMem.rawMesh.vert, _state.cudaMem.rawMesh.numVert);
+}
+
 
 void MeshRenderer::render() {
   useProg();

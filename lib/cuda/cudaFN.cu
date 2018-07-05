@@ -291,3 +291,33 @@ extern "C" float topKThElementHost(float *_data, uint32_t _num, uint32_t _k) {
   wrapupForTimingH(start, stop, deviceVec, result, time, retFromSelect);
   return retFromSelect;
 }
+
+extern "C" bool runMalloc(void **_ptr, size_t _size) {
+  cudaError_t lRes;
+  CUDA_RUN(cudaMalloc(_ptr, _size));
+
+  return true;
+error:
+  return false;
+}
+
+extern "C" bool runMemcpy(void *_dest, void *_src, size_t _size, MemcpyKind _kind) {
+  cudaError_t lRes;
+  CUDA_RUN(cudaMemcpy(_dest, _src, _size, static_cast<cudaMemcpyKind>(_kind)));
+
+  return true;
+error:
+  return false;
+}
+
+extern "C" void runFree(void *_ptr) { cudaFree(_ptr); }
+
+extern "C" __global__ void kTransformVecs(vec3 *_src, vec3 *_dest, uint32_t _size, mat4 _mat) {
+  for (uint32_t i = blockIdx.x * blockDim.x + threadIdx.x; i < _size; i += blockDim.x * gridDim.x) {
+    _dest[i] = _mat * vec4(_src[i], 1.0f);
+  }
+}
+
+extern "C" void transformVecs(vec3 *_src, vec3 *_dest, uint32_t _size, mat4 _mat) {
+  kTransformVecs<<<(_size + 256 - 1) / 256, 256>>>(_src, _dest, _size, _mat);
+}

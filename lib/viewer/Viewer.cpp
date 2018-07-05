@@ -178,8 +178,10 @@ void Viewer::keyCallback(Window &_win, State &_state, Camera &_cam, int _key) {
     case GLFW_KEY_A:
     case GLFW_KEY_S:
     case GLFW_KEY_D:
-      vRState.vCurrCam = UINT32_MAX;
-      vPlaybackIndex   = UINT32_MAX;
+      if (_state.meshOffsets.empty()) {
+        vRState.vCurrCam = UINT32_MAX;
+        vPlaybackIndex   = UINT32_MAX;
+      }
       break;
 
     case GLFW_KEY_F1: vRState.vRendererType = Renderer::MESH; break;
@@ -306,7 +308,13 @@ ErrorCode Viewer::runImpl(State &_state) {
     if (vRecording) { _state.camTrac.push_back(make_shared<Camera>(lCam)); }
     if (vPlaybackIndex != UINT32_MAX) {
       Camera *lTempCam = dynamic_cast<Camera *>(_state.camTrac[vPlaybackIndex].get());
-      if (lTempCam) lCam = *lTempCam;
+
+      if (_state.meshOffsets.empty()) {
+        if (lTempCam) lCam = *lTempCam;
+      } else {
+        vRenderer->updateMesh(_state, lTempCam, 0);
+      }
+
       vPlaybackIndex++;
       if (vPlaybackIndex >= _state.camTrac.size()) { vPlaybackIndex = 0; }
     }

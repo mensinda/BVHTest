@@ -62,6 +62,12 @@ struct State final {
     nanoseconds      time = nanoseconds(0);
   };
 
+  struct NewMeshOffset {
+    uint32_t vertOffset;
+    uint32_t normOffset;
+    uint32_t facesOffset;
+  };
+
   struct CudaMemory final {
     CUDAMemoryBVHPointer bvh;
     MeshRaw              rawMesh;
@@ -69,11 +75,12 @@ struct State final {
 
   std::vector<CMD> commands;
 
-  Mesh                 mesh;
-  std::vector<CAM_PTR> cameras;
-  std::vector<CAM_PTR> camTrac;
-  std::vector<Work>    work;
-  BVH                  bvh;
+  Mesh                       mesh;
+  std::vector<NewMeshOffset> meshOffsets;
+  std::vector<CAM_PTR>       cameras;
+  std::vector<CAM_PTR>       camTrac;
+  std::vector<Work>          work;
+  BVH                        bvh;
 };
 
 } // namespace BVHTest::base

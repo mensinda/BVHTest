@@ -185,6 +185,8 @@ ErrorCode LoadAdd::runImpl(base::State &_state) {
 
   mat4 lScale = glm::scale(vec3(vScale, vScale, vScale));
 
+  _state.meshOffsets.push_back({vOffsetVert, vOffsetNorm, vOffsetFaces});
+
 #pragma omp parallel for
   for (uint32_t i = vOffsetFaces; i < _state.mesh.faces.size(); ++i) {
     Triangle &lTri = _state.mesh.faces[i];

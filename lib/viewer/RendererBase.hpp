@@ -70,6 +70,8 @@ class RendererBase {
   virtual Renderer    getType() const                = 0;
   virtual uint32_t    numRenderModes()               = 0;
   virtual std::string getRenderModeString()          = 0;
+
+  virtual void updateMesh(base::State &_state, base::CameraBase *_cam, uint32_t _offsetIndex);
 };
 
 } // namespace BVHTest::view

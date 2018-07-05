@@ -26,6 +26,11 @@ class MeshRenderer : public RendererBase {
   GLint vUniformLoc = 0;
 
   size_t vNumIndex = 0;
+  size_t vNumVert  = 0;
+
+  base::MeshRaw vRawMesh;
+
+  glm::vec3 *vDevOriginalVert = nullptr;
 
  public:
   MeshRenderer() = delete;
@@ -34,6 +39,7 @@ class MeshRenderer : public RendererBase {
 
   void        render() override;
   void        update(base::CameraBase *_cam) override;
+  void        updateMesh(base::State &_state, base::CameraBase *_cam, uint32_t _offsetIndex) override;
   Renderer    getType() const override { return Renderer::MESH; }
   uint32_t    numRenderModes() override { return 2; }
   std::string getRenderModeString() override;
