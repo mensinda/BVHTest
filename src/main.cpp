@@ -32,6 +32,7 @@
 #include "io/ExportMesh.hpp"
 #include "io/ImportMesh.hpp"
 #include "io/Load.hpp"
+#include "io/LoadAdd.hpp"
 #include "io/WriteImage.hpp"
 #include "misc/Sleep.hpp"
 #include "misc/Validate.hpp"
@@ -54,15 +55,16 @@ using namespace Enum2Str;
 using namespace nlohmann;
 
 const vector<string> gCommandList = {
-    "import",     "load",       "export", "BVHExport", "BVHImport", "camExport",    "camImport",    "writeImg",
-    "copyToGPU",  "copyToHost", "median", "wald07",    "bittner13", "bittner13Par", "bittner13GPU", "CPUTracer",
-    "CUDATracer", "bruteForce", "status", "validate",  "sleep",     "viewer"};
+    "import",    "load",       "loadAdd",    "export", "BVHExport", "BVHImport", "camExport",    "camImport",
+    "writeImg",  "copyToGPU",  "copyToHost", "median", "wald07",    "bittner13", "bittner13Par", "bittner13GPU",
+    "CPUTracer", "CUDATracer", "bruteForce", "status", "validate",  "sleep",     "viewer"};
 
 // String command to object
 Config::CMD_PTR fromString(string _s) {
   switch (fnv1aHash(_s)) {
     case "import"_h: return make_shared<IO::ImportMesh>();
     case "load"_h: return make_shared<IO::Load>();
+    case "loadAdd"_h: return make_shared<IO::LoadAdd>();
     case "export"_h: return make_shared<IO::ExportMesh>();
     case "BVHExport"_h: return make_shared<IO::BVHExport>();
     case "BVHImport"_h: return make_shared<IO::BVHImport>();
