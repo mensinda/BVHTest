@@ -45,7 +45,7 @@ std::vector<TriWithBB> BuilderBase::boundingVolumesFromMesh(Mesh const &_mesh) {
     vec3 const &v2 = _mesh.vert[_mesh.faces[i].v2];
     vec3 const &v3 = _mesh.vert[_mesh.faces[i].v3];
 
-    lRes[i].tri = _mesh.faces[i];
+    lRes[i].tri = i;
 
     lRes[i].bbox.minMax[0].x = std::min(std::min(v1.x, v2.x), v3.x) - std::numeric_limits<float>::epsilon();
     lRes[i].bbox.minMax[0].y = std::min(std::min(v1.y, v2.y), v3.y) - std::numeric_limits<float>::epsilon();
@@ -62,13 +62,8 @@ std::vector<TriWithBB> BuilderBase::boundingVolumesFromMesh(Mesh const &_mesh) {
 }
 
 
-BuilderBase::BuildRes BuilderBase::build(BuilderBase::ITER _begin,
-                                         BuilderBase::ITER _end,
-                                         BVH &             _bvh,
-                                         vector<Triangle> &_tris,
-                                         uint32_t          _parent,
-                                         bool              _isLeftChild,
-                                         uint32_t          _level) {
+BuilderBase::BuildRes BuilderBase::build(
+    BuilderBase::ITER _begin, BuilderBase::ITER _end, BVH &_bvh, uint32_t _parent, bool _isLeftChild, uint32_t _level) {
   size_t   lSize    = _end - _begin;
   uint32_t lNewNode = _bvh.nextNodeIndex();
   AABB     lNodeBBox;
@@ -77,16 +72,10 @@ BuilderBase::BuildRes BuilderBase::build(BuilderBase::ITER _begin,
 
   if (lSize == 1) {
     lNodeBBox = _begin[0].bbox;
-    _bvh.addLeaf(lNodeBBox, _parent, static_cast<uint32_t>(_tris.size()), 1, _isLeftChild);
-    _tris.emplace_back(_begin[0].tri);
+    _bvh.addLeaf(lNodeBBox, _parent, _begin[0].tri, 1, _isLeftChild);
   } else if (lSize == 2) {
     lNodeBBox = _begin[0].bbox;
     lNodeBBox.mergeWith(_begin[1].bbox);
-
-    _tris.emplace_back(_begin[0].tri);
-    _tris.emplace_back(_begin[1].tri);
-
-    uint32_t lNewTrisSize = static_cast<uint32_t>(_tris.size());
 
     _bvh.addInner(lNodeBBox,    // AABB
                   _parent,      // parent
@@ -96,8 +85,8 @@ BuilderBase::BuildRes BuilderBase::build(BuilderBase::ITER _begin,
                   _isLeftChild  // is current node a left child?
     );
 
-    _bvh.addLeaf(_begin[0].bbox, lNewNode, lNewTrisSize - 2, 1, true);  // Left child
-    _bvh.addLeaf(_begin[1].bbox, lNewNode, lNewTrisSize - 1, 1, false); // Right child
+    _bvh.addLeaf(_begin[0].bbox, lNewNode, _begin[0].tri, 1, true);  // Left child
+    _bvh.addLeaf(_begin[1].bbox, lNewNode, _begin[1].tri, 1, false); // Right child
   } else {
     ITER lSplitAt = split(_begin, _end, _level);
 
@@ -105,8 +94,8 @@ BuilderBase::BuildRes BuilderBase::build(BuilderBase::ITER _begin,
     _bvh.addInner({}, _parent, UINT32_MAX, UINT32_MAX, UINT32_MAX, _isLeftChild);
     BVHNode *lNode = _bvh[lNewNode];
 
-    auto [lID1, lBBOX1] = build(_begin, lSplitAt, _bvh, _tris, lNewNode, true, _level + 1); // Left
-    auto [lID2, lBBOX2] = build(lSplitAt, _end, _bvh, _tris, lNewNode, false, _level + 1);  // Right
+    auto [lID1, lBBOX1] = build(_begin, lSplitAt, _bvh, lNewNode, true, _level + 1); // Left
+    auto [lID2, lBBOX2] = build(lSplitAt, _end, _bvh, lNewNode, false, _level + 1);  // Right
 
     lNodeBBox = lBBOX1;
     lNodeBBox.mergeWith(lBBOX2);

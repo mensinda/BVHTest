@@ -83,7 +83,6 @@ ErrorCode BVHImport::runImpl(State &_state) {
 
   fs::path lBinaryPath = lDataDir / lControlData.at("bin").get<string>();
   uint32_t lSize       = lControlData.at("BVHSize").get<uint32_t>();
-  uint32_t lNumTris    = lControlData.at("numTris").get<uint32_t>();
   _state.bvh.setMaxLevel(lControlData.at("treeHeight").get<uint16_t>());
   uint32_t lCheckSumComp = lControlData.at("compressedChecksum").get<uint32_t>();
   uint32_t lCheckSumRaw  = lControlData.at("rawChecksum").get<uint32_t>();
@@ -103,7 +102,7 @@ ErrorCode BVHImport::runImpl(State &_state) {
   auto lBeginPos = lBinaryFile.tellg();
   lBinaryFile.seekg(0, lBinaryFile.end);
   size_t lCompSize = lBinaryFile.tellg() - lBeginPos;
-  size_t lDataSize = lSize * sizeof(BVHNode) + lNumTris * sizeof(Triangle);
+  size_t lDataSize = lSize * sizeof(BVHNode);
   lBinaryFile.seekg(0, lBinaryFile.beg);
 
   unique_ptr<uint8_t[]> lComp = unique_ptr<uint8_t[]>(new uint8_t[lCompSize]);
@@ -137,9 +136,7 @@ ErrorCode BVHImport::runImpl(State &_state) {
   }
 
   _state.bvh.resize(lSize);
-  _state.mesh.faces.resize(lNumTris);
   memcpy(_state.bvh.data(), lData.get(), lSize * sizeof(BVHNode));
-  memcpy(_state.mesh.faces.data(), lData.get() + lSize * sizeof(BVHNode), lNumTris * sizeof(Triangle));
 
   return ErrorCode::OK;
 }

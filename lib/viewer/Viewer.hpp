@@ -80,7 +80,10 @@ class Viewer final : public base::Command {
   inline std::string       getName() const override { return "viewer"; }
   inline std::string       getDesc() const override { return "render the mesh, BVH, etc. with OpenGL"; }
   inline base::CommandType getType() const override { return base::CommandType::VIEWER; }
-  inline uint64_t getRequiredCommands() const override { return static_cast<uint64_t>(base::CommandType::IMPORT); }
+  inline uint64_t          getRequiredCommands() const override {
+    return static_cast<uint64_t>(base::CommandType::IMPORT) | static_cast<uint64_t>(base::CommandType::BVH_BUILD) |
+           static_cast<uint64_t>(base::CommandType::CUDA_INIT);
+  }
 
   base::ErrorCode runImpl(base::State &_state) override;
 

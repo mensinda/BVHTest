@@ -67,15 +67,12 @@ ErrorCode BVHExport::runImpl(State &_state) {
 
 
   // Compress
-  size_t                lInSize   = _state.bvh.size() * sizeof(BVHNode) + _state.mesh.faces.size() * sizeof(Triangle);
+  size_t                lInSize   = _state.bvh.size() * sizeof(BVHNode);
   size_t                lCompSize = lInSize + (lInSize / 16) + 64 + 3;
   unique_ptr<uint8_t[]> lData     = unique_ptr<uint8_t[]>(new uint8_t[lInSize]);
   unique_ptr<uint8_t[]> lComp     = unique_ptr<uint8_t[]>(new uint8_t[lCompSize]);
 
   memcpy(lData.get(), reinterpret_cast<char *>(_state.bvh.data()), _state.bvh.size() * sizeof(BVHNode));
-  memcpy(lData.get() + _state.bvh.size() * sizeof(BVHNode),
-         reinterpret_cast<char *>(_state.mesh.faces.data()),
-         _state.mesh.faces.size() * sizeof(Triangle));
 
   auto lCheckSumRaw = lzo_adler32(0, nullptr, 0);
   lCheckSumRaw      = lzo_adler32(lCheckSumRaw, lData.get(), lInSize);
@@ -93,7 +90,6 @@ ErrorCode BVHExport::runImpl(State &_state) {
   json lControlData = {{"version", vFormatVers},
                        {"bin", (vExportName + "_bvh.bin")},
                        {"BVHSize", _state.bvh.size()},
-                       {"numTris", _state.mesh.faces.size()},
                        {"treeHeight", _state.bvh.maxLevel()},
                        {"compressedChecksum", lCheckSumComp},
                        {"rawChecksum", lCheckSumRaw}};

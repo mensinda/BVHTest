@@ -39,13 +39,12 @@ class BuilderBase : public base::Command {
  protected:
   virtual ITER split(ITER _begin, ITER _end, uint32_t _level);
 
-  BuildRes build(ITER                         _begin,
-                 ITER                         _end,
-                 BVHTest::base::BVH &         _bvh,
-                 std::vector<base::Triangle> &_tris,
-                 uint32_t                     _parent      = 0,
-                 bool                         _isLeftChild = 0,
-                 uint32_t                     _level       = 0);
+  BuildRes build(ITER                _begin,
+                 ITER                _end,
+                 BVHTest::base::BVH &_bvh,
+                 uint32_t            _parent      = 0,
+                 bool                _isLeftChild = 0,
+                 uint32_t            _level       = 0);
 
  public:
   BuilderBase() = default;

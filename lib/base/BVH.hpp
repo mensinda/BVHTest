@@ -101,10 +101,10 @@ struct AABB {
   }
 };
 
-struct TriWithBB {
-  Triangle  tri;
+struct alignas(16) TriWithBB {
   AABB      bbox;
   glm::vec3 centroid;
+  uint32_t  tri;
 };
 
 static const uint8_t TRUE  = 1;

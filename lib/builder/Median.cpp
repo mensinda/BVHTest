@@ -31,13 +31,10 @@ Median::ITER Median::split(Median::ITER _begin, Median::ITER _end, uint32_t) { r
 
 
 ErrorCode Median::runImpl(State &_state) {
-  vector<Triangle> lResVec;
-  lResVec.reserve(_state.mesh.faces.size());
   _state.bvh.reserve(_state.mesh.faces.size() * 2); // Assuming perfect binary tree
 
   auto lAABBs = boundingVolumesFromMesh(_state.mesh);
-  build(begin(lAABBs), end(lAABBs), _state.bvh, lResVec);
+  build(begin(lAABBs), end(lAABBs), _state.bvh);
 
-  swap(lResVec, _state.mesh.faces); // Copy the result triangles
   return ErrorCode::OK;
 }
