@@ -64,7 +64,17 @@ ErrorCode CameraExport::runImpl(State &_state) {
     lCameras.push_back(json{{"type", Enum2Str::toStr(i->getType())}, {"cam", i->toJSON()}});
   }
 
-  json lControlData = {{"version", vFormatVers}, {"cameras", lCameras}};
+  vector<json> lCamTrac;
+  for (auto const &i : _state.camTrac) {
+    if (i->getType() == CameraType::PERSPECTIVE) { lCamTrac.push_back(i->toJSON()); }
+  }
+
+  json lControlData;
+  if (lCamTrac.empty()) {
+    lControlData = {{"version", vFormatVers}, {"cameras", lCameras}};
+  } else {
+    lControlData = {{"version", vFormatVers}, {"cameras", lCameras}, {"camTrac", lCamTrac}};
+  }
 
   fstream lControlFile(lControlPath.string(), lControlFile.out | lControlFile.trunc);
 

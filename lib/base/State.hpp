@@ -71,6 +71,7 @@ struct State final {
 
   Mesh                 mesh;
   std::vector<CAM_PTR> cameras;
+  std::vector<CAM_PTR> camTrac;
   std::vector<Work>    work;
   BVH                  bvh;
 };

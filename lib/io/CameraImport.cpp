@@ -95,5 +95,14 @@ ErrorCode CameraImport::runImpl(State &_state) {
     _state.cameras.push_back(lCamPtr);
   }
 
+  if (lData.count("camTrac") > 0) {
+    std::vector<json> lCamTrac = lData.at("camTrac").get<vector<json>>();
+    for (json i : lCamTrac) {
+      auto lCamPtr = make_shared<Camera>();
+      lCamPtr->fromJSON(i);
+      _state.camTrac.push_back(lCamPtr);
+    }
+  }
+
   return ErrorCode::OK;
 }

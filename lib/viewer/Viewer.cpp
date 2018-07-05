@@ -165,6 +165,7 @@ void Viewer::keyCallback(Window &_win, State &_state, Camera &_cam, int _key) {
       _cam           = *lCamSaved;
       vRState.vPitch = 0;
       vRState.vYaw   = -90;
+      vPlaybackIndex = UINT32_MAX;
       break;
     }
     case GLFW_KEY_DELETE:
@@ -176,11 +177,24 @@ void Viewer::keyCallback(Window &_win, State &_state, Camera &_cam, int _key) {
     case GLFW_KEY_W:
     case GLFW_KEY_A:
     case GLFW_KEY_S:
-    case GLFW_KEY_D: vRState.vCurrCam = UINT32_MAX; break;
+    case GLFW_KEY_D:
+      vRState.vCurrCam = UINT32_MAX;
+      vPlaybackIndex   = UINT32_MAX;
+      break;
 
     case GLFW_KEY_F1: vRState.vRendererType = Renderer::MESH; break;
     case GLFW_KEY_F2: vRState.vRendererType = Renderer::BVH; break;
     case GLFW_KEY_F3: vRState.vRendererType = Renderer::CUDA_TRACER; break;
+
+    case GLFW_KEY_SPACE:
+      if (!vRecording) { _state.camTrac.clear(); }
+      vRecording     = !vRecording;
+      vPlaybackIndex = UINT32_MAX;
+      break;
+    case GLFW_KEY_P:
+      vRecording     = false;
+      vPlaybackIndex = 0;
+      break;
 
     case GLFW_KEY_R:
       if (vRenderer) { vRenderer->toggleRenderMode(); }
@@ -232,7 +246,6 @@ ErrorCode Viewer::runImpl(State &_state) {
 
   TextInit lTextInit;
   Camera   lCam;
-  Text     lFPSText;
   Text     lControl;
   Text     lUsage;
   uint32_t lFrames  = 0;
@@ -245,9 +258,8 @@ ErrorCode Viewer::runImpl(State &_state) {
 
   auto [lScreenWidth, lScreenHeight] = lWindow.getResolution();
   gltViewport(lScreenWidth, lScreenHeight);
-  lFPSText.setLine(0);
-  lControl.setLine(1);
-  lUsage.setPos(0, static_cast<float>(lScreenHeight) - lUsage.lineHeight() * 8);
+  lControl.setLine(0);
+  lUsage.setPos(0, static_cast<float>(lScreenHeight) - lUsage.lineHeight() * 9);
 
   lUsage.set(
       "Movemet:   WASD + Mouse + Scroll wheel    ###   Movement Speed: KP +/-"
@@ -257,7 +269,8 @@ ErrorCode Viewer::runImpl(State &_state) {
       "\n - Delete: DELETE"
       "\nToggle overlay: BACKSPACE"
       "\nSwitch Renderes: Function keys (F1, F2, etc.)"
-      "\nToggle Render mode: R");
+      "\nToggle Render mode: R"
+      "\nToggle Record: SPACE    ###    Playback: P");
 
   auto lCurr         = high_resolution_clock::now();
   auto lFPSTimeStamp = high_resolution_clock::now();
@@ -290,6 +303,14 @@ ErrorCode Viewer::runImpl(State &_state) {
       }
     }
 
+    if (vRecording) { _state.camTrac.push_back(make_shared<Camera>(lCam)); }
+    if (vPlaybackIndex != UINT32_MAX) {
+      Camera *lTempCam = dynamic_cast<Camera *>(_state.camTrac[vPlaybackIndex].get());
+      if (lTempCam) lCam = *lTempCam;
+      vPlaybackIndex++;
+      if (vPlaybackIndex >= _state.camTrac.size()) { vPlaybackIndex = 0; }
+    }
+
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     vRenderer->update(&lCam);
     vRenderer->render();
@@ -301,14 +322,27 @@ ErrorCode Viewer::runImpl(State &_state) {
         lLastFPS      = lFrames;
       }
 
-      lFPSText.set(fmt::format("FPS: {}; Frametime: {}ms", lFPS, lFrameTime));
-      lControl.set(fmt::format("Speed level: {}\nSaved cameras: {}\nCurrent camera: {}\nRenderer: {}\nMode: {}",
-                               vRState.vSpeedLevel,
-                               _state.cameras.size(),
-                               vRState.vCurrCam == UINT32_MAX ? "-" : to_string(vRState.vCurrCam),
-                               toStr(vRState.vRendererType),
-                               vRenderer->getRenderModeString()));
-      lFPSText.draw();
+      lControl.set(
+          fmt::format("FPS: {}; Frametime: {}ms"
+                      "\nSpeed level: {}"
+                      "\nSaved cameras: {}"
+                      "\nCurrent camera: {}"
+                      "\nRenderer: {}"
+                      "\nMode: {}"
+                      "\nRecording: {}"
+                      "\nPlayback Frame: {} of {}",
+                      lFPS,
+                      lFrameTime,
+                      vRState.vSpeedLevel,
+                      _state.cameras.size(),
+                      vRState.vCurrCam == UINT32_MAX ? "-" : to_string(vRState.vCurrCam),
+                      toStr(vRState.vRendererType),
+                      vRenderer->getRenderModeString(),
+                      vRecording ? "TRUE" : "FALSE",
+                      vPlaybackIndex == UINT32_MAX ? -1 : (int)vPlaybackIndex,
+                      _state.camTrac.size()));
+
+      glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
       lControl.draw();
       lUsage.draw();
     }
