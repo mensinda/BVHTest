@@ -20,16 +20,12 @@
 #include <iostream>
 #include <string>
 
+using namespace glm;
 using namespace std;
 using namespace BVHTest;
 using namespace BVHTest::view;
 using namespace BVHTest::base;
 using namespace BVHTest::misc;
-
-struct VBOData {
-  glm::vec3 vert;
-  glm::vec3 norm;
-};
 
 static const char *gVertexShader = R"__GLSL__(
 #version 330 core
@@ -59,32 +55,32 @@ void main() {
 )__GLSL__";
 
 
-MeshRenderer::MeshRenderer(const Mesh &_mesh) {
-  // Generate OpenGL VBO data
-  std::vector<VBOData> lOGLData;
-  lOGLData.resize(_mesh.vert.size());
-  for (size_t i = 0; i < _mesh.vert.size(); ++i) {
-    lOGLData[i].vert = _mesh.vert[i];
-    lOGLData[i].norm = _mesh.norm[i];
-  }
+MeshRenderer::MeshRenderer(State &_state) {
+  auto const &lMesh = _state.mesh;
 
   bindVAO();
-  bindVBO();
-  glBufferData(GL_ARRAY_BUFFER, lOGLData.size() * sizeof(VBOData), lOGLData.data(), GL_STATIC_DRAW);
+  generateVBOData(_state.mesh.vert.size());
+  copyVBODataDevice2Device(_state.cudaMem.rawMesh.vert, _state.cudaMem.rawMesh.numVert);
+
+  bindNBO();
+  glBufferData(GL_ARRAY_BUFFER, lMesh.norm.size() * sizeof(vec3), lMesh.norm.data(), GL_STATIC_DRAW);
 
   bindEBO();
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, _mesh.faces.size() * sizeof(Triangle), _mesh.faces.data(), GL_STATIC_DRAW);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, lMesh.faces.size() * sizeof(Triangle), lMesh.faces.data(), GL_STATIC_DRAW);
 
+  bindVBO();
   glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(VBOData), (void *)0);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
+
+  bindNBO();
   glEnableVertexAttribArray(1);
-  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(VBOData), (void *)offsetof(VBOData, norm));
+  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
 
   unbindVAO();
 
   if (!compileShaders(gVertexShader, gFragmentShader)) { return; }
 
-  vNumIndex   = _mesh.faces.size() * 3;
+  vNumIndex   = lMesh.faces.size() * 3;
   vUniformLoc = getLocation("uMVP");
 }
 

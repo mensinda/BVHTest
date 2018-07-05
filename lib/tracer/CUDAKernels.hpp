@@ -53,8 +53,10 @@ extern "C" void tracerImage(Ray *      _rays,
 extern "C" void copyImageToHost(CUDAPixel *_hostPixel, CUDAPixel *_cudaImg, uint32_t _w, uint32_t _h);
 
 extern "C" bool registerOGLImage(void **_resource, uint32_t _image);
+extern "C" bool registerOGLBuffer(void **_resource, uint32_t _buffer);
 extern "C" bool copyToOGLImage(void **_resource, CUDAPixel *_img, uint32_t _w, uint32_t _h);
-extern "C" void unregisterOGLImage(void *_resource);
+extern "C" bool copyToOGLBuffer(void **_resource, vec3 *_data, uint32_t _num);
+extern "C" void unregisterOGL(void *_resource);
 
 extern "C" uint16_t calcIntCountPercentile(CUDAPixel *_devImage, uint32_t _w, uint32_t _h, float _percent);
 

@@ -287,7 +287,7 @@ ErrorCode Viewer::runImpl(State &_state) {
       switch (vRState.vRendererType) {
         case Renderer::MESH:
           vRenderer.reset();
-          vRenderer = make_shared<MeshRenderer>(_state.mesh);
+          vRenderer = make_shared<MeshRenderer>(_state);
           glEnable(GL_DEPTH_TEST);
           break;
         case Renderer::BVH:

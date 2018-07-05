@@ -29,7 +29,7 @@ class MeshRenderer : public RendererBase {
 
  public:
   MeshRenderer() = delete;
-  MeshRenderer(base::Mesh const &_mesh);
+  MeshRenderer(base::State &_state);
   ~MeshRenderer();
 
   void        render() override;

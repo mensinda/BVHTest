@@ -158,7 +158,7 @@ LiveTracer::LiveTracer(State &_state, uint32_t _w, uint32_t _h) {
 }
 
 LiveTracer::~LiveTracer() {
-  unregisterOGLImage(vCudaRes);
+  unregisterOGL(vCudaRes);
   freeRays(&vRays);
   freeImage(vDeviceImage);
   glDeleteTextures(1, &vTexture);

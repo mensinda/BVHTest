@@ -17,6 +17,7 @@
 #pragma once
 
 #include "base/CameraBase.hpp"
+#include "base/State.hpp"
 #include "gl3w.h"
 
 namespace BVHTest::view {
@@ -27,6 +28,7 @@ class RendererBase {
  private:
   GLuint vVAO = 0;
   GLuint vVBO = 0;
+  GLuint vNBO = 0;
   GLuint vEBO = 0;
 
   GLuint vVertexShader   = 0;
@@ -35,9 +37,12 @@ class RendererBase {
 
   uint32_t vRenderMode = 0;
 
+  void *vCUDABuffer = nullptr;
+
  protected:
   inline void bindVAO() { glBindVertexArray(vVAO); }
   inline void bindVBO() { glBindBuffer(GL_ARRAY_BUFFER, vVBO); }
+  inline void bindNBO() { glBindBuffer(GL_ARRAY_BUFFER, vNBO); }
   inline void bindEBO() { glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vEBO); }
   inline void useProg() { glUseProgram(vShaderProg); }
 
@@ -45,6 +50,9 @@ class RendererBase {
 
   bool  compileShaders(const char *_vert, const char *_frag);
   GLint getLocation(const char *_name);
+
+  bool generateVBOData(uint32_t _numVert);
+  bool copyVBODataDevice2Device(glm::vec3 *_data, uint32_t _size);
 
  public:
   RendererBase();

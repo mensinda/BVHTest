@@ -473,6 +473,26 @@ error:
   return false;
 }
 
+extern "C" bool copyToOGLBuffer(void **_resource, vec3 *_data, uint32_t _num) {
+  cudaError_t            lRes;
+  vec3 *                 lBoundData;
+  size_t                 lNumBytes;
+  cudaGraphicsResource **lResource = reinterpret_cast<cudaGraphicsResource **>(_resource);
+
+  CUDA_RUN(cudaPeekAtLastError());
+  CUDA_RUN(cudaGraphicsMapResources(1, lResource, 0));
+  CUDA_RUN(cudaGraphicsResourceGetMappedPointer((void **)&lBoundData, &lNumBytes, *lResource));
+
+  CUDA_RUN(cudaMemcpy(lBoundData, _data, _num * sizeof(vec3), cudaMemcpyDeviceToDevice));
+
+  CUDA_RUN(cudaGraphicsUnmapResources(1, lResource, 0));
+
+  return true;
+
+error:
+  return false;
+}
+
 extern "C" void copyImageToHost(CUDAPixel *_hostPixel, CUDAPixel *_cudaImg, uint32_t _w, uint32_t _h) {
   cudaMemcpy(_hostPixel, _cudaImg, _w * _h * sizeof(CUDAPixel), cudaMemcpyDeviceToHost);
 }
@@ -490,8 +510,22 @@ error:
   return false;
 }
 
-extern "C" void unregisterOGLImage(void *_resource) {
-  cudaGraphicsUnregisterResource(reinterpret_cast<cudaGraphicsResource *>(_resource));
+extern "C" bool registerOGLBuffer(void **_resource, uint32_t _buffer) {
+  cudaError_t lRes;
+  CUDA_RUN(cudaGraphicsGLRegisterBuffer(
+      reinterpret_cast<cudaGraphicsResource **>(_resource), _buffer, cudaGraphicsMapFlagsWriteDiscard));
+  return true;
+
+error:
+  return false;
+}
+
+extern "C" void unregisterOGL(void *_resource) {
+  cudaError_t lRes;
+  CUDA_RUN(cudaDeviceSynchronize());
+  CUDA_RUN(cudaGraphicsUnregisterResource(reinterpret_cast<cudaGraphicsResource *>(_resource)));
+error:
+  return;
 }
 
 

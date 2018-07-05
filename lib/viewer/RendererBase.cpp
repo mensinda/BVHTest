@@ -16,7 +16,9 @@
 
 #include "BVHTestCfg.hpp"
 #include "RendererBase.hpp"
+#include "tracer/CUDAKernels.hpp"
 
+using namespace glm;
 using namespace std;
 using namespace BVHTest;
 using namespace BVHTest::view;
@@ -24,6 +26,7 @@ using namespace BVHTest::view;
 RendererBase::RendererBase() {
   glGenVertexArrays(1, &vVAO);
   glGenBuffers(1, &vVBO);
+  glGenBuffers(1, &vNBO);
   glGenBuffers(1, &vEBO);
 
   vVertexShader   = glCreateShader(GL_VERTEX_SHADER);
@@ -32,7 +35,10 @@ RendererBase::RendererBase() {
 }
 
 RendererBase::~RendererBase() {
+  if (vCUDABuffer) { unregisterOGL(vCUDABuffer); }
+
   glDeleteBuffers(1, &vVBO);
+  glDeleteBuffers(1, &vNBO);
   glDeleteBuffers(1, &vEBO);
   glDeleteVertexArrays(1, &vVAO);
 
@@ -87,3 +93,17 @@ bool RendererBase::compileShaders(const char *_vert, const char *_frag) {
 }
 
 GLint RendererBase::getLocation(const char *_name) { return glGetUniformLocation(vShaderProg, _name); }
+
+
+bool RendererBase::generateVBOData(uint32_t _numVert) {
+  bindVAO();
+  bindVBO();
+  glBufferData(GL_ARRAY_BUFFER, _numVert * sizeof(vec3), nullptr, GL_DYNAMIC_DRAW);
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+  return registerOGLBuffer(&vCUDABuffer, vVBO);
+}
+
+bool RendererBase::copyVBODataDevice2Device(vec3 *_data, uint32_t _size) {
+  return copyToOGLBuffer(&vCUDABuffer, _data, _size);
+}
