@@ -453,6 +453,83 @@ error:
   return lResult;
 }
 
+struct DynNodeSelector {
+  uint32_t begin;
+  BVHNode *nodes;
+
+  __host__ __device__ __forceinline__ DynNodeSelector(uint32_t _begin, BVHNode *_nodes)
+      : begin(_begin), nodes(_nodes) {}
+
+  __device__ __forceinline__ bool operator()(const uint32_t &a) const { return nodes[a].left >= begin; }
+};
+
+extern "C" void selectDynamicLeafNodes(GPUWorkingMemory *    _data,
+                                       CUDAMemoryBVHPointer *_GPUbvh,
+                                       uint32_t *            _out,
+                                       uint32_t *            _numOut,
+                                       uint32_t              _beginDynamicTriangle) {
+  cudaError_t     lRes;
+  int *           lNumSelected        = nullptr;
+  void *          lCubTempStorage     = nullptr;
+  size_t          lCubTempStorageSize = 0;
+  DynNodeSelector lSelector(_beginDynamicTriangle, _GPUbvh->nodes);
+
+  CUDA_RUN(cudaMalloc(&lNumSelected, sizeof(int)));
+
+  CUDA_RUN(cub::DeviceSelect::If(
+      lCubTempStorage, lCubTempStorageSize, _data->leafNodes, _out, lNumSelected, _data->numLeafNodes, lSelector));
+
+  CUDA_RUN(cudaMalloc(&lCubTempStorage, lCubTempStorageSize));
+
+  CUDA_RUN(cub::DeviceSelect::If(
+      lCubTempStorage, lCubTempStorageSize, _data->leafNodes, _out, lNumSelected, _data->numLeafNodes, lSelector));
+
+  CUDA_RUN(cudaMemcpy(_numOut, lNumSelected, sizeof(int), cudaMemcpyDeviceToHost));
+
+error:
+  cudaFree(lNumSelected);
+  cudaFree(lCubTempStorage);
+}
+
+extern "C" __global__ void kRefitLeafBVHTris(
+    uint32_t *_nodeIDs, BVHNode *_nodes, Triangle *_faces, vec3 *_vert, uint32_t _num) {
+  for (uint32_t i = blockIdx.x * blockDim.x + threadIdx.x; i < _num; i += blockDim.x * gridDim.x) {
+    uint32_t const lID   = _nodeIDs[i];
+    BVHNode        lNode = _nodes[lID];
+    Triangle const lFace = _faces[lNode.left];
+    vec3           lV1   = _vert[lFace.v1]; // Will be min
+    vec3           lV2   = _vert[lFace.v2]; // Will be max
+    vec3           lV3   = _vert[lFace.v3];
+
+    if (lV2.x < lV1.x) { lV1.x = lV2.x; }
+    if (lV2.y < lV1.y) { lV1.y = lV2.y; }
+    if (lV2.z < lV1.z) { lV1.z = lV2.z; }
+    if (lV3.x < lV1.x) { lV1.x = lV3.x; }
+    if (lV3.y < lV1.y) { lV1.y = lV3.y; }
+    if (lV3.z < lV1.z) { lV1.z = lV3.z; }
+
+    if (lV1.x > lV2.x) { lV2.x = lV1.x; }
+    if (lV1.y > lV2.y) { lV2.y = lV1.y; }
+    if (lV1.z > lV2.z) { lV2.z = lV1.z; }
+    if (lV3.x > lV2.x) { lV2.x = lV3.x; }
+    if (lV3.y > lV2.y) { lV2.y = lV3.y; }
+    if (lV3.z > lV2.z) { lV2.z = lV3.z; }
+
+    lNode.bbox.minMax[0] = lV1;
+    lNode.bbox.minMax[1] = lV2;
+    _nodes[lID]          = lNode;
+  }
+}
+
+extern "C" void refitDynamicTris(CUDAMemoryBVHPointer *_GPUbvh,
+                                 MeshRaw               _cudaMesh,
+                                 uint32_t *            _nodesToUpdate,
+                                 uint32_t              _numNodes,
+                                 uint32_t              _blockSize) {
+  uint32_t lBlks = (_numNodes + _blockSize - 1) / _blockSize;
+  kRefitLeafBVHTris<<<lBlks, _blockSize>>>(_nodesToUpdate, _GPUbvh->nodes, _cudaMesh.faces, _cudaMesh.vert, _numNodes);
+}
+
 
 extern "C" bool copyToOGLImage(void **_resource, CUDAPixel *_img, uint32_t _w, uint32_t _h) {
   cudaError_t            lRes;

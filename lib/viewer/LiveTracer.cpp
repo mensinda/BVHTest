@@ -14,14 +14,21 @@
  * limitations under the License.
  */
 
+#define GLM_ENABLE_EXPERIMENTAL
+
 #include "LiveTracer.hpp"
+#include "cuda/cudaFN.hpp"
 #include "misc/Camera.hpp"
 #include "tracer/CUDAKernels.hpp"
 #include "tracer/CUDATracer.hpp"
+#include <glm/gtx/transform.hpp>
 
+using namespace std;
+using namespace glm;
 using namespace BVHTest;
 using namespace BVHTest::base;
 using namespace BVHTest::view;
+using namespace BVHTest::misc;
 
 static const char *gVertexShader = R"__GLSL__(
 #version 330 core
@@ -113,11 +120,32 @@ void main() {
 )__GLSL__";
 
 LiveTracer::LiveTracer(State &_state, uint32_t _w, uint32_t _h) {
-  vWidth  = _w;
-  vHeight = _h;
+  vWidth   = _w;
+  vHeight  = _h;
+  vCudaMem = _state.cudaMem;
 
   allocateRays(&vRays, vWidth * vHeight);
   allocateImage(&vDeviceImage, vWidth, vHeight);
+
+  vRawMesh          = vCudaMem.rawMesh;
+  uint32_t lNumVert = vRawMesh.numVert * sizeof(vec3);
+  cuda::runMalloc((void **)&vDevOriginalVert, lNumVert);
+  cuda::runMemcpy(vDevOriginalVert, vRawMesh.vert, lNumVert, MemcpyKind::Dev2Dev);
+
+  uint32_t lNumNodes  = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
+  uint32_t lChunkSize = lNumNodes / vNumChunks;
+  vWorkingMemory      = allocateMemory(&vCudaMem.bvh, lChunkSize, vCudaMem.rawMesh.numFaces);
+  if (!vWorkingMemory.result) { throw std::runtime_error("CUDA malloc failed"); }
+  initData(&vWorkingMemory, &vCudaMem.bvh, 64);
+
+  if (!_state.meshOffsets.empty()) {
+    uint32_t lOffset           = _state.meshOffsets[0].facesOffset;
+    uint32_t lNumNodesSelected = 0;
+    vNumNodesToRefit           = vRawMesh.numFaces - lOffset;
+    cuda::runMalloc((void **)&vNodesToRefit, vNumNodesToRefit * sizeof(uint32_t));
+    selectDynamicLeafNodes(&vWorkingMemory, &vCudaMem.bvh, vNodesToRefit, &lNumNodesSelected, lOffset);
+    assert(lNumNodesSelected == vNumNodesToRefit);
+  }
 
   float lVert[] = {1, 1, 1, -1, -1, 1, -1, -1};
 
@@ -154,10 +182,15 @@ LiveTracer::LiveTracer(State &_state, uint32_t _w, uint32_t _h) {
   vMaxCountLocation = getLocation("uMaxCount");
 
   registerOGLImage(&vCudaRes, vTexture);
-  vCudaMem = _state.cudaMem;
 }
 
 LiveTracer::~LiveTracer() {
+  uint32_t lNumVert = vRawMesh.numVert * sizeof(vec3);
+  cuda::runMemcpy(vRawMesh.vert, vDevOriginalVert, lNumVert, MemcpyKind::Dev2Dev);
+  cuda::runFree(vDevOriginalVert);
+
+  if (vNodesToRefit) { cuda::runFree(vNodesToRefit); }
+
   unregisterOGL(vCudaRes);
   freeRays(&vRays);
   freeImage(vDeviceImage);
@@ -168,7 +201,22 @@ void LiveTracer::render() {
   misc::Camera *lCam = dynamic_cast<misc::Camera *>(vCam);
   if (!vCam || !lCam) { return; }
 
-  auto lCamData = lCam->getCamera();
+  auto     lCamData   = lCam->getCamera();
+  uint32_t lNumNodes  = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(vCudaMem.bvh.numNodes));
+  uint32_t lChunkSize = lNumNodes / vNumChunks;
+  lNumNodes           = lChunkSize * vNumChunks;
+
+  AlgoCFG lCFG;
+  lCFG.blockSize     = 64;
+  lCFG.offsetAccess  = true;
+  lCFG.altFindNode   = true;
+  lCFG.altFixTree    = true;
+  lCFG.altSort       = true;
+  lCFG.sort          = true;
+  lCFG.localPatchCPY = true;
+
+  doAlgorithmStep(&vWorkingMemory, &vCudaMem.bvh, 16, lChunkSize, lCFG);
+  //   doAlgorithmStep(&vWorkingMemory, &vCudaMem.bvh, 16, lChunkSize, lCFG);
 
   generateRays(vRays, vWidth, vHeight, lCamData.pos, lCamData.lookAt, lCamData.up, lCamData.fov);
   tracerImage(vRays, vDeviceImage, vCudaMem.bvh.nodes, 0, vCudaMem.rawMesh, vec3(1, 1, 1), vWidth, vHeight, vBundle);
@@ -199,6 +247,34 @@ void LiveTracer::update(CameraBase *_cam) {
     }
   }
 }
+
+void LiveTracer::updateMesh(State &_state, CameraBase *_cam, uint32_t _offsetIndex) {
+  Camera *lCam = dynamic_cast<Camera *>(_cam);
+  if (!lCam) { return; }
+
+  auto lData = lCam->getCamera();
+  auto lOffs = _state.meshOffsets[_offsetIndex];
+
+  mat4 lMat = translate(lData.pos) * rotate(dot(lData.lookAt, vec3(1, 0, 0)) * (float)M_PI, lData.up);
+
+  // This is technically a hack but it works
+  uint32_t *lOldToFix          = vWorkingMemory.nodesToFix;
+  uint32_t  lOldToFixNum       = vWorkingMemory.numNodesToFix;
+  vWorkingMemory.nodesToFix    = vNodesToRefit;
+  vWorkingMemory.numNodesToFix = vNumNodesToRefit;
+
+  cuda::transformVecs(vDevOriginalVert + lOffs.vertOffset,
+                      _state.cudaMem.rawMesh.vert + lOffs.vertOffset,
+                      _state.cudaMem.rawMesh.numVert - lOffs.vertOffset,
+                      lMat);
+  refitDynamicTris(&vCudaMem.bvh, vCudaMem.rawMesh, vNodesToRefit, vNumNodesToRefit, 64);
+  fixTree3(&vWorkingMemory, &vCudaMem.bvh, 64);
+  doCudaDevSync();
+
+  vWorkingMemory.nodesToFix    = lOldToFix;
+  vWorkingMemory.numNodesToFix = lOldToFixNum;
+}
+
 
 std::string LiveTracer::getRenderModeString() {
   std::string lRet = vBundle ? "BUNDLE -- " : "NORMAL -- ";

@@ -17,6 +17,7 @@
 #pragma once
 
 #include "base/State.hpp"
+#include "builder/Bittner13CUDA.hpp"
 #include "tracer/CUDAKernels.hpp"
 #include "RendererBase.hpp"
 #include <chrono>
@@ -47,17 +48,26 @@ class LiveTracer : public RendererBase {
   TimePoint vPercentileRecalc = std::chrono::system_clock::now();
   uint32_t  vMaxCount         = 255;
 
+  float            vBatchPercent = 1.0f;
+  uint32_t         vNumChunks    = 16;
+  GPUWorkingMemory vWorkingMemory;
+
+  base::MeshRaw vRawMesh;
+  glm::vec3 *   vDevOriginalVert = nullptr;
+  uint32_t *    vNodesToRefit    = nullptr;
+  uint32_t      vNumNodesToRefit = 0;
+
  public:
   LiveTracer(base::State &_state, uint32_t _w, uint32_t _h);
   virtual ~LiveTracer();
-
-  static bool cudaInit();
 
   void        render() override;
   void        update(base::CameraBase *_cam) override;
   Renderer    getType() const override { return Renderer::CUDA_TRACER; }
   uint32_t    numRenderModes() override { return 4; }
   std::string getRenderModeString() override;
+
+  void updateMesh(base::State &_state, base::CameraBase *_cam, uint32_t _offsetIndex) override;
 };
 
 } // namespace BVHTest::view

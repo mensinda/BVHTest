@@ -18,12 +18,14 @@
 
 #define GLM_FORCE_NO_CTOR_INIT
 
+#include "builder/Bittner13CUDA.hpp"
 #include <base/BVH.hpp>
 #include <base/Ray.hpp>
 #include <glm/vec3.hpp>
 #include <cstdint>
 
 using BVHTest::base::BVHNode;
+using BVHTest::base::CUDAMemoryBVHPointer;
 using BVHTest::base::MeshRaw;
 using BVHTest::base::Ray;
 using glm::vec3;
@@ -49,6 +51,18 @@ extern "C" void tracerImage(Ray *      _rays,
                             uint32_t   _w,
                             uint32_t   _h,
                             bool       _bundle);
+
+extern "C" void selectDynamicLeafNodes(GPUWorkingMemory *    _data,
+                                       CUDAMemoryBVHPointer *_GPUbvh,
+                                       uint32_t *            _out,
+                                       uint32_t *            _numOut,
+                                       uint32_t              _beginDynamicTriangle);
+
+extern "C" void refitDynamicTris(CUDAMemoryBVHPointer *_GPUbvh,
+                                 MeshRaw               _cudaMesh,
+                                 uint32_t *            _nodesToUpdate,
+                                 uint32_t              _numNodes,
+                                 uint32_t              _blockSize);
 
 extern "C" void copyImageToHost(CUDAPixel *_hostPixel, CUDAPixel *_cudaImg, uint32_t _w, uint32_t _h);
 
