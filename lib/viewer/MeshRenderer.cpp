@@ -20,6 +20,7 @@
 #include "cuda/cudaFN.hpp"
 #include "misc/Camera.hpp"
 #include <glm/gtx/transform.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <string>
@@ -119,7 +120,7 @@ void MeshRenderer::updateMesh(State &_state, CameraBase *_cam, uint32_t _offsetI
   auto lData = lCam->getCamera();
   auto lOffs = _state.meshOffsets[_offsetIndex];
 
-  mat4 lMat = translate(lData.pos);
+  mat4 lMat = translate(lData.pos) * rotate(dot(lData.lookAt, vec3(1, 0, 0)) * (float)M_PI, lData.up);
 
   cuda::transformVecs(vDevOriginalVert + lOffs.vertOffset,
                       _state.cudaMem.rawMesh.vert + lOffs.vertOffset,
