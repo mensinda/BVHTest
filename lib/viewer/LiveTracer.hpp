@@ -51,6 +51,7 @@ class LiveTracer : public RendererBase {
 
   float            vBatchPercent = 1.0f;
   uint32_t         vNumChunks    = 16;
+  uint32_t         vCurrChunk    = 0;
   GPUWorkingMemory vWorkingMemory;
 
   base::MeshRaw vRawMesh;

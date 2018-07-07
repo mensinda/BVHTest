@@ -207,6 +207,8 @@ void LiveTracer::render() {
   lNumNodes           = lChunkSize * vNumChunks;
 
   AlgoCFG lCFG;
+  lCFG.numChunks     = vNumChunks;
+  lCFG.chunkSize     = lChunkSize;
   lCFG.blockSize     = 64;
   lCFG.offsetAccess  = true;
   lCFG.altFindNode   = true;
@@ -215,7 +217,16 @@ void LiveTracer::render() {
   lCFG.sort          = true;
   lCFG.localPatchCPY = true;
 
-  if (vBVHUpdate) { doAlgorithmStep(&vWorkingMemory, &vCudaMem.bvh, 16, lChunkSize, lCFG); }
+  if (vBVHUpdate) {
+    if (vCurrChunk == 0) {
+      bn13_selectNodes(&vWorkingMemory, &vCudaMem.bvh, lCFG);
+    } else {
+      bn13_rmAndReinsChunk(&vWorkingMemory, &vCudaMem.bvh, lCFG, vCurrChunk - 1);
+    }
+
+    vCurrChunk++;
+    if (vCurrChunk > vNumChunks) { vCurrChunk = 0; }
+  }
 
   generateRays(vRays, vWidth, vHeight, lCamData.pos, lCamData.lookAt, lCamData.up, lCamData.fov);
   tracerImage(vRays, vDeviceImage, vCudaMem.bvh.nodes, 0, vCudaMem.rawMesh, vec3(1, 1, 1), vWidth, vHeight, vBundle);

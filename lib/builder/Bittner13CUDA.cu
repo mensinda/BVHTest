@@ -696,25 +696,22 @@ void fixTree3(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPU
 }
 
 
-
-void doAlgorithmStep(
-    GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, uint32_t _numChunks, uint32_t _chunkSize, AlgoCFG _cfg) {
+void bn13_selectNodes(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, AlgoCFG _cfg) {
   if (!_data || !_GPUbvh) { return; }
 
   cudaError_t lRes;
-  uint32_t    lNumBlocksAll   = (_data->numInnerNodes + _cfg.blockSize - 1) / _cfg.blockSize;
-  uint32_t    lNumBlocksChunk = (_chunkSize + _cfg.blockSize - 1) / _cfg.blockSize;
-  uint32_t    lSharedMemory   = sizeof(uint32_t) * _cfg.blockSize * CUDA_ALT_QUEUE_SIZE;
-  int *       lNumSelected    = nullptr;
+  uint32_t    lNBlkAll = (_data->numInnerNodes + _cfg.blockSize - 1) / _cfg.blockSize;
+
+  int *lNumSelected = nullptr;
 
   ALLOCATE(&lNumSelected, 1, int);
 
-  kCalcCost<<<lNumBlocksAll, _cfg.blockSize>>>(_data->sumMin.sums,
-                                               _data->sumMin.mins,
-                                               _GPUbvh->nodes,
-                                               _data->todoNodes.nodes,
-                                               _data->todoNodes.costs,
-                                               _data->numInnerNodes);
+  kCalcCost<<<lNBlkAll, _cfg.blockSize>>>(_data->sumMin.sums,
+                                          _data->sumMin.mins,
+                                          _GPUbvh->nodes,
+                                          _data->todoNodes.nodes,
+                                          _data->todoNodes.costs,
+                                          _data->numInnerNodes);
 
   if (_cfg.sort) {
     if (!_cfg.altSort) {
@@ -732,10 +729,10 @@ void doAlgorithmStep(
                                                         _data->todoSorted.costs,
                                                         _data->numInnerNodes));
 
-      kGenerateFlags<<<lNumBlocksAll, _cfg.blockSize>>>(_data->todoNodes.costs,
-                                                        _data->deviceSelectFlags,
-                                                        _data->todoSorted.costs + _numChunks * _chunkSize,
-                                                        _data->numInnerNodes);
+      kGenerateFlags<<<lNBlkAll, _cfg.blockSize>>>(_data->todoNodes.costs,
+                                                   _data->deviceSelectFlags,
+                                                   _data->todoSorted.costs + _cfg.numChunks * _cfg.chunkSize,
+                                                   _data->numInnerNodes);
 
       CUDA_RUN(cub::DeviceSelect::Flagged(_data->cubSortTempStorage,
                                           _data->cubSortTempStorageSize,
@@ -751,7 +748,7 @@ void doAlgorithmStep(
     cudaDeviceProp dp;
     cudaGetDeviceProperties(&dp, 0);
 
-    float lKCost = topKThElement(_data->todoNodes.costs, _data->sumMin.num, _numChunks * _chunkSize);
+    float lKCost = topKThElement(_data->todoNodes.costs, _data->sumMin.num, _cfg.numChunks * _cfg.chunkSize);
 
     CUBNodeSlelect lSelector(_data->todoNodes.costs, lKCost);
 
@@ -767,43 +764,55 @@ void doAlgorithmStep(
 #endif
   }
 
-  for (uint32_t i = 0; i < _numChunks; ++i) {
-    if (_cfg.localPatchCPY) {
-      kRemoveAndReinsert2<<<lNumBlocksChunk, _cfg.blockSize, lSharedMemory>>>(_data->todoSorted.nodes,
-                                                                              _data->patches,
-                                                                              _GPUbvh->bvh,
-                                                                              _data->nodesToFix,
-                                                                              _cfg.offsetAccess,
-                                                                              i,
-                                                                              _numChunks,
-                                                                              _chunkSize,
-                                                                              _cfg.altFindNode);
-    } else {
-      kRemoveAndReinsert1<<<lNumBlocksChunk, _cfg.blockSize, lSharedMemory>>>(_data->todoSorted.nodes,
-                                                                              _data->patches,
-                                                                              _data->nodesToFix,
-                                                                              _cfg.offsetAccess,
-                                                                              i,
-                                                                              _numChunks,
-                                                                              _chunkSize,
-                                                                              _cfg.altFindNode);
-    }
-
-    kCheckConflicts<<<lNumBlocksChunk, _cfg.blockSize>>>(
-        _data->patches, _data->sumMin.flags, _data->skipped, _data->nodesToFix, _chunkSize);
-
-    kApplyPatches<<<lNumBlocksChunk, _cfg.blockSize>>>(_data->patches, _GPUbvh->bvh, _data->sumMin.flags, _chunkSize);
-
-    if (_cfg.altFixTree) {
-      fixTree3(_data, _GPUbvh, _cfg.blockSize);
-    } else {
-      fixTree1(_data, _GPUbvh, _cfg.blockSize);
-    }
-  }
-
 error:
   cudaFree(lNumSelected);
   return;
+}
+
+
+void bn13_rmAndReinsChunk(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, AlgoCFG _cfg, uint32_t _chunk) {
+  if (!_data || !_GPUbvh) { return; }
+
+  uint32_t lNBlkChunk    = (_cfg.chunkSize + _cfg.blockSize - 1) / _cfg.blockSize;
+  uint32_t lSharedMemory = sizeof(uint32_t) * _cfg.blockSize * CUDA_ALT_QUEUE_SIZE;
+
+  if (_cfg.localPatchCPY) {
+    kRemoveAndReinsert2<<<lNBlkChunk, _cfg.blockSize, lSharedMemory>>>(_data->todoSorted.nodes,
+                                                                       _data->patches,
+                                                                       _GPUbvh->bvh,
+                                                                       _data->nodesToFix,
+                                                                       _cfg.offsetAccess,
+                                                                       _chunk,
+                                                                       _cfg.numChunks,
+                                                                       _cfg.chunkSize,
+                                                                       _cfg.altFindNode);
+  } else {
+    kRemoveAndReinsert1<<<lNBlkChunk, _cfg.blockSize, lSharedMemory>>>(_data->todoSorted.nodes,
+                                                                       _data->patches,
+                                                                       _data->nodesToFix,
+                                                                       _cfg.offsetAccess,
+                                                                       _chunk,
+                                                                       _cfg.numChunks,
+                                                                       _cfg.chunkSize,
+                                                                       _cfg.altFindNode);
+  }
+
+  kCheckConflicts<<<lNBlkChunk, _cfg.blockSize>>>(
+      _data->patches, _data->sumMin.flags, _data->skipped, _data->nodesToFix, _cfg.chunkSize);
+
+  kApplyPatches<<<lNBlkChunk, _cfg.blockSize>>>(_data->patches, _GPUbvh->bvh, _data->sumMin.flags, _cfg.chunkSize);
+
+  if (_cfg.altFixTree) {
+    fixTree3(_data, _GPUbvh, _cfg.blockSize);
+  } else {
+    fixTree1(_data, _GPUbvh, _cfg.blockSize);
+  }
+}
+
+void bn13_doAlgorithmStep(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, AlgoCFG _cfg) {
+  bn13_selectNodes(_data, _GPUbvh, _cfg);
+
+  for (uint32_t i = 0; i < _cfg.numChunks; ++i) { bn13_rmAndReinsChunk(_data, _GPUbvh, _cfg, i); }
 }
 
 

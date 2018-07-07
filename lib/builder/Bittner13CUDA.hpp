@@ -20,6 +20,8 @@
 #include "base/BVHPatch.hpp"
 #include <cstdint>
 
+using BVHTest::base::CUDAMemoryBVHPointer;
+
 typedef BVHTest::base::BVHPatch  PATCH;
 typedef BVHTest::base::MiniPatch MINI_PATCH;
 const size_t                     CUDA_QUEUE_SIZE     = 512;
@@ -58,6 +60,8 @@ struct GPUWorkingMemory {
 };
 
 struct AlgoCFG {
+  uint32_t numChunks;
+  uint32_t chunkSize;
   uint32_t blockSize     = 32;
   bool     offsetAccess  = true;
   bool     altFindNode   = true;
@@ -67,20 +71,18 @@ struct AlgoCFG {
   bool     localPatchCPY = true;
 };
 
-GPUWorkingMemory allocateMemory(BVHTest::base::CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize, uint32_t _numFaces);
+GPUWorkingMemory allocateMemory(CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize, uint32_t _numFaces);
 void             freeMemory(GPUWorkingMemory *_data);
 
-void initData(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
-void fixTree1(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
-void fixTree3(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
+void initData(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
+void fixTree1(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
+void fixTree3(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize);
 
-void doAlgorithmStep(GPUWorkingMemory *                   _data,
-                     BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh,
-                     uint32_t                             _numChunks,
-                     uint32_t                             _chunkSize,
-                     AlgoCFG                              _cfg);
+void bn13_selectNodes(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, AlgoCFG _cfg);
+void bn13_rmAndReinsChunk(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, AlgoCFG _cfg, uint32_t _chunk);
+void bn13_doAlgorithmStep(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, AlgoCFG _cfg);
 
-float CUDAcalcSAH(BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh);
+float CUDAcalcSAH(CUDAMemoryBVHPointer *_GPUbvh);
 
 void doCudaDevSync();
 

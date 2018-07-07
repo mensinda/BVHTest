@@ -92,6 +92,8 @@ ErrorCode Bittner13GPU::runImpl(State &_state) {
   lNumNodes           = lChunkSize * vNumChunks;
 
   AlgoCFG lCFG;
+  lCFG.numChunks     = vNumChunks;
+  lCFG.chunkSize     = lChunkSize;
   lCFG.blockSize     = vCUDABlockSize;
   lCFG.offsetAccess  = vOffsetAccess;
   lCFG.altFindNode   = vAltFindNode;
@@ -103,7 +105,7 @@ ErrorCode Bittner13GPU::runImpl(State &_state) {
   for (uint32_t i = 0; i < vMaxNumStepps; ++i) {
     //     PROGRESS(fmt::format("Stepp {:<3}; SAH: ?", i), i, vMaxNumStepps);
 
-    doAlgorithmStep(&vWorkingMemory, &_state.cudaMem.bvh, vNumChunks, lChunkSize, lCFG);
+    bn13_doAlgorithmStep(&vWorkingMemory, &_state.cudaMem.bvh, lCFG);
   }
 
   //   PROGRESS("CUDA sync", vMaxNumStepps, vMaxNumStepps);
