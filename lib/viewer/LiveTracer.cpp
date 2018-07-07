@@ -215,8 +215,7 @@ void LiveTracer::render() {
   lCFG.sort          = true;
   lCFG.localPatchCPY = true;
 
-  doAlgorithmStep(&vWorkingMemory, &vCudaMem.bvh, 16, lChunkSize, lCFG);
-  //   doAlgorithmStep(&vWorkingMemory, &vCudaMem.bvh, 16, lChunkSize, lCFG);
+  if (vBVHUpdate) { doAlgorithmStep(&vWorkingMemory, &vCudaMem.bvh, 16, lChunkSize, lCFG); }
 
   generateRays(vRays, vWidth, vHeight, lCamData.pos, lCamData.lookAt, lCamData.up, lCamData.fov);
   tracerImage(vRays, vDeviceImage, vCudaMem.bvh.nodes, 0, vCudaMem.rawMesh, vec3(1, 1, 1), vWidth, vHeight, vBundle);
@@ -236,8 +235,9 @@ void LiveTracer::update(CameraBase *_cam) {
   vCam           = _cam;
   uint32_t lMode = getRenderMode();
 
-  vBundle  = lMode & 0b010;
-  vBVHView = lMode & 0b001;
+  vBVHUpdate = lMode & 0b100;
+  vBundle    = lMode & 0b010;
+  vBVHView   = lMode & 0b001;
 
   if (vBVHView) {
     TimePoint lNow = std::chrono::system_clock::now();
@@ -257,27 +257,19 @@ void LiveTracer::updateMesh(State &_state, CameraBase *_cam, uint32_t _offsetInd
 
   mat4 lMat = translate(lData.pos) * rotate(dot(lData.lookAt, vec3(1, 0, 0)) * (float)M_PI, lData.up);
 
-  // This is technically a hack but it works
-  uint32_t *lOldToFix          = vWorkingMemory.nodesToFix;
-  uint32_t  lOldToFixNum       = vWorkingMemory.numNodesToFix;
-  vWorkingMemory.nodesToFix    = vNodesToRefit;
-  vWorkingMemory.numNodesToFix = vNumNodesToRefit;
-
   cuda::transformVecs(vDevOriginalVert + lOffs.vertOffset,
                       _state.cudaMem.rawMesh.vert + lOffs.vertOffset,
                       _state.cudaMem.rawMesh.numVert - lOffs.vertOffset,
                       lMat);
   refitDynamicTris(&vCudaMem.bvh, vCudaMem.rawMesh, vNodesToRefit, vNumNodesToRefit, 64);
-  fixTree3(&vWorkingMemory, &vCudaMem.bvh, 64);
+  fixTree1(&vWorkingMemory, &vCudaMem.bvh, 64);
   doCudaDevSync();
-
-  vWorkingMemory.nodesToFix    = lOldToFix;
-  vWorkingMemory.numNodesToFix = lOldToFixNum;
 }
 
 
 std::string LiveTracer::getRenderModeString() {
-  std::string lRet = vBundle ? "BUNDLE -- " : "NORMAL -- ";
+  std::string lRet = vBundle ? "BUNDLE   --   " : "NORMAL   --   ";
+  lRet += vBVHUpdate ? "UPDATE BVH   --   " : "STATIC BVH   --   ";
   lRet += vBVHView ? "MAX int count: " + std::to_string(vMaxCount) : "Diffuse";
   return lRet;
 }

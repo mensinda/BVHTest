@@ -185,7 +185,7 @@ ErrorCode LoadAdd::runImpl(base::State &_state) {
 
   mat4 lScale = glm::scale(vec3(vScale, vScale, vScale));
 
-  _state.meshOffsets.push_back({vOffsetVert, vOffsetNorm, vOffsetFaces});
+  _state.meshOffsets.push_back({(uint32_t)vOffsetVert, (uint32_t)vOffsetNorm, (uint32_t)vOffsetFaces});
 
 #pragma omp parallel for
   for (uint32_t i = vOffsetFaces; i < _state.mesh.faces.size(); ++i) {

@@ -39,8 +39,9 @@ class LiveTracer : public RendererBase {
   uint32_t vWidth;
   uint32_t vHeight;
 
-  bool vBundle  = false;
-  bool vBVHView = false;
+  bool vBVHUpdate = false;
+  bool vBundle    = false;
+  bool vBVHView   = false;
 
   GLint vIntCountLocation = 0;
   GLint vMaxCountLocation = 0;
@@ -64,7 +65,7 @@ class LiveTracer : public RendererBase {
   void        render() override;
   void        update(base::CameraBase *_cam) override;
   Renderer    getType() const override { return Renderer::CUDA_TRACER; }
-  uint32_t    numRenderModes() override { return 4; }
+  uint32_t    numRenderModes() override { return 8; }
   std::string getRenderModeString() override;
 
   void updateMesh(base::State &_state, base::CameraBase *_cam, uint32_t _offsetIndex) override;

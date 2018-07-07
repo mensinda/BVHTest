@@ -493,31 +493,37 @@ error:
 
 extern "C" __global__ void kRefitLeafBVHTris(
     uint32_t *_nodeIDs, BVHNode *_nodes, Triangle *_faces, vec3 *_vert, uint32_t _num) {
-  for (uint32_t i = blockIdx.x * blockDim.x + threadIdx.x; i < _num; i += blockDim.x * gridDim.x) {
+  uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t stride = blockDim.x * gridDim.x;
+
+  for (uint32_t i = index; i < _num; i += stride) {
     uint32_t const lID   = _nodeIDs[i];
     BVHNode        lNode = _nodes[lID];
     Triangle const lFace = _faces[lNode.left];
-    vec3           lV1   = _vert[lFace.v1]; // Will be min
-    vec3           lV2   = _vert[lFace.v2]; // Will be max
-    vec3           lV3   = _vert[lFace.v3];
-
-    if (lV2.x < lV1.x) { lV1.x = lV2.x; }
-    if (lV2.y < lV1.y) { lV1.y = lV2.y; }
-    if (lV2.z < lV1.z) { lV1.z = lV2.z; }
-    if (lV3.x < lV1.x) { lV1.x = lV3.x; }
-    if (lV3.y < lV1.y) { lV1.y = lV3.y; }
-    if (lV3.z < lV1.z) { lV1.z = lV3.z; }
-
-    if (lV1.x > lV2.x) { lV2.x = lV1.x; }
-    if (lV1.y > lV2.y) { lV2.y = lV1.y; }
-    if (lV1.z > lV2.z) { lV2.z = lV1.z; }
-    if (lV3.x > lV2.x) { lV2.x = lV3.x; }
-    if (lV3.y > lV2.y) { lV2.y = lV3.y; }
-    if (lV3.z > lV2.z) { lV2.z = lV3.z; }
+    vec3 const     lV1   = _vert[lFace.v1];
+    vec3 const     lV2   = _vert[lFace.v2];
+    vec3 const     lV3   = _vert[lFace.v3];
 
     lNode.bbox.minMax[0] = lV1;
     lNode.bbox.minMax[1] = lV2;
-    _nodes[lID]          = lNode;
+
+    if (lV2.x < lNode.bbox.minMax[0].x) { lNode.bbox.minMax[0].x = lV2.x; }
+    if (lV2.y < lNode.bbox.minMax[0].y) { lNode.bbox.minMax[0].y = lV2.y; }
+    if (lV2.z < lNode.bbox.minMax[0].z) { lNode.bbox.minMax[0].z = lV2.z; }
+    if (lV3.x < lNode.bbox.minMax[0].x) { lNode.bbox.minMax[0].x = lV3.x; }
+    if (lV3.y < lNode.bbox.minMax[0].y) { lNode.bbox.minMax[0].y = lV3.y; }
+    if (lV3.z < lNode.bbox.minMax[0].z) { lNode.bbox.minMax[0].z = lV3.z; }
+
+    if (lV1.x > lNode.bbox.minMax[1].x) { lNode.bbox.minMax[1].x = lV1.x; }
+    if (lV1.y > lNode.bbox.minMax[1].y) { lNode.bbox.minMax[1].y = lV1.y; }
+    if (lV1.z > lNode.bbox.minMax[1].z) { lNode.bbox.minMax[1].z = lV1.z; }
+    if (lV3.x > lNode.bbox.minMax[1].x) { lNode.bbox.minMax[1].x = lV3.x; }
+    if (lV3.y > lNode.bbox.minMax[1].y) { lNode.bbox.minMax[1].y = lV3.y; }
+    if (lV3.z > lNode.bbox.minMax[1].z) { lNode.bbox.minMax[1].z = lV3.z; }
+
+    lNode.bbox.minMax[0] -= FLT_EPSILON;
+    lNode.bbox.minMax[1] += FLT_EPSILON;
+    _nodes[lID] = lNode;
   }
 }
 
