@@ -474,29 +474,42 @@ extern "C" __global__ void kFixTree3_2(uint32_t *_toFix, SumMinCUDA _SMF, BVHNod
   uint32_t lLeft;
   uint32_t lRight;
   float    lSArea;
+  BVHNode  lNodeCPY;
 
   for (uint32_t i = index; i < _num; i += stride) {
     lNode = _toFix[i];
     if (lNode == UINT32_MAX) { continue; }
 
+    lNodeCPY = _nodes[lNode];
+
+    // Check if leaf node
+    if (lNodeCPY.numChildren == 0) {
+      atomicSub(&_SMF.flags[lNode], 1); // Leaf nodes should only be locked once
+      lNode    = lNodeCPY.parent;
+      lNodeCPY = _nodes[lNode];
+    }
+
     while (true) {
       if (atomicSub(&_SMF.flags[lNode], 1) != 1) { break; } // Stop when already locked (locked == 1)
 
-      lLeft  = _nodes[lNode].left;
-      lRight = _nodes[lNode].right;
+      lLeft  = lNodeCPY.left;
+      lRight = lNodeCPY.right;
       lAABB  = _nodes[lLeft].bbox;
       lAABB.mergeWith(_nodes[lRight].bbox);
       lSArea = lAABB.surfaceArea();
 
-      _nodes[lNode].bbox        = lAABB;
-      _nodes[lNode].surfaceArea = lSArea;
-      _nodes[lNode].numChildren = _nodes[lLeft].numChildren + _nodes[lRight].numChildren + 2;
-      _SMF.sums[lNode]          = _SMF.sums[lLeft] + _SMF.sums[lRight] + lSArea;
-      _SMF.mins[lNode]          = _SMF.mins[lLeft] < _SMF.mins[lRight] ? _SMF.mins[lLeft] : _SMF.mins[lRight];
+      lNodeCPY.bbox        = lAABB;
+      lNodeCPY.surfaceArea = lSArea;
+      lNodeCPY.numChildren = _nodes[lLeft].numChildren + _nodes[lRight].numChildren + 2;
+      _SMF.sums[lNode]     = _SMF.sums[lLeft] + _SMF.sums[lRight] + lSArea;
+      _SMF.mins[lNode]     = _SMF.mins[lLeft] < _SMF.mins[lRight] ? _SMF.mins[lLeft] : _SMF.mins[lRight];
+
+      _nodes[lNode] = lNodeCPY;
 
       // Check if root
-      if (lNode == _nodes[lNode].parent) { break; }
-      lNode = _nodes[lNode].parent;
+      if (lNode == lNodeCPY.parent) { break; }
+      lNode    = lNodeCPY.parent;
+      lNodeCPY = _nodes[lNode];
     }
   }
 }

@@ -257,13 +257,21 @@ void LiveTracer::updateMesh(State &_state, CameraBase *_cam, uint32_t _offsetInd
 
   mat4 lMat = translate(lData.pos) * rotate(dot(lData.lookAt, vec3(1, 0, 0)) * (float)M_PI, lData.up);
 
+  // This is technically a hack but it works
+  uint32_t *lOldToFix          = vWorkingMemory.nodesToFix;
+  uint32_t  lOldToFixNum       = vWorkingMemory.numNodesToFix;
+  vWorkingMemory.nodesToFix    = vNodesToRefit;
+  vWorkingMemory.numNodesToFix = vNumNodesToRefit;
+
   cuda::transformVecs(vDevOriginalVert + lOffs.vertOffset,
                       _state.cudaMem.rawMesh.vert + lOffs.vertOffset,
                       _state.cudaMem.rawMesh.numVert - lOffs.vertOffset,
                       lMat);
   refitDynamicTris(&vCudaMem.bvh, vCudaMem.rawMesh, vNodesToRefit, vNumNodesToRefit, 64);
-  fixTree1(&vWorkingMemory, &vCudaMem.bvh, 64);
-  doCudaDevSync();
+  fixTree3(&vWorkingMemory, &vCudaMem.bvh, 64);
+
+  vWorkingMemory.nodesToFix    = lOldToFix;
+  vWorkingMemory.numNodesToFix = lOldToFixNum;
 }
 
 
