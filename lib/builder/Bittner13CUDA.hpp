@@ -80,6 +80,8 @@ void doAlgorithmStep(GPUWorkingMemory *                   _data,
                      uint32_t                             _chunkSize,
                      AlgoCFG                              _cfg);
 
+float CUDAcalcSAH(BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh);
+
 void doCudaDevSync();
 
 uint32_t calcNumSkipped(GPUWorkingMemory *_data);

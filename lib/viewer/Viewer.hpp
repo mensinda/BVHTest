@@ -34,6 +34,7 @@ class Viewer final : public base::Command {
   double   vMouseSensitivity = 0.025;
   bool     vFaceCulling      = false;
   bool     vRecording        = false;
+  bool     vCalcSAH          = true;
   uint32_t vPlaybackIndex    = UINT32_MAX;
 
   struct RenderState {

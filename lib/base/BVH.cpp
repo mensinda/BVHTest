@@ -33,7 +33,7 @@ float BVH::calcSAH(float _cInner, float _cLeaf) {
     lSAH = lSAH + lCost;
   }
 
-  return (1.0f / rootNode()->surfaceArea) * lSAH;
+  return lSAH / rootNode()->surfaceArea;
 }
 
 void BVH::fixLevels() {

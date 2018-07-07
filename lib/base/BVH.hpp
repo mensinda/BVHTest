@@ -129,6 +129,13 @@ struct alignas(16) BVHNode {
   CUDA_CALL uint32_t numFaces() const noexcept { return right; }
   CUDA_CALL bool     isLeftChild() const noexcept { return isLeft != 0; }
   CUDA_CALL bool     isRightChild() const noexcept { return isLeft == 0; }
+
+  // Used for simple SAH calculation (cInner == cLeaf)
+  CUDA_CALL BVHNode operator+(const BVHNode &b) const {
+    BVHNode lRes;
+    lRes.surfaceArea = surfaceArea + b.surfaceArea;
+    return lRes;
+  }
 };
 
 class BVH final {
@@ -225,7 +232,7 @@ class BVH final {
   }
 
 
-  float calcSAH(float _cInner = 1.2f, float _cLeaf = 1.0f);
+  float calcSAH(float _cInner = 1.0f, float _cLeaf = 1.0f);
   void  fixLevels();
   void  fixSurfaceAreas();
 };

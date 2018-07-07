@@ -276,8 +276,9 @@ void LiveTracer::updateMesh(State &_state, CameraBase *_cam, uint32_t _offsetInd
 
 
 std::string LiveTracer::getRenderModeString() {
-  std::string lRet = vBundle ? "BUNDLE   --   " : "NORMAL   --   ";
-  lRet += vBVHUpdate ? "UPDATE BVH   --   " : "STATIC BVH   --   ";
-  lRet += vBVHView ? "MAX int count: " + std::to_string(vMaxCount) : "Diffuse";
+  std::string lRet;
+  lRet += "\n  -- Update BVH:          "s + (vBVHUpdate ? "TRUE" : "FALSE");
+  lRet += "\n  -- Bundle Tracing: "s + (vBundle ? "TRUE" : "FALSE");
+  lRet += "\n  -- Counter View:      "s + (vBVHView ? "TRUE" : "FALSE");
   return lRet;
 }

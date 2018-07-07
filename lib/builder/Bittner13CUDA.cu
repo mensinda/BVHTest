@@ -807,6 +807,37 @@ error:
 }
 
 
+
+float CUDAcalcSAH(CUDAMemoryBVHPointer *_GPUbvh) {
+  cudaError_t lRes;
+  BVHNode     lResNode;
+  void *      lTemp       = nullptr;
+  size_t      lTempS      = 0;
+  BVHNode *   lResNodeGPU = nullptr;
+  float       lSAH        = 0.0f;
+  float       lSumAll     = 0.0f; // Sum of all surfaceAreas
+
+  ALLOCATE(&lResNodeGPU, 1, BVHNode);
+  CUDA_RUN(cub::DeviceReduce::Sum(lTemp, lTempS, _GPUbvh->nodes, lResNodeGPU, _GPUbvh->numNodes));
+  ALLOCATE(&lTemp, lTempS, uint8_t);
+  CUDA_RUN(cub::DeviceReduce::Sum(lTemp, lTempS, _GPUbvh->nodes, lResNodeGPU, _GPUbvh->numNodes));
+  CUDA_RUN(cudaMemcpy(&lResNode, lResNodeGPU, sizeof(BVHNode), cudaMemcpyDeviceToHost));
+
+  lSumAll = lResNode.surfaceArea;
+
+  // Get the root node
+  CUDA_RUN(cudaMemcpy(&lResNode, _GPUbvh->nodes + 0, sizeof(BVHNode), cudaMemcpyDeviceToHost));
+
+  lSumAll -= lResNode.surfaceArea; // Subtract the SA of the root node, that was added in the Sum above
+  lSAH = lSumAll / lResNode.surfaceArea;
+
+error:
+  FREE2(lResNodeGPU);
+  FREE2(lTemp);
+  return lSAH;
+}
+
+
 uint32_t calcNumSkipped(GPUWorkingMemory *_data) {
   cudaError_t lRes;
   uint32_t    lSkipped    = 0;

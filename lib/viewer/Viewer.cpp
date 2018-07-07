@@ -174,6 +174,7 @@ void Viewer::keyCallback(Window &_win, State &_state, Camera &_cam, int _key) {
       vRState.vCurrCam = UINT32_MAX;
       break;
 
+    case GLFW_KEY_Q: vCalcSAH = !vCalcSAH; break;
     case GLFW_KEY_W:
     case GLFW_KEY_A:
     case GLFW_KEY_S:
@@ -261,10 +262,11 @@ ErrorCode Viewer::runImpl(State &_state) {
   auto [lScreenWidth, lScreenHeight] = lWindow.getResolution();
   gltViewport(lScreenWidth, lScreenHeight);
   lControl.setLine(0);
-  lUsage.setPos(0, static_cast<float>(lScreenHeight) - lUsage.lineHeight() * 9);
+  lUsage.setPos(0, static_cast<float>(lScreenHeight) - lUsage.lineHeight() * 10);
 
   lUsage.set(
       "Movemet:   WASD + Mouse + Scroll wheel    ###   Movement Speed: KP +/-"
+      "\nToggle calculate SAH: Q"
       "\nCameras:"
       "\n - Cycle: C"
       "\n - Add: ENTER"
@@ -330,8 +332,12 @@ ErrorCode Viewer::runImpl(State &_state) {
         lLastFPS      = lFrames;
       }
 
+      float lSAH = 0.0f;
+      if (vCalcSAH) { lSAH = CUDAcalcSAH(&_state.cudaMem.bvh); }
+
       lControl.set(
           fmt::format("FPS: {}; Frametime: {}ms"
+                      "\nSurface Area Heuristic: {}"
                       "\nSpeed level: {}"
                       "\nSaved cameras: {}"
                       "\nCurrent camera: {}"
@@ -341,6 +347,7 @@ ErrorCode Viewer::runImpl(State &_state) {
                       "\nPlayback Frame: {} of {}",
                       lFPS,
                       lFrameTime,
+                      lSAH,
                       vRState.vSpeedLevel,
                       _state.cameras.size(),
                       vRState.vCurrCam == UINT32_MAX ? "-" : to_string(vRState.vCurrCam),
