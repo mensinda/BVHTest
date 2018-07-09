@@ -21,6 +21,7 @@
 #include "builder/Bittner13.hpp"
 #include "builder/Bittner13GPU.hpp"
 #include "builder/Bittner13Par.hpp"
+#include "builder/HLBVH.hpp"
 #include "builder/Median.hpp"
 #include "builder/Wald07.hpp"
 #include "cuda/CopyToGPU.hpp"
@@ -55,9 +56,9 @@ using namespace Enum2Str;
 using namespace nlohmann;
 
 const vector<string> gCommandList = {
-    "import",    "load",       "loadAdd",    "export", "BVHExport", "BVHImport", "camExport",    "camImport",
-    "writeImg",  "copyToGPU",  "copyToHost", "median", "wald07",    "bittner13", "bittner13Par", "bittner13GPU",
-    "CPUTracer", "CUDATracer", "bruteForce", "status", "validate",  "sleep",     "viewer"};
+    "import",   "load",      "loadAdd",    "export",     "BVHExport", "BVHImport", "camExport",    "camImport",
+    "writeImg", "copyToGPU", "copyToHost", "median",     "wald07",    "bittner13", "bittner13Par", "bittner13GPU",
+    "hlbvh",    "CPUTracer", "CUDATracer", "bruteForce", "status",    "validate",  "sleep",        "viewer"};
 
 // String command to object
 Config::CMD_PTR fromString(string _s) {
@@ -78,6 +79,7 @@ Config::CMD_PTR fromString(string _s) {
     case "bittner13"_h: return make_shared<builder::Bittner13>();
     case "bittner13Par"_h: return make_shared<builder::Bittner13Par>();
     case "bittner13GPU"_h: return make_shared<builder::Bittner13GPU>();
+    case "hlbvh"_h: return make_shared<builder::HLBVH>();
     case "CPUTracer"_h: return make_shared<tracer::CPUTracer>();
     case "CUDATracer"_h: return make_shared<tracer::CUDATracer>();
     case "bruteForce"_h: return make_shared<tracer::BruteForceTracer>();
