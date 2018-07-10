@@ -24,10 +24,11 @@ using BVHTest::base::MeshRaw;
 using BVHTest::base::Triangle;
 using glm::vec3;
 
-struct alignas(16) HLBVH_TriData {
+struct HLBVH_TriData {
   AABB     bbox;
   vec3     centroid;
-  Triangle face;
+  uint32_t faceIndex;
+  uint64_t __padding__;
 };
 
 struct HLBVH_WorkingMemory {
@@ -42,6 +43,9 @@ struct HLBVH_WorkingMemory {
   uint32_t numFaces           = 0;
   size_t   cubTempStorageSize = 0;
 };
+
+AABB HLBVH_initTriData(HLBVH_WorkingMemory *_mem, MeshRaw *_rawMesh);
+void HLBVH_calcMortonCodes(HLBVH_WorkingMemory *_mem, AABB _sceneAABB);
 
 bool                HLBVH_allocateBVH(CUDAMemoryBVHPointer *_bvh, MeshRaw *_rawMesh);
 HLBVH_WorkingMemory HLBVH_allocateWorkingMemory(MeshRaw *_rawMesh);
