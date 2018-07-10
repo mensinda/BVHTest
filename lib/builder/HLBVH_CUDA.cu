@@ -182,6 +182,16 @@ void HLBVH_calcMortonCodes(HLBVH_WorkingMemory *_mem, AABB _sceneAABB) {
   kCalcMortonCodes<<<lNumBlocks, 64>>>(_mem->mortonCodes, _mem->triData, lOffset, lScale, _mem->numFaces);
 }
 
+void HLBVH_sortMortonCodes(HLBVH_WorkingMemory *_mem) {
+  cub::DeviceRadixSort::SortPairs(_mem->cubTempStorage,
+                                  _mem->cubTempStorageSize,
+                                  _mem->mortonCodes,
+                                  _mem->mortonCodesSorted,
+                                  _mem->triData,
+                                  _mem->triDataSorted,
+                                  _mem->numFaces);
+}
+
 /*  ___  ___                                 ___  ___                                                  _     */
 /*  |  \/  |                                 |  \/  |                                                 | |    */
 /*  | .  . | ___ _ __ ___   ___  _ __ _   _  | .  . | __ _ _ __   __ _  __ _  ___ _ __ ___   ___ _ __ | |_   */

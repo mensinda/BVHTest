@@ -46,6 +46,7 @@ struct HLBVH_WorkingMemory {
 
 AABB HLBVH_initTriData(HLBVH_WorkingMemory *_mem, MeshRaw *_rawMesh);
 void HLBVH_calcMortonCodes(HLBVH_WorkingMemory *_mem, AABB _sceneAABB);
+void HLBVH_sortMortonCodes(HLBVH_WorkingMemory *_mem);
 
 bool                HLBVH_allocateBVH(CUDAMemoryBVHPointer *_bvh, MeshRaw *_rawMesh);
 HLBVH_WorkingMemory HLBVH_allocateWorkingMemory(MeshRaw *_rawMesh);

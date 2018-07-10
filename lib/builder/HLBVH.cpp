@@ -15,7 +15,6 @@
  */
 
 #include "HLBVH.hpp"
-#include <iostream>
 
 using namespace std;
 using namespace BVHTest;
@@ -42,6 +41,7 @@ ErrorCode HLBVH::setup(State &_state) {
 ErrorCode HLBVH::runImpl(State &_state) {
   AABB lBBox = HLBVH_initTriData(&vWorkingMem, &_state.cudaMem.rawMesh);
   HLBVH_calcMortonCodes(&vWorkingMem, lBBox);
+  HLBVH_sortMortonCodes(&vWorkingMem);
 
   return ErrorCode::OK;
 }
