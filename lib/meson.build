@@ -41,7 +41,8 @@ builderSrc = files([
 
 
 builderCU = files([
-  'builder/Bittner13CUDA.cu'
+  'builder/Bittner13CUDA.cu',
+  'builder/HLBVH_CUDA.cu'
 ])
 
 

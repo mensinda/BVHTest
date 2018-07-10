@@ -32,6 +32,13 @@ using namespace BucketSelect;
 extern "C" bool copyBVHToGPU(BVH *_bvh, CUDAMemoryBVHPointer *_ptr) {
   if (!_bvh || !_ptr) { return false; }
 
+  if (_bvh->size() == 0) {
+    _ptr->bvh      = nullptr;
+    _ptr->nodes    = nullptr;
+    _ptr->numNodes = 0;
+    return true;
+  }
+
   size_t      lSize = _bvh->size() * sizeof(BVHNode);
   BVH         lTempBVH;
   cudaError_t lRes;
@@ -105,6 +112,8 @@ error:
 
 extern "C" bool copyBVHToHost(CUDAMemoryBVHPointer *_bvh, base::BVH *_ptr) {
   if (!_bvh->bvh || !_bvh->nodes || !_ptr) { return false; }
+
+  if (_bvh->numNodes == 0) { return true; }
 
   cudaError_t lRes;
   BVH         lTempBVH;

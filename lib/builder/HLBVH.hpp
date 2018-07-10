@@ -17,11 +17,14 @@
 #pragma once
 
 #include "BuilderBase.hpp"
+#include "HLBVH_CUDA.hpp"
 
 namespace BVHTest::builder {
 
 class HLBVH final : public BuilderBase {
  private:
+  HLBVH_WorkingMemory vWorkingMem;
+
  public:
   HLBVH() = default;
   virtual ~HLBVH();

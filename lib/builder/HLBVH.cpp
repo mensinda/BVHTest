@@ -26,6 +26,14 @@ void HLBVH::fromJSON(const json &_j) { BuilderBase::fromJSON(_j); }
 json HLBVH::toJSON() const { return BuilderBase::toJSON(); }
 
 ErrorCode HLBVH::setup(State &_state) {
+  vWorkingMem = HLBVH_allocateWorkingMemory(&_state.cudaMem.rawMesh);
+  if (!vWorkingMem.lRes) { return ErrorCode::CUDA_ERROR; }
+
+  if (!HLBVH_allocateBVH(&_state.cudaMem.bvh, &_state.cudaMem.rawMesh)) {
+    HLBVH_freeWorkingMemory(&vWorkingMem);
+    return ErrorCode::CUDA_ERROR;
+  }
+
   (void)_state;
   return ErrorCode::OK;
 }
@@ -35,4 +43,7 @@ ErrorCode HLBVH::runImpl(State &_state) {
   return ErrorCode::OK;
 }
 
-void HLBVH::teardown(State &_state) { (void)_state; }
+void HLBVH::teardown(State &_state) {
+  (void)_state;
+  HLBVH_freeWorkingMemory(&vWorkingMem);
+}
