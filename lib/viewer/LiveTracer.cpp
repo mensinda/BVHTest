@@ -138,6 +138,8 @@ LiveTracer::LiveTracer(State &_state, uint32_t _w, uint32_t _h) {
   if (!vWorkingMemory.result) { throw std::runtime_error("CUDA malloc failed"); }
   initData(&vWorkingMemory, &vCudaMem.bvh, 64);
 
+  vLBVHWorkMem = LBVH_allocateWorkingMemory(&vRawMesh);
+
   if (!_state.meshOffsets.empty()) {
     uint32_t lOffset           = _state.meshOffsets[0].facesOffset;
     uint32_t lNumNodesSelected = 0;
@@ -217,6 +219,14 @@ void LiveTracer::render() {
   lCFG.sort          = true;
   lCFG.localPatchCPY = true;
 
+  if (vLBVHRebuild) {
+    AABB lBBox = LBVH_initTriData(&vLBVHWorkMem, &vRawMesh);
+    LBVH_calcMortonCodes(&vLBVHWorkMem, lBBox);
+    LBVH_sortMortonCodes(&vLBVHWorkMem);
+    LBVH_buildBVHTree(&vLBVHWorkMem, &vCudaMem.bvh);
+    LBVH_fixAABB(&vLBVHWorkMem, &vCudaMem.bvh);
+  }
+
   if (vBVHUpdate) {
     if (vCurrChunk == 0) {
       bn13_selectNodes(&vWorkingMemory, &vCudaMem.bvh, lCFG);
@@ -246,9 +256,10 @@ void LiveTracer::update(CameraBase *_cam) {
   vCam           = _cam;
   uint32_t lMode = getRenderMode();
 
-  vBVHUpdate = lMode & 0b100;
-  vBundle    = lMode & 0b010;
-  vBVHView   = lMode & 0b001;
+  vLBVHRebuild = lMode & 0b1000;
+  vBVHUpdate   = lMode & 0b0100;
+  vBundle      = lMode & 0b0010;
+  vBVHView     = lMode & 0b0001;
 
   if (vBVHView) {
     TimePoint lNow = std::chrono::system_clock::now();
@@ -279,7 +290,8 @@ void LiveTracer::updateMesh(State &_state, CameraBase *_cam, uint32_t _offsetInd
                       _state.cudaMem.rawMesh.numVert - lOffs.vertOffset,
                       lMat);
   refitDynamicTris(&vCudaMem.bvh, vCudaMem.rawMesh, vNodesToRefit, vNumNodesToRefit, 64);
-  fixTree3(&vWorkingMemory, &vCudaMem.bvh, 64);
+
+  if (!vLBVHRebuild) { fixTree3(&vWorkingMemory, &vCudaMem.bvh, 64); }
 
   vWorkingMemory.nodesToFix    = lOldToFix;
   vWorkingMemory.numNodesToFix = lOldToFixNum;
@@ -288,8 +300,10 @@ void LiveTracer::updateMesh(State &_state, CameraBase *_cam, uint32_t _offsetInd
 
 std::string LiveTracer::getRenderModeString() {
   std::string lRet;
+  lRet += "\n  -- LBVH Rebuild:      "s + (vLBVHRebuild ? "TRUE" : "FALSE");
   lRet += "\n  -- Update BVH:          "s + (vBVHUpdate ? "TRUE" : "FALSE");
   lRet += "\n  -- Bundle Tracing: "s + (vBundle ? "TRUE" : "FALSE");
   lRet += "\n  -- Counter View:      "s + (vBVHView ? "TRUE" : "FALSE");
+  lRet += "\n  ---- Counter Percentie -- " + std::to_string(vMaxCount) + " ----";
   return lRet;
 }

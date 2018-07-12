@@ -20,6 +20,7 @@
 #include "builder/Bittner13CUDA.hpp"
 #include "tracer/CUDAKernels.hpp"
 #include "RendererBase.hpp"
+#include "builder/LBVH_CUDA.hpp"
 #include <chrono>
 
 namespace BVHTest::view {
@@ -39,9 +40,10 @@ class LiveTracer : public RendererBase {
   uint32_t vWidth;
   uint32_t vHeight;
 
-  bool vBVHUpdate = false;
-  bool vBundle    = false;
-  bool vBVHView   = false;
+  bool vLBVHRebuild = false;
+  bool vBVHUpdate   = false;
+  bool vBundle      = false;
+  bool vBVHView     = false;
 
   GLint vIntCountLocation = 0;
   GLint vMaxCountLocation = 0;
@@ -49,10 +51,11 @@ class LiveTracer : public RendererBase {
   TimePoint vPercentileRecalc = std::chrono::system_clock::now();
   uint32_t  vMaxCount         = 255;
 
-  float            vBatchPercent = 1.0f;
-  uint32_t         vNumChunks    = 16;
-  uint32_t         vCurrChunk    = 0;
-  GPUWorkingMemory vWorkingMemory;
+  float              vBatchPercent = 1.0f;
+  uint32_t           vNumChunks    = 16;
+  uint32_t           vCurrChunk    = 0;
+  GPUWorkingMemory   vWorkingMemory;
+  LBVH_WorkingMemory vLBVHWorkMem;
 
   base::MeshRaw vRawMesh;
   glm::vec3 *   vDevOriginalVert = nullptr;
@@ -66,7 +69,7 @@ class LiveTracer : public RendererBase {
   void        render() override;
   void        update(base::CameraBase *_cam) override;
   Renderer    getType() const override { return Renderer::CUDA_TRACER; }
-  uint32_t    numRenderModes() override { return 8; }
+  uint32_t    numRenderModes() override { return 16; }
   std::string getRenderModeString() override;
 
   void updateMesh(base::State &_state, base::CameraBase *_cam, uint32_t _offsetIndex) override;
