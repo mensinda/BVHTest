@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "HLBVH_CUDA.hpp"
+#include "LBVH_CUDA.hpp"
 #include <cfloat>
 #include <cub/cub.cuh>
 #include <cuda_runtime.h>
@@ -49,19 +49,19 @@ using namespace BVHTest::base;
 /*                                                       */
 
 struct ReduceRootAABB {
-  __device__ __forceinline__ HLBVH_TriData operator()(HLBVH_TriData const &a, HLBVH_TriData const &b) {
-    HLBVH_TriData lRes;
+  __device__ __forceinline__ LBVH_TriData operator()(LBVH_TriData const &a, LBVH_TriData const &b) {
+    LBVH_TriData lRes;
     lRes.bbox = a.bbox;
     lRes.bbox.mergeWith(b.bbox);
     return lRes;
   }
 };
 
-extern "C" __global__ void kInitTriData(HLBVH_TriData *_data, Triangle *_faces, vec3 *_vert, uint32_t _num) {
+extern "C" __global__ void kInitTriData(LBVH_TriData *_data, Triangle *_faces, vec3 *_vert, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
   for (uint32_t i = index; i < _num; i += stride) {
-    HLBVH_TriData lRes;
+    LBVH_TriData lRes;
     lRes.faceIndex = i;
 
     Triangle const lFace = _faces[i];
@@ -95,23 +95,23 @@ extern "C" __global__ void kInitTriData(HLBVH_TriData *_data, Triangle *_faces, 
   }
 }
 
-AABB HLBVH_initTriData(HLBVH_WorkingMemory *_mem, MeshRaw *_rawMesh) {
+AABB LBVH_initTriData(LBVH_WorkingMemory *_mem, MeshRaw *_rawMesh) {
   cudaError_t    lRes;
   ReduceRootAABB lReductor;
   uint32_t       lNumBlocks = (_rawMesh->numFaces + 64 - 1) / 64;
-  HLBVH_TriData *lDevResult = nullptr;
-  HLBVH_TriData  lResult;
-  HLBVH_TriData  lInit;
+  LBVH_TriData * lDevResult = nullptr;
+  LBVH_TriData   lResult;
+  LBVH_TriData   lInit;
   lInit.bbox.minMax[0] = vec3(0.0f, 0.0f, 0.0f);
   lInit.bbox.minMax[1] = vec3(0.0f, 0.0f, 0.0f);
 
-  ALLOCATE(&lDevResult, 1, HLBVH_TriData);
+  ALLOCATE(&lDevResult, 1, LBVH_TriData);
 
   kInitTriData<<<lNumBlocks, 64>>>(_mem->triData, _rawMesh->faces, _rawMesh->vert, _rawMesh->numFaces);
 
   CUDA_RUN(cub::DeviceReduce::Reduce(
       _mem->cubTempStorage, _mem->cubTempStorageSize, _mem->triData, lDevResult, _mem->numFaces, lReductor, lInit));
-  CUDA_RUN(cudaMemcpy(&lResult, lDevResult, sizeof(HLBVH_TriData), cudaMemcpyDeviceToHost));
+  CUDA_RUN(cudaMemcpy(&lResult, lDevResult, sizeof(LBVH_TriData), cudaMemcpyDeviceToHost));
 
 error:
   FREE(lDevResult);
@@ -138,7 +138,7 @@ __device__ __forceinline__ uint32_t expandBits(uint32_t v) {
 }
 
 extern "C" __global__ void kCalcMortonCodes(
-    uint32_t *_outCode, HLBVH_TriData *_triData, vec3 _offset, vec3 _scale, uint32_t _num) {
+    uint32_t *_outCode, LBVH_TriData *_triData, vec3 _offset, vec3 _scale, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
   for (uint32_t i = index; i < _num; i += stride) {
@@ -165,7 +165,7 @@ extern "C" __global__ void kCalcMortonCodes(
   }
 }
 
-void HLBVH_calcMortonCodes(HLBVH_WorkingMemory *_mem, AABB _sceneAABB) {
+void LBVH_calcMortonCodes(LBVH_WorkingMemory *_mem, AABB _sceneAABB) {
   uint32_t lNumBlocks = (_mem->numFaces + 64 - 1) / 64;
 
   // Set AABB to range [0, X]
@@ -182,7 +182,7 @@ void HLBVH_calcMortonCodes(HLBVH_WorkingMemory *_mem, AABB _sceneAABB) {
   kCalcMortonCodes<<<lNumBlocks, 64>>>(_mem->mortonCodes, _mem->triData, lOffset, lScale, _mem->numFaces);
 }
 
-void HLBVH_sortMortonCodes(HLBVH_WorkingMemory *_mem) {
+void LBVH_sortMortonCodes(LBVH_WorkingMemory *_mem) {
   cub::DeviceRadixSort::SortPairs(_mem->cubTempStorage,
                                   _mem->cubTempStorageSize,
                                   _mem->mortonCodes,
@@ -270,15 +270,15 @@ __device__ __forceinline__ uint2 determineRange(uint32_t *_sortedMortonCodes, ui
   }
 }
 
-extern "C" __global__ void kGenLeafNodes(BVHNode *      _nodes,
-                                         uint32_t *     _sortedMortonCodes,
-                                         HLBVH_TriData *_sortedData,
-                                         uint32_t       _num) {
+extern "C" __global__ void kGenLeafNodes(BVHNode *     _nodes,
+                                         uint32_t *    _sortedMortonCodes,
+                                         LBVH_TriData *_sortedData,
+                                         uint32_t      _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
   for (uint32_t i = index; i < _num; i += stride) {
-    HLBVH_TriData lData = _sortedData[i];
-    BVHNode       lNode;
+    LBVH_TriData lData = _sortedData[i];
+    BVHNode      lNode;
     lNode.bbox        = lData.bbox;
     lNode.parent      = UINT32_MAX;
     lNode.numChildren = 0;
@@ -322,7 +322,7 @@ extern "C" __global__ void kBuildTree(BVHNode *_nodes, uint32_t *_sortedMortonCo
   }
 }
 
-void HLBVH_buildBVHTree(HLBVH_WorkingMemory *_mem, CUDAMemoryBVHPointer *_bvh) {
+void LBVH_buildBVHTree(LBVH_WorkingMemory *_mem, CUDAMemoryBVHPointer *_bvh) {
   uint32_t lNumBlocks = (_mem->numFaces + 64 - 1) / 64;
   kGenLeafNodes<<<lNumBlocks, 64>>>(_bvh->nodes, _mem->mortonCodesSorted, _mem->triDataSorted, _mem->numFaces);
   kBuildTree<<<lNumBlocks, 64>>>(_bvh->nodes, _mem->mortonCodesSorted, _mem->numFaces);
@@ -373,7 +373,7 @@ extern "C" __global__ void kFixAABBTree(BVHNode *_nodes, uint32_t *_locks, uint3
   }
 }
 
-void HLBVH_fixAABB(HLBVH_WorkingMemory *_mem, CUDAMemoryBVHPointer *_bvh) {
+void LBVH_fixAABB(LBVH_WorkingMemory *_mem, CUDAMemoryBVHPointer *_bvh) {
   cudaError_t lRes;
   uint32_t    lNumBlocks = (_mem->numFaces + 64 - 1) / 64;
 
@@ -393,7 +393,7 @@ error:
 /*                                     __/ |                            __/ |                                */
 /*                                    |___/                            |___/                                 */
 
-bool HLBVH_allocateBVH(CUDAMemoryBVHPointer *_bvh, MeshRaw *_rawMesh) {
+bool LBVH_allocateBVH(CUDAMemoryBVHPointer *_bvh, MeshRaw *_rawMesh) {
   cudaError_t lRes;
   BVH         lBVH;
 
@@ -420,14 +420,14 @@ error:
   return false;
 }
 
-HLBVH_WorkingMemory HLBVH_allocateWorkingMemory(MeshRaw *_rawMesh) {
-  cudaError_t         lRes;
-  HLBVH_WorkingMemory lMem;
-  ReduceRootAABB      lReductor;
-  size_t              lTS1   = 0;
-  size_t              lTS2   = 0;
-  HLBVH_TriData *     lDummy = nullptr;
-  HLBVH_TriData       lInit;
+LBVH_WorkingMemory LBVH_allocateWorkingMemory(MeshRaw *_rawMesh) {
+  cudaError_t        lRes;
+  LBVH_WorkingMemory lMem;
+  ReduceRootAABB     lReductor;
+  size_t             lTS1   = 0;
+  size_t             lTS2   = 0;
+  LBVH_TriData *     lDummy = nullptr;
+  LBVH_TriData       lInit;
   lInit.bbox.minMax[0] = vec3(0.0f, 0.0f, 0.0f);
   lInit.bbox.minMax[1] = vec3(0.0f, 0.0f, 0.0f);
 
@@ -435,8 +435,8 @@ HLBVH_WorkingMemory HLBVH_allocateWorkingMemory(MeshRaw *_rawMesh) {
   lMem.numLocks = _rawMesh->numFaces * 2 - 1;
   ALLOCATE(&lMem.mortonCodes, lMem.numFaces, uint32_t);
   ALLOCATE(&lMem.mortonCodesSorted, lMem.numFaces, uint32_t);
-  ALLOCATE(&lMem.triData, lMem.numFaces, HLBVH_TriData);
-  ALLOCATE(&lMem.triDataSorted, lMem.numFaces, HLBVH_TriData);
+  ALLOCATE(&lMem.triData, lMem.numFaces, LBVH_TriData);
+  ALLOCATE(&lMem.triDataSorted, lMem.numFaces, LBVH_TriData);
   ALLOCATE(&lMem.atomicLocks, lMem.numLocks, uint32_t);
 
   CUDA_RUN(cub::DeviceRadixSort::SortPairs(lMem.cubTempStorage,
@@ -471,7 +471,7 @@ error:
   return lMem;
 }
 
-void HLBVH_freeWorkingMemory(HLBVH_WorkingMemory *_mem) {
+void LBVH_freeWorkingMemory(LBVH_WorkingMemory *_mem) {
   FREE(_mem->mortonCodes);
   FREE(_mem->mortonCodesSorted);
   FREE(_mem->triData);
@@ -484,4 +484,4 @@ void HLBVH_freeWorkingMemory(HLBVH_WorkingMemory *_mem) {
   _mem->lRes               = false;
 }
 
-void HLBVH_doCUDASyc() { cudaDeviceSynchronize(); }
+void LBVH_doCUDASyc() { cudaDeviceSynchronize(); }

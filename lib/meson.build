@@ -33,7 +33,7 @@ builderSrc = files([
   'builder/Bittner13Par.cpp',
   'builder/Bittner13GPU.cpp',
   'builder/BuilderBase.cpp',
-  'builder/HLBVH.cpp',
+  'builder/LBVH.cpp',
   'builder/Median.cpp',
   'builder/OptimizerBase.cpp',
   'builder/Wald07.cpp'
@@ -42,7 +42,7 @@ builderSrc = files([
 
 builderCU = files([
   'builder/Bittner13CUDA.cu',
-  'builder/HLBVH_CUDA.cu'
+  'builder/LBVH_CUDA.cu'
 ])
 
 
@@ -51,7 +51,7 @@ builderInc = files([
   'builder/Bittner13Par.hpp',
   'builder/Bittner13GPU.hpp',
   'builder/BuilderBase.hpp',
-  'builder/HLBVH.hpp',
+  'builder/LBVH.hpp',
   'builder/Median.hpp',
   'builder/OptimizerBase.hpp',
   'builder/Wald07.hpp'

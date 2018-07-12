@@ -17,20 +17,20 @@
 #pragma once
 
 #include "BuilderBase.hpp"
-#include "HLBVH_CUDA.hpp"
+#include "LBVH_CUDA.hpp"
 
 namespace BVHTest::builder {
 
-class HLBVH final : public BuilderBase {
+class LBVH final : public BuilderBase {
  private:
-  HLBVH_WorkingMemory vWorkingMem;
+  LBVH_WorkingMemory vWorkingMem;
 
  public:
-  HLBVH() = default;
-  virtual ~HLBVH();
+  LBVH() = default;
+  virtual ~LBVH();
 
-  inline std::string getName() const override { return "hlbvh"; }
-  inline std::string getDesc() const override { return "HLBVH CUDA builder"; }
+  inline std::string getName() const override { return "LBVH"; }
+  inline std::string getDesc() const override { return "LBVH CUDA builder"; }
 
   inline uint64_t getRequiredCommands() const override {
     return BuilderBase::getRequiredCommands() | static_cast<uint64_t>(base::CommandType::CUDA_INIT);

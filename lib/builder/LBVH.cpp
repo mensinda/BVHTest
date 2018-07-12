@@ -14,23 +14,23 @@
  * limitations under the License.
  */
 
-#include "HLBVH.hpp"
+#include "LBVH.hpp"
 
 using namespace std;
 using namespace BVHTest;
 using namespace BVHTest::base;
 using namespace BVHTest::builder;
 
-HLBVH::~HLBVH() {}
-void HLBVH::fromJSON(const json &_j) { BuilderBase::fromJSON(_j); }
-json HLBVH::toJSON() const { return BuilderBase::toJSON(); }
+LBVH::~LBVH() {}
+void LBVH::fromJSON(const json &_j) { BuilderBase::fromJSON(_j); }
+json LBVH::toJSON() const { return BuilderBase::toJSON(); }
 
-ErrorCode HLBVH::setup(State &_state) {
-  vWorkingMem = HLBVH_allocateWorkingMemory(&_state.cudaMem.rawMesh);
+ErrorCode LBVH::setup(State &_state) {
+  vWorkingMem = LBVH_allocateWorkingMemory(&_state.cudaMem.rawMesh);
   if (!vWorkingMem.lRes) { return ErrorCode::CUDA_ERROR; }
 
-  if (!HLBVH_allocateBVH(&_state.cudaMem.bvh, &_state.cudaMem.rawMesh)) {
-    HLBVH_freeWorkingMemory(&vWorkingMem);
+  if (!LBVH_allocateBVH(&_state.cudaMem.bvh, &_state.cudaMem.rawMesh)) {
+    LBVH_freeWorkingMemory(&vWorkingMem);
     return ErrorCode::CUDA_ERROR;
   }
 
@@ -38,18 +38,18 @@ ErrorCode HLBVH::setup(State &_state) {
   return ErrorCode::OK;
 }
 
-ErrorCode HLBVH::runImpl(State &_state) {
-  AABB lBBox = HLBVH_initTriData(&vWorkingMem, &_state.cudaMem.rawMesh);
-  HLBVH_calcMortonCodes(&vWorkingMem, lBBox);
-  HLBVH_sortMortonCodes(&vWorkingMem);
-  HLBVH_buildBVHTree(&vWorkingMem, &_state.cudaMem.bvh);
-  HLBVH_fixAABB(&vWorkingMem, &_state.cudaMem.bvh);
-  HLBVH_doCUDASyc();
+ErrorCode LBVH::runImpl(State &_state) {
+  AABB lBBox = LBVH_initTriData(&vWorkingMem, &_state.cudaMem.rawMesh);
+  LBVH_calcMortonCodes(&vWorkingMem, lBBox);
+  LBVH_sortMortonCodes(&vWorkingMem);
+  LBVH_buildBVHTree(&vWorkingMem, &_state.cudaMem.bvh);
+  LBVH_fixAABB(&vWorkingMem, &_state.cudaMem.bvh);
+  LBVH_doCUDASyc();
 
   return ErrorCode::OK;
 }
 
-void HLBVH::teardown(State &_state) {
+void LBVH::teardown(State &_state) {
   (void)_state;
-  HLBVH_freeWorkingMemory(&vWorkingMem);
+  LBVH_freeWorkingMemory(&vWorkingMem);
 }

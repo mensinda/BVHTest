@@ -24,36 +24,36 @@ using BVHTest::base::MeshRaw;
 using BVHTest::base::Triangle;
 using glm::vec3;
 
-struct HLBVH_TriData {
+struct LBVH_TriData {
   AABB     bbox;
   vec3     centroid;
   uint32_t faceIndex;
   uint64_t __padding__;
 };
 
-struct HLBVH_WorkingMemory {
+struct LBVH_WorkingMemory {
   bool lRes = false;
 
-  uint32_t *     mortonCodes       = nullptr;
-  uint32_t *     mortonCodesSorted = nullptr;
-  HLBVH_TriData *triData           = nullptr;
-  HLBVH_TriData *triDataSorted     = nullptr;
-  void *         cubTempStorage    = nullptr;
-  uint32_t *     atomicLocks       = nullptr;
+  uint32_t *    mortonCodes       = nullptr;
+  uint32_t *    mortonCodesSorted = nullptr;
+  LBVH_TriData *triData           = nullptr;
+  LBVH_TriData *triDataSorted     = nullptr;
+  void *        cubTempStorage    = nullptr;
+  uint32_t *    atomicLocks       = nullptr;
 
   uint32_t numFaces           = 0;
   size_t   cubTempStorageSize = 0;
   uint32_t numLocks           = 0;
 };
 
-AABB HLBVH_initTriData(HLBVH_WorkingMemory *_mem, MeshRaw *_rawMesh);
-void HLBVH_calcMortonCodes(HLBVH_WorkingMemory *_mem, AABB _sceneAABB);
-void HLBVH_sortMortonCodes(HLBVH_WorkingMemory *_mem);
-void HLBVH_buildBVHTree(HLBVH_WorkingMemory *_mem, CUDAMemoryBVHPointer *_bvh);
-void HLBVH_fixAABB(HLBVH_WorkingMemory *_mem, CUDAMemoryBVHPointer *_bvh);
+AABB LBVH_initTriData(LBVH_WorkingMemory *_mem, MeshRaw *_rawMesh);
+void LBVH_calcMortonCodes(LBVH_WorkingMemory *_mem, AABB _sceneAABB);
+void LBVH_sortMortonCodes(LBVH_WorkingMemory *_mem);
+void LBVH_buildBVHTree(LBVH_WorkingMemory *_mem, CUDAMemoryBVHPointer *_bvh);
+void LBVH_fixAABB(LBVH_WorkingMemory *_mem, CUDAMemoryBVHPointer *_bvh);
 
-bool                HLBVH_allocateBVH(CUDAMemoryBVHPointer *_bvh, MeshRaw *_rawMesh);
-HLBVH_WorkingMemory HLBVH_allocateWorkingMemory(MeshRaw *_rawMesh);
-void                HLBVH_freeWorkingMemory(HLBVH_WorkingMemory *_mem);
+bool               LBVH_allocateBVH(CUDAMemoryBVHPointer *_bvh, MeshRaw *_rawMesh);
+LBVH_WorkingMemory LBVH_allocateWorkingMemory(MeshRaw *_rawMesh);
+void               LBVH_freeWorkingMemory(LBVH_WorkingMemory *_mem);
 
-void HLBVH_doCUDASyc();
+void LBVH_doCUDASyc();
