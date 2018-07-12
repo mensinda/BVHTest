@@ -42,6 +42,9 @@ ErrorCode HLBVH::runImpl(State &_state) {
   AABB lBBox = HLBVH_initTriData(&vWorkingMem, &_state.cudaMem.rawMesh);
   HLBVH_calcMortonCodes(&vWorkingMem, lBBox);
   HLBVH_sortMortonCodes(&vWorkingMem);
+  HLBVH_buildBVHTree(&vWorkingMem, &_state.cudaMem.bvh);
+  HLBVH_fixAABB(&vWorkingMem, &_state.cudaMem.bvh);
+  HLBVH_doCUDASyc();
 
   return ErrorCode::OK;
 }

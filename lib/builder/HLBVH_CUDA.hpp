@@ -39,15 +39,21 @@ struct HLBVH_WorkingMemory {
   HLBVH_TriData *triData           = nullptr;
   HLBVH_TriData *triDataSorted     = nullptr;
   void *         cubTempStorage    = nullptr;
+  uint32_t *     atomicLocks       = nullptr;
 
   uint32_t numFaces           = 0;
   size_t   cubTempStorageSize = 0;
+  uint32_t numLocks           = 0;
 };
 
 AABB HLBVH_initTriData(HLBVH_WorkingMemory *_mem, MeshRaw *_rawMesh);
 void HLBVH_calcMortonCodes(HLBVH_WorkingMemory *_mem, AABB _sceneAABB);
 void HLBVH_sortMortonCodes(HLBVH_WorkingMemory *_mem);
+void HLBVH_buildBVHTree(HLBVH_WorkingMemory *_mem, CUDAMemoryBVHPointer *_bvh);
+void HLBVH_fixAABB(HLBVH_WorkingMemory *_mem, CUDAMemoryBVHPointer *_bvh);
 
 bool                HLBVH_allocateBVH(CUDAMemoryBVHPointer *_bvh, MeshRaw *_rawMesh);
 HLBVH_WorkingMemory HLBVH_allocateWorkingMemory(MeshRaw *_rawMesh);
 void                HLBVH_freeWorkingMemory(HLBVH_WorkingMemory *_mem);
+
+void HLBVH_doCUDASyc();
