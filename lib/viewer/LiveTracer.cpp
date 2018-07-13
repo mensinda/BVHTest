@@ -132,7 +132,7 @@ LiveTracer::LiveTracer(State &_state, uint32_t _w, uint32_t _h) {
   cuda::runMalloc((void **)&vDevOriginalVert, lNumVert);
   cuda::runMemcpy(vDevOriginalVert, vRawMesh.vert, lNumVert, MemcpyKind::Dev2Dev);
 
-  uint32_t lNumNodes  = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
+  uint32_t lNumNodes  = (uint32_t)((vBatchPercent / 100.0f) * (float)_state.cudaMem.bvh.numNodes);
   uint32_t lChunkSize = lNumNodes / vNumChunks;
   vWorkingMemory      = allocateMemory(&vCudaMem.bvh, lChunkSize, vCudaMem.rawMesh.numFaces);
   if (!vWorkingMemory.result) { throw std::runtime_error("CUDA malloc failed"); }

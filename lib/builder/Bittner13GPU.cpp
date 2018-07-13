@@ -76,7 +76,7 @@ json Bittner13GPU::toJSON() const {
 }
 
 ErrorCode Bittner13GPU::setup(State &_state) {
-  uint32_t lNumNodes  = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
+  uint32_t lNumNodes  = (uint32_t)((vBatchPercent / 100.0f) * (float)_state.cudaMem.bvh.numNodes);
   uint32_t lChunkSize = lNumNodes / vNumChunks;
   vWorkingMemory      = allocateMemory(&_state.cudaMem.bvh, lChunkSize, _state.cudaMem.rawMesh.numFaces);
 
@@ -87,7 +87,7 @@ ErrorCode Bittner13GPU::setup(State &_state) {
 }
 
 ErrorCode Bittner13GPU::runImpl(State &_state) {
-  uint32_t lNumNodes  = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
+  uint32_t lNumNodes  = (uint32_t)((vBatchPercent / 100.0f) * (float)_state.cudaMem.bvh.numNodes);
   uint32_t lChunkSize = lNumNodes / vNumChunks;
   lNumNodes           = lChunkSize * vNumChunks;
 
@@ -114,7 +114,7 @@ ErrorCode Bittner13GPU::runImpl(State &_state) {
 }
 
 void Bittner13GPU::teardown(State &_state) {
-  uint32_t lNumNodes  = static_cast<uint32_t>((vBatchPercent / 100.0f) * static_cast<float>(_state.bvh.size()));
+  uint32_t lNumNodes  = (uint32_t)((vBatchPercent / 100.0f) * (float)_state.cudaMem.bvh.numNodes);
   uint32_t lChunkSize = lNumNodes / vNumChunks;
   lNumNodes           = lChunkSize * vNumChunks;
 
