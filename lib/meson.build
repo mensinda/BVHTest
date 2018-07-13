@@ -82,6 +82,7 @@ ioSrc = files([
   'io/ImportMesh.cpp',
   'io/Load.cpp',
   'io/LoadAdd.cpp',
+  'io/WriteData.cpp',
   'io/WriteImage.cpp',
 ])
 
@@ -94,6 +95,7 @@ ioInc = files([
   'io/ImportMesh.hpp',
   'io/Load.hpp',
   'io/LoadAdd.hpp',
+  'io/WriteData.hpp',
   'io/WriteImage.hpp',
 ])
 

@@ -64,7 +64,7 @@ ErrorCode Command::run(State &_state) {
   }
 
   _state.commandsRun |= static_cast<uint64_t>(getType());
-  _state.commands.push_back({lName, duration_cast<milliseconds>(lEnd - lStart)});
+  _state.commands.push_back({lName, getType(), duration_cast<milliseconds>(lEnd - lStart)});
   return ErrorCode::OK;
 }
 

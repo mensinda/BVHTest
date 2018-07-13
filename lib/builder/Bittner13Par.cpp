@@ -480,11 +480,14 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
   /*****                                           | |      *****/
   /*****                                           |_|      *****/
 
+  benchmarkInitData(_state, [&]() { return _state.bvh.calcSAH(); });
 
   for (uint32_t i = 0; i < vMaxNumStepps; ++i) {
 #if ENABLE_PROGRESS_BAR
     progress(fmt::format("Stepp {:<3}; SAH: {:<6.5}", i, _state.bvh.calcSAH()), i, vMaxNumStepps - 1);
 #endif
+
+    benchmarkStartTimer(_state);
 
     /*   _____ _                     __      _____      _           _     _   _           _             */
     /*  /  ___| |                   /  | _  /  ___|    | |         | |   | \ | |         | |            */
@@ -623,6 +626,8 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
         fixTree(lFixList[k * 3 + 2], _state.bvh, _sumMin);
       }
     }
+
+    benchmarkRecordData(_state, [&]() { return _state.bvh.calcSAH(); });
   }
 
   PROGRESS_DONE;

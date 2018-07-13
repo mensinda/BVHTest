@@ -224,7 +224,7 @@ void Bittner13::fixTree(uint32_t _node, BVH &_bvh) {
     NODE->bbox        = lBBox;
     NODE->surfaceArea = lSArea;
 
-    lSum              = lSum + SUM_OF(lCurrSiblingIndex) + lSArea * getCostInner();
+    lSum              = lSum + SUM_OF(lCurrSiblingIndex) + lSArea;
     lMin              = min(lMin, MIN_OF(lCurrSiblingIndex));
     lNum              = lNum + lCurrSibling->numChildren + 2;
     vSumAndMin[lNode] = {lSum, lMin};
@@ -255,13 +255,13 @@ void Bittner13::initSumAndMin(BVH &_bvh) {
     }
 
     // Leaf
-    vSumAndMin[lNode] = {NODE->surfaceArea * (float)getCostTri(), NODE->surfaceArea};
+    vSumAndMin[lNode] = {NODE->surfaceArea, NODE->surfaceArea};
 
     // Backtrack if left and right children are processed
     while ((lBitStack & 1) == 0) {
       if (lBitStack == 0 && lNode == lRoot) { return; } // We are done
       lNode             = NODE->parent;
-      vSumAndMin[lNode] = {SUM_OF(NODE->left) + SUM_OF(NODE->right) + NODE->surfaceArea * (float)getCostInner(),
+      vSumAndMin[lNode] = {SUM_OF(NODE->left) + SUM_OF(NODE->right) + NODE->surfaceArea,
                            min(MIN_OF(NODE->left), MIN_OF(NODE->right))};
       lBitStack >>= 1;
     }
@@ -288,6 +288,8 @@ ErrorCode Bittner13::runMetric(State &_state) {
   if (lNumStepps > 100) { lSkipp = lNumStepps / 100; }
 #endif
 
+  benchmarkInitData(_state, [&]() -> float { return _state.bvh.calcSAH(); });
+
   for (uint32_t i = 0; i < lNumStepps; ++i) {
 #if ENABLE_PROGRESS_BAR
     if (lSkipp == 0) {
@@ -299,6 +301,8 @@ ErrorCode Bittner13::runMetric(State &_state) {
       }
     }
 #endif
+
+    benchmarkStartTimer(_state);
 
     OMP_fi lWorstNode = {0.0f, 0};
 
@@ -348,6 +352,8 @@ ErrorCode Bittner13::runMetric(State &_state) {
       reinsert(l1stIndex, lU1, _state.bvh);
       reinsert(l2ndIndex, lU2, _state.bvh);
     }
+
+    benchmarkRecordData(_state, [&]() -> float { return _state.bvh.calcSAH(); });
   }
 
   return ErrorCode::OK;
@@ -375,6 +381,8 @@ ErrorCode Bittner13::runRandom(State &_state) {
   if (lNumStepps > 100) { lSkipp = lNumStepps / 100; }
 #endif
 
+  benchmarkInitData(_state, [&]() -> float { return _state.bvh.calcSAH(); });
+
   for (uint32_t i = 0; i < lNumStepps; ++i) {
 #if ENABLE_PROGRESS_BAR
     if (lSkipp == 0) {
@@ -386,6 +394,8 @@ ErrorCode Bittner13::runRandom(State &_state) {
       }
     }
 #endif
+
+    benchmarkStartTimer(_state);
 
     // Select nodes to reinsert
     if (!vStrictSequential) {
@@ -412,6 +422,8 @@ ErrorCode Bittner13::runRandom(State &_state) {
       reinsert(l1stIndex, lU1, _state.bvh);
       reinsert(l2ndIndex, lU2, _state.bvh);
     }
+
+    benchmarkRecordData(_state, [&]() -> float { return _state.bvh.calcSAH(); });
   }
 
   return ErrorCode::OK;

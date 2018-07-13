@@ -102,13 +102,14 @@ ErrorCode Bittner13GPU::runImpl(State &_state) {
   lCFG.sort          = vSortBatch;
   lCFG.localPatchCPY = vLocalPatchCPY;
 
-  for (uint32_t i = 0; i < vMaxNumStepps; ++i) {
-    //     PROGRESS(fmt::format("Stepp {:<3}; SAH: ?", i), i, vMaxNumStepps);
+  benchmarkInitData(_state, [&]() { return CUDAcalcSAH(&_state.cudaMem.bvh); }, [&]() { doCudaDevSync(); });
 
+  for (uint32_t i = 0; i < vMaxNumStepps; ++i) {
+    benchmarkStartTimer(_state, [&]() { doCudaDevSync(); });
     bn13_doAlgorithmStep(&vWorkingMemory, &_state.cudaMem.bvh, lCFG);
+    benchmarkRecordData(_state, [&]() { return CUDAcalcSAH(&_state.cudaMem.bvh); }, [&]() { doCudaDevSync(); });
   }
 
-  //   PROGRESS("CUDA sync", vMaxNumStepps, vMaxNumStepps);
   doCudaDevSync();
   return ErrorCode::OK;
 }

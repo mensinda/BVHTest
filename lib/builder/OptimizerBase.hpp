@@ -18,12 +18,20 @@
 
 #include "base/BVH.hpp"
 #include "base/Command.hpp"
+#include <chrono>
+#include <functional>
 
 namespace BVHTest::builder {
 
 class OptimizerBase : public base::Command {
-  double vCostInner = 1.2f;
-  double vCostTri   = 1.0f;
+ public:
+  typedef std::chrono::system_clock::time_point TP;
+
+ private:
+  bool vCalcSAH = false;
+  bool vDoSync  = false;
+
+  TP vStart;
 
  public:
   OptimizerBase() = default;
@@ -35,8 +43,9 @@ class OptimizerBase : public base::Command {
   void fromJSON(const json &_j) override;
   json toJSON() const override;
 
-  inline double getCostInner() const noexcept { return vCostInner; }
-  inline double getCostTri() const noexcept { return vCostTri; }
+  void benchmarkInitData(base::State &_state, std::function<float()> _calcSAH, std::function<void()> _sync = []() {});
+  void benchmarkStartTimer(base::State &_state, std::function<void()> _sync = []() {});
+  void benchmarkRecordData(base::State &_state, std::function<float()> _calcSAH, std::function<void()> _sync = []() {});
 };
 
 } // namespace BVHTest::builder

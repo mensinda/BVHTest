@@ -53,6 +53,7 @@ struct State final {
 
   struct CMD final {
     std::string  name;
+    CommandType  type;
     milliseconds duration;
   };
 
@@ -67,6 +68,20 @@ struct State final {
     uint32_t normOffset;
     uint32_t facesOffset;
   };
+
+  struct OptData {
+    struct OptStepp {
+      uint32_t     step;
+      float        sah;
+      milliseconds duration;
+    };
+
+    std::vector<OptStepp> optStepps;
+
+
+    uint32_t numSkipped;
+    uint32_t numTotal;
+  } optData;
 
   struct CudaMemory final {
     CUDAMemoryBVHPointer bvh;

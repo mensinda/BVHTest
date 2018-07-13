@@ -34,6 +34,7 @@
 #include "io/ImportMesh.hpp"
 #include "io/Load.hpp"
 #include "io/LoadAdd.hpp"
+#include "io/WriteData.hpp"
 #include "io/WriteImage.hpp"
 #include "misc/Sleep.hpp"
 #include "misc/Validate.hpp"
@@ -55,10 +56,11 @@ using namespace fmt;
 using namespace Enum2Str;
 using namespace nlohmann;
 
-const vector<string> gCommandList = {
-    "import",   "load",      "loadAdd",    "export",     "BVHExport", "BVHImport", "camExport",    "camImport",
-    "writeImg", "copyToGPU", "copyToHost", "median",     "wald07",    "bittner13", "bittner13Par", "bittner13GPU",
-    "LBVH",     "CPUTracer", "CUDATracer", "bruteForce", "status",    "validate",  "sleep",        "viewer"};
+const vector<string> gCommandList = {"import",       "load",         "loadAdd",   "export",    "BVHExport",
+                                     "BVHImport",    "camExport",    "camImport", "writeImg",  "writeData",
+                                     "copyToGPU",    "copyToHost",   "median",    "wald07",    "bittner13",
+                                     "bittner13Par", "bittner13GPU", "LBVH",      "CPUTracer", "CUDATracer",
+                                     "bruteForce",   "status",       "validate",  "sleep",     "viewer"};
 
 // String command to object
 Config::CMD_PTR fromString(string _s) {
@@ -72,6 +74,7 @@ Config::CMD_PTR fromString(string _s) {
     case "camExport"_h: return make_shared<IO::CameraExport>();
     case "camImport"_h: return make_shared<IO::CameraImport>();
     case "writeImg"_h: return make_shared<IO::WriteImage>();
+    case "writeData"_h: return make_shared<IO::WriteData>();
     case "copyToGPU"_h: return make_shared<cuda::CopyToGPU>();
     case "copyToHost"_h: return make_shared<cuda::CopyToHost>();
     case "median"_h: return make_shared<builder::Median>();

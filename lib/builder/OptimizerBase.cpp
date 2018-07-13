@@ -17,6 +17,8 @@
 #include "OptimizerBase.hpp"
 
 using namespace std;
+using namespace std::chrono;
+using namespace std::chrono_literals;
 using namespace glm;
 using namespace BVHTest;
 using namespace BVHTest::builder;
@@ -24,8 +26,32 @@ using namespace BVHTest::base;
 
 OptimizerBase::~OptimizerBase() {}
 void OptimizerBase::fromJSON(const json &_j) {
-  vCostInner = _j.value("costInner", vCostInner);
-  vCostTri   = _j.value("costLeaf", vCostTri);
+  vCalcSAH = _j.value("base_calcSAH", vCalcSAH);
+  vDoSync  = _j.value("base_doSync", vDoSync);
 }
 
-json OptimizerBase::toJSON() const { return json{{"costInner", vCostInner}, {"costLeaf", vCostTri}}; }
+json OptimizerBase::toJSON() const { return json{{"base_calcSAH", vCalcSAH}, {"base_doSync", vDoSync}}; }
+
+void OptimizerBase::benchmarkInitData(State &_state, function<float()> _calcSAH, function<void()> _sync) {
+  _state.optData.numSkipped = 0;
+  _state.optData.numTotal   = 0;
+  _state.optData.optStepps.push_back({0, 0.0f, 0ms});
+  if (vCalcSAH) { _state.optData.optStepps.back().sah = _calcSAH(); }
+  if (vDoSync) { _sync(); }
+}
+
+void OptimizerBase::benchmarkStartTimer(State &_state, function<void()> _sync) {
+  _state.optData.optStepps.push_back({(uint32_t)_state.optData.optStepps.size(), 0.0f, 0ms});
+  if (vDoSync) { _sync(); }
+  vStart = chrono::system_clock::now();
+}
+
+
+void OptimizerBase::benchmarkRecordData(State &_state, function<float()> _calcSAH, function<void()> _sync) {
+  if (vDoSync) { _sync(); }
+  auto lEnd = chrono::system_clock::now();
+
+  _state.optData.optStepps.back().duration = duration_cast<milliseconds>(lEnd - vStart);
+
+  if (vCalcSAH) { _state.optData.optStepps.back().sah = _calcSAH(); }
+}
