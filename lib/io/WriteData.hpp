@@ -20,8 +20,18 @@
 
 namespace BVHTest::IO {
 
+/*!
+ * \brief Writes accumulated data
+ *
+ * Out file variables:
+ *  - %d -- basePath
+ *  - %i -- current input
+ *  - %n -- current name
+ */
 class WriteData final : public base::Command {
  private:
+  std::string vOutFile = "%d/%i/rData_%n.json";
+
   json generateJSON(base::State &_state);
 
  public:

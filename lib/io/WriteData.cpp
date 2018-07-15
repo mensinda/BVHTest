@@ -16,6 +16,7 @@
 
 #include "WriteData.hpp"
 #include <fstream>
+#include <regex>
 
 #if __has_include(<filesystem>)
 #  include <filesystem>
@@ -33,8 +34,8 @@ using namespace BVHTest::base;
 using namespace BVHTest::IO;
 
 WriteData::~WriteData() {}
-void WriteData::fromJSON(const json &_j) { (void)_j; }
-json WriteData::toJSON() const { return json::object(); }
+void WriteData::fromJSON(const json &_j) { vOutFile = _j.value("outFile", vOutFile); }
+json WriteData::toJSON() const { return json{{"outFile", vOutFile}}; }
 
 json WriteData::generateJSON(State &_state) {
   milliseconds lTotalTime = 0ms;
@@ -57,18 +58,18 @@ json WriteData::generateJSON(State &_state) {
 
 ErrorCode WriteData::runImpl(State &_state) {
   fs::path lBasePath = _state.basePath;
-  lBasePath          = lBasePath / _state.input;
-  fs::path lOutDir;
-  if (fs::is_directory(lBasePath)) {
-    lOutDir = lBasePath;
-  } else if (fs::is_regular_file(lBasePath)) {
-    lOutDir = lBasePath.parent_path();
-    if (!fs::is_directory(lOutDir)) { return ErrorCode::IO_ERROR; }
-  } else {
-    return ErrorCode::IO_ERROR;
-  }
+  if (!fs::is_directory(lBasePath)) { return ErrorCode::IO_ERROR; }
 
-  fs::path lOutPath = fs::absolute(lOutDir) / ("rData_"s + _state.name + ".json"s);
+  regex lRegDir("%d");
+  regex lRegInput("%i");
+  regex lRegName("%n");
+
+  string lFile = vOutFile;
+  lFile        = regex_replace(lFile, lRegDir, lBasePath.string());
+  lFile        = regex_replace(lFile, lRegInput, _state.input);
+  lFile        = regex_replace(lFile, lRegName, _state.name);
+
+  fs::path lOutPath = lFile;
   fstream  lOutFile(lOutPath.string(), lOutFile.out | lOutFile.trunc);
 
   if (!lOutFile.is_open()) { return ErrorCode::IO_ERROR; }
