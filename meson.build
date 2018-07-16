@@ -35,7 +35,8 @@ compiler = meson.get_compiler('cpp')
 cfgData  = configuration_data()
 cfgData.set_quoted('BVHTEST_VERSION', meson.project_version())
 cfgData.set_quoted('LOGGER_NAME',     meson.project_name())
-cfgData.set10('CUDA_FACE_CULLING', get_option('cudaFaceCulling'))
+cfgData.set10('CUDA_FACE_CULLING',   get_option('cudaFaceCulling'))
+cfgData.set10('ENABLE_PROGRESS_BAR', get_option('enableProgressBar'))
 
 baseDeps = [
   threads,

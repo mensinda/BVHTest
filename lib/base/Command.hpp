@@ -16,10 +16,9 @@
 
 #pragma once
 
+#include "BVHTestCfg.hpp"
 #include "Configurable.hpp"
 #include "State.hpp"
-
-#define ENABLE_PROGRESS_BAR 1
 
 #if ENABLE_PROGRESS_BAR
 #  define PROGRESS(...) progress(__VA_ARGS__)

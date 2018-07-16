@@ -1,1 +1,2 @@
-option('cudaFaceCulling', type : 'boolean', value : true)
+option('cudaFaceCulling',   type : 'boolean', value : true)
+option('enableProgressBar', type : 'boolean', value : true)

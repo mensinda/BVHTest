@@ -27,6 +27,7 @@ namespace spd = spdlog;
 #mesondefine BVHTEST_VERSION
 #mesondefine LOGGER_NAME
 #mesondefine CUDA_FACE_CULLING
+#mesondefine ENABLE_PROGRESS_BAR
 
 #ifndef __CUDACC__
 namespace BVHTest {

@@ -52,7 +52,10 @@ json WriteData::generateJSON(State &_state) {
   return json{{"totalTime", lTotalTime.count()},
               {"optStepps", lData},
               {"numSkipped", _state.optData.numSkipped},
-              {"numTotal", _state.optData.numTotal}};
+              {"numTotal", _state.optData.numTotal},
+              {"numFaces", _state.mesh.faces.size()},
+              {"numVert", _state.mesh.vert.size()},
+              {"numBVHNodes", _state.bvh.size()}};
 }
 
 

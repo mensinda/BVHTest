@@ -168,18 +168,28 @@ bool run(string _file) {
     lFile << lJSON.dump(2);
     lFile.close();
 
+    lLogger->set_level(spd::level::debug);
+    if (!lCfg.getIsVerbose()) { lLogger->set_level(spd::level::warn); }
+
     // Start executing
-    if (lCfg.getIsVerbose()) {
-      lLogger->set_level(spd::level::debug);
-    } else {
-      lLogger->set_level(spd::level::warn);
-    }
 
     auto lInput    = lCfg.getInput();
     auto lCommands = lCfg.getCommands();
 
+    const char *lFmtString = "{}Processing \x1b[33m{:<24} \x1b[36m{:<2} of {}\x1b[0m";
+    string      lEscSeq    = "\x1b[1m";
+    uint32_t    lCounter   = 0;
+
+    if (!lCfg.getIsVerbose()) { lEscSeq = "\x1b[2K\x1b[1G\x1b[1m"; }
+
     for (auto &i : lInput) {
-      lLogger->info("\x1b[1mProcessing \x1b[33m{}\x1b[0m", i);
+      if (!lCfg.getIsVerbose()) {
+        fmt::print(lFmtString, lEscSeq, i, lCounter++, lInput.size());
+        fflush(stdout);
+      } else {
+        lLogger->info(lFmtString, lEscSeq, i, lCounter++, lInput.size());
+      }
+
       State lState;
       lState.input    = i;
       lState.basePath = lCfg.getBasePath();
