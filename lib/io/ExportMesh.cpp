@@ -55,7 +55,7 @@ ErrorCode ExportMesh::runImpl(State &_state) {
   fs::path outDir  = fs::absolute(vOutDir);
   fs::path dataDir = outDir / fs::absolute(_state.input).filename().replace_extension("");
 
-  static HEAP_ALLOC(wrkmem, LZO1X_1_MEM_COMPRESS);
+  //   static HEAP_ALLOC(wrkmem, LZO1X_1_MEM_COMPRESS);
 
   if (!checkDir(outDir)) { return ErrorCode::IO_ERROR; }
   if (!checkDir(dataDir)) { return ErrorCode::IO_ERROR; }
@@ -66,10 +66,10 @@ ErrorCode ExportMesh::runImpl(State &_state) {
   auto &lMesh = _state.mesh;
 
   // Compress
-  size_t lInSize   = (lMesh.vert.size() + lMesh.norm.size()) * sizeof(vec3) + lMesh.faces.size() * sizeof(Triangle);
-  size_t lCompSize = lInSize + (lInSize / 16) + 64 + 3;
+  size_t lInSize = (lMesh.vert.size() + lMesh.norm.size()) * sizeof(vec3) + lMesh.faces.size() * sizeof(Triangle);
+  //   size_t lCompSize = lInSize + (lInSize / 16) + 64 + 3;
   unique_ptr<uint8_t[]> lData = unique_ptr<uint8_t[]>(new uint8_t[lInSize]);
-  unique_ptr<uint8_t[]> lComp = unique_ptr<uint8_t[]>(new uint8_t[lCompSize]);
+  //   unique_ptr<uint8_t[]> lComp = unique_ptr<uint8_t[]>(new uint8_t[lCompSize]);
 
   size_t lOffset = 0;
   memcpy(lData.get() + lOffset, reinterpret_cast<char *>(lMesh.vert.data()), lMesh.vert.size() * sizeof(vec3));
@@ -81,14 +81,14 @@ ErrorCode ExportMesh::runImpl(State &_state) {
   auto lCheckSumRaw = lzo_adler32(0, nullptr, 0);
   lCheckSumRaw      = lzo_adler32(lCheckSumRaw, lData.get(), lInSize);
 
-  auto lRet = lzo1x_1_compress(lData.get(), lInSize, lComp.get(), &lCompSize, wrkmem);
-  if (lRet != LZO_E_OK) {
-    lLogger->error("Compression failed: {}", lRet);
-    return ErrorCode::IO_ERROR;
-  }
+  //   auto lRet = lzo1x_1_compress(lData.get(), lInSize, lComp.get(), &lCompSize, wrkmem);
+  //   if (lRet != LZO_E_OK) {
+  //     lLogger->error("Compression failed: {}", lRet);
+  //     return ErrorCode::IO_ERROR;
+  //   }
 
-  auto lCheckSumComp = lzo_adler32(0, nullptr, 0);
-  lCheckSumComp      = lzo_adler32(lCheckSumComp, lComp.get(), lCompSize);
+  //   auto lCheckSumComp = lzo_adler32(0, nullptr, 0);
+  //   lCheckSumComp      = lzo_adler32(lCheckSumComp, lComp.get(), lCompSize);
 
   fs::path lControl = dataDir / "data.json";
   fs::path lBinary  = dataDir / "data.bin";
@@ -96,7 +96,7 @@ ErrorCode ExportMesh::runImpl(State &_state) {
   json lCfg = {
       {"version", vFormatVers},
       {"bin", lBinary.filename().string()},
-      {"compressedChecksum", lCheckSumComp},
+      //       {"compressedChecksum", lCheckSumComp},
       {"rawChecksum", lCheckSumRaw},
       {"mesh",
        {{"vert", _state.mesh.vert.size()}, {"normals", _state.mesh.norm.size()}, {"faces", _state.mesh.faces.size()}}}};
@@ -117,7 +117,7 @@ ErrorCode ExportMesh::runImpl(State &_state) {
   lControlFile << lCfg.dump(2);
   lControlFile.close();
 
-  lBin.write(reinterpret_cast<char *>(lComp.get()), lCompSize);
+  lBin.write(reinterpret_cast<char *>(lData.get()), lInSize);
   lBin.close();
 
   return ErrorCode::OK;

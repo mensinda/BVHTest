@@ -84,8 +84,8 @@ ErrorCode BVHImport::runImpl(State &_state) {
   fs::path lBinaryPath = lDataDir / lControlData.at("bin").get<string>();
   uint32_t lSize       = lControlData.at("BVHSize").get<uint32_t>();
   _state.bvh.setMaxLevel(lControlData.at("treeHeight").get<uint16_t>());
-  uint32_t lCheckSumComp = lControlData.at("compressedChecksum").get<uint32_t>();
-  uint32_t lCheckSumRaw  = lControlData.at("rawChecksum").get<uint32_t>();
+  //   uint32_t lCheckSumComp = lControlData.at("compressedChecksum").get<uint32_t>();
+  uint32_t lCheckSumRaw = lControlData.at("rawChecksum").get<uint32_t>();
 
   if (!fs::exists(lBinaryPath) || !fs::is_regular_file(lBinaryPath)) {
     lLogger->error("Invalid BVH binary file {}", fs::absolute(lBinaryPath).string());
@@ -101,42 +101,41 @@ ErrorCode BVHImport::runImpl(State &_state) {
   // Read File
   auto lBeginPos = lBinaryFile.tellg();
   lBinaryFile.seekg(0, lBinaryFile.end);
-  size_t lCompSize = lBinaryFile.tellg() - lBeginPos;
+  //   size_t lCompSize = lBinaryFile.tellg() - lBeginPos;
   size_t lDataSize = lSize * sizeof(BVHNode);
   lBinaryFile.seekg(0, lBinaryFile.beg);
 
-  unique_ptr<uint8_t[]> lComp = unique_ptr<uint8_t[]>(new uint8_t[lCompSize]);
-  unique_ptr<uint8_t[]> lData = unique_ptr<uint8_t[]>(new uint8_t[lDataSize]);
+  //   unique_ptr<uint8_t[]> lComp = unique_ptr<uint8_t[]>(new uint8_t[lCompSize]);
+  //   unique_ptr<uint8_t[]> lData = unique_ptr<uint8_t[]>(new uint8_t[lDataSize]);
 
-  lBinaryFile.read(reinterpret_cast<char *>(lComp.get()), lCompSize);
+  _state.bvh.resize(lSize);
+
+  lBinaryFile.read(reinterpret_cast<char *>(_state.bvh.data()), lDataSize);
   lBinaryFile.close();
 
+  //   auto lCheckSumTemp = lzo_adler32(0, nullptr, 0);
+  //   lCheckSumTemp      = lzo_adler32(lCheckSumTemp, lComp.get(), lCompSize);
+
+  //   if (lCheckSumTemp != lCheckSumComp) {
+  //     lLogger->error("Corrupt binary file '{}'", lBinaryPath.string());
+  //     return ErrorCode::IO_ERROR;
+  //   }
+  //
+  //   auto lRet = lzo1x_decompress(lComp.get(), lCompSize, lData.get(), &lDataSize, nullptr);
+  //   if (lRet != LZO_E_OK) {
+  //     lLogger->error("Decompression of '{}' failed: {}", lBinaryPath.string(), lRet);
+  //     return ErrorCode::IO_ERROR;
+  //   }
+  //
+  //   lComp = nullptr; // Free memory
+
   auto lCheckSumTemp = lzo_adler32(0, nullptr, 0);
-  lCheckSumTemp      = lzo_adler32(lCheckSumTemp, lComp.get(), lCompSize);
-
-  if (lCheckSumTemp != lCheckSumComp) {
-    lLogger->error("Corrupt binary file '{}'", lBinaryPath.string());
-    return ErrorCode::IO_ERROR;
-  }
-
-  auto lRet = lzo1x_decompress(lComp.get(), lCompSize, lData.get(), &lDataSize, nullptr);
-  if (lRet != LZO_E_OK) {
-    lLogger->error("Decompression of '{}' failed: {}", lBinaryPath.string(), lRet);
-    return ErrorCode::IO_ERROR;
-  }
-
-  lComp = nullptr; // Free memory
-
-  lCheckSumTemp = lzo_adler32(0, nullptr, 0);
-  lCheckSumTemp = lzo_adler32(lCheckSumTemp, lData.get(), lDataSize);
+  lCheckSumTemp      = lzo_adler32(lCheckSumTemp, reinterpret_cast<uint8_t *>(_state.bvh.data()), lDataSize);
 
   if (lCheckSumTemp != lCheckSumRaw) {
     lLogger->error("Decompression of '{}' failed: corrupt data", lBinaryPath.string());
     return ErrorCode::IO_ERROR;
   }
-
-  _state.bvh.resize(lSize);
-  memcpy(_state.bvh.data(), lData.get(), lSize * sizeof(BVHNode));
 
   return ErrorCode::OK;
 }
