@@ -27,9 +27,9 @@ class Bittner13Par final : public OptimizerBase {
   typedef std::pair<uint32_t, float> TUP;
 
   struct SumMin {
-    float            sum;
-    float            min;
-    std::atomic_flag flag;
+    float                sum;
+    float                min;
+    std::atomic_uint32_t flag;
   };
 
   struct RM_RES {
@@ -63,11 +63,11 @@ class Bittner13Par final : public OptimizerBase {
   bool     vShuffleList  = true;
   bool     vAltFindNode  = false;
 
-  std::vector<TUP>            lTodoList;
-  std::vector<base::BVHPatch> lPatches;
-  std::vector<bool>           lSkipp;
-  std::vector<uint32_t>       lFixList;
-  std::unique_ptr<SumMin[]>   lSumMin;
+  std::vector<TUP>            vTodoList;
+  std::vector<base::BVHPatch> vPatches;
+  std::vector<bool>           vSkipp;
+  std::vector<uint32_t>       vFixList;
+  std::unique_ptr<SumMin[]>   vSumMin;
 
   uint32_t findNode1(uint32_t _n, base::BVHPatch &_bvh);
   uint32_t findNode2(uint32_t _n, base::BVHPatch &_bvh);
