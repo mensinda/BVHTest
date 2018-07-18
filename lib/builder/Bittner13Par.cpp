@@ -198,7 +198,7 @@ uint32_t Bittner13Par::findNode2(uint32_t _n, BVHPatch &_bvh) {
 #define SPINN_LOCK(N, VAL)                                                                                             \
   {                                                                                                                    \
     uint32_t __lock = 0;                                                                                               \
-    while (_sumMin[N].flag.compare_exchange_strong(__lock, VAL)) { this_thread::yield(); }                             \
+    while (_sumMin[N].flag.compare_exchange_strong(__lock, VAL)) {}                                                    \
   }
 
 #define IF_NOT_LOCK(N, VAL)                                                                                            \
@@ -475,11 +475,7 @@ ErrorCode Bittner13Par::runImpl(State &_state) {
         BVHNode const *lNode = _state.bvh[j];
         float          lSA   = lNode->surfaceArea;
 
-        bool lIsRoot       = j == _state.bvh.root();
-        bool lParentIsRoot = lNode->parent == _state.bvh.root();
-        bool lCanRemove    = !lIsRoot && !lParentIsRoot && !lNode->isLeaf();
-
-        float lCost  = lCanRemove ? ((lSA * lSA * lSA * (float)lNode->numChildren) / (SUM_OF(j) * MIN_OF(j))) : 0.0f;
+        float lCost  = (lSA * lSA * lSA * (float)lNode->numChildren) / (SUM_OF(j) * MIN_OF(j));
         vTodoList[j] = {j, lCost};
       }
 
