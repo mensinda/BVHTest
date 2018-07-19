@@ -50,7 +50,7 @@ class Bittner13Par final : public OptimizerBase {
     uint32_t root;
   };
 
-  static const size_t QUEUE_SIZE = 512;
+  static const size_t QUEUE_SIZE = 16384;
 
  private:
   uint32_t vMaxNumStepps = 500;
