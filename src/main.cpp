@@ -184,10 +184,10 @@ bool run(string _file) {
 
     for (auto &i : lInput) {
       if (!lCfg.getIsVerbose()) {
-        fmt::print(lFmtString, lEscSeq, i, lCounter++, lInput.size());
+        fmt::print(lFmtString, lEscSeq, i, ++lCounter, lInput.size());
         fflush(stdout);
       } else {
-        lLogger->info(lFmtString, lEscSeq, i, lCounter++, lInput.size());
+        lLogger->info(lFmtString, lEscSeq, i, ++lCounter, lInput.size());
       }
 
       State lState;
