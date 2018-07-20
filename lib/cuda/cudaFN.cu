@@ -181,6 +181,11 @@ error:
   return lRes == cudaSuccess;
 }
 
+extern "C" void resetCUDA() {
+  cudaDeviceReset();
+  cudaThreadExit();
+}
+
 // __global__ void findTopKthElementDevice(DeviceTensor<float, 1> _data, uint32_t k, float *_out) {
 //   float topK = warpFindTopKthElement(_data, k).k;
 //
