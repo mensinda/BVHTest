@@ -24,7 +24,7 @@ using BVHTest::base::CUDAMemoryBVHPointer;
 
 typedef BVHTest::base::BVHPatch  PATCH;
 typedef BVHTest::base::MiniPatch MINI_PATCH;
-const size_t                     CUDA_QUEUE_SIZE     = 512;
+const size_t                     CUDA_QUEUE_SIZE     = 16384;
 const size_t                     CUDA_ALT_QUEUE_SIZE = 16;
 
 struct SumMinCUDA {
