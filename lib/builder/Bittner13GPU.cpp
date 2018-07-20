@@ -126,5 +126,8 @@ void Bittner13GPU::teardown(State &_state) {
                     lNumNodes * vMaxNumStepps,
                     (int)(((float)lSkipped / (float)(lNumNodes * vMaxNumStepps)) * 100));
 
+  _state.optData.numSkipped = lSkipped;
+  _state.optData.numTotal   = lNumNodes * vMaxNumStepps;
+
   freeMemory(&vWorkingMemory);
 }
