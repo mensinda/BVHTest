@@ -397,7 +397,10 @@ bool LBVH_allocateBVH(CUDAMemoryBVHPointer *_bvh, MeshRaw *_rawMesh) {
   cudaError_t lRes;
   BVH         lBVH;
 
+  if (_bvh->bvh != nullptr || _bvh->nodes != nullptr) { return false; }
+
   _bvh->numNodes = _rawMesh->numFaces * 2 - 1;
+  cudaDeviceSynchronize();
   ALLOCATE(&_bvh->bvh, 1, BVH);
   ALLOCATE(&_bvh->nodes, _bvh->numNodes, BVHNode);
 

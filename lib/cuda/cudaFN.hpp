@@ -30,6 +30,8 @@ extern "C" bool copyMeshToGPU(base::Mesh *_mesh, base::MeshRaw *_meshOut);
 extern "C" bool copyBVHToHost(base::CUDAMemoryBVHPointer *_bvh, base::BVH *_ptr);
 extern "C" bool copyMeshToHost(base::MeshRaw *_mesh, base::Mesh *_meshOut);
 
+extern "C" void resetCUDA();
+
 extern "C" float topKThElement(float *_data, uint32_t _num, uint32_t _k);
 extern "C" float topKThElementHost(float *_data, uint32_t _num, uint32_t _k);
 
