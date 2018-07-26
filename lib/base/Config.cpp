@@ -26,11 +26,10 @@ Config::~Config() {}
 void Config::fromJSON(json const &_j) {
   auto lLogger = getLogger();
   if (_j.count("baseConfig") > 0) {
-    vName       = _j["baseConfig"].value("name", vName);
-    vMaxThreads = _j["baseConfig"].value("maxThreads", vMaxThreads);
-    vVerbose    = _j["baseConfig"].value("verbose", vVerbose);
-    vBasePath   = _j["baseConfig"].value("basePath", vBasePath);
-    vInput      = _j["baseConfig"].value("input", vInput);
+    vName     = _j["baseConfig"].value("name", vName);
+    vVerbose  = _j["baseConfig"].value("verbose", vVerbose);
+    vBasePath = _j["baseConfig"].value("basePath", vBasePath);
+    vInput    = _j["baseConfig"].value("input", vInput);
   }
 
   if (_j.count("commands") == 0 || !_j["commands"].is_array()) return;
@@ -49,13 +48,9 @@ void Config::fromJSON(json const &_j) {
 }
 
 json Config::toJSON() const {
-  auto lJSON = json{{"baseConfig",
-                     {{"name", vName},
-                      {"maxThreads", vMaxThreads},
-                      {"verbose", vVerbose},
-                      {"basePath", vBasePath},
-                      {"input", vInput}}},
-                    {"commands", json::array()}};
+  auto lJSON =
+      json{{"baseConfig", {{"name", vName}, {"verbose", vVerbose}, {"basePath", vBasePath}, {"input", vInput}}},
+           {"commands", json::array()}};
 
   for (auto &i : vCommands) {
     json lOpts = i->toJSON();

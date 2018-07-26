@@ -33,11 +33,10 @@ class Config final : public base::Configurable {
  private:
   FUNC_PTR commandFromString;
 
-  std::string              vName       = "BVHTest default run";
-  uint32_t                 vMaxThreads = 4;
-  bool                     vVerbose    = true;
-  std::string              vBasePath   = ".";
-  std::vector<std::string> vInput      = {};
+  std::string              vName     = "BVHTest default run";
+  bool                     vVerbose  = true;
+  std::string              vBasePath = ".";
+  std::vector<std::string> vInput    = {};
 
   std::vector<CMD_PTR> vCommands;
 
