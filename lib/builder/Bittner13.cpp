@@ -32,9 +32,6 @@ using namespace BVHTest::misc;
 
 
 // Quality of life defines
-#define SUM_OF(x) vSumAndMin[x].sum
-#define MIN_OF(x) vSumAndMin[x].min
-
 #define NODE _bvh[lNode]
 #define PARENT _bvh[NODE->parent]
 #define LEFT _bvh[NODE->left]
@@ -208,26 +205,17 @@ void Bittner13::fixTree(uint32_t _node, BVH &_bvh) {
   BVHNode *lCurrSibling      = nullptr;
 
   AABB  lBBox = LEFT->bbox;
-  float lSum  = SUM_OF(lLastIndex);
-  float lMin  = MIN_OF(lLastIndex);
   float lNum  = lLast->numChildren;
-
-  float lSArea;
-
 
   while (true) {
     lCurrSiblingIndex = lLastWasLeft ? NODE->right : NODE->left;
     lCurrSibling      = _bvh[lCurrSiblingIndex];
 
     lBBox.mergeWith(lCurrSibling->bbox);
-    lSArea            = lBBox.surfaceArea();
     NODE->bbox        = lBBox;
-    NODE->surfaceArea = lSArea;
+    NODE->surfaceArea = lBBox.surfaceArea();
 
-    lSum              = lSum + SUM_OF(lCurrSiblingIndex) + lSArea;
-    lMin              = min(lMin, MIN_OF(lCurrSiblingIndex));
     lNum              = lNum + lCurrSibling->numChildren + 2;
-    vSumAndMin[lNode] = {lSum, lMin};
     NODE->numChildren = lNum;
 
     if (lNode == _bvh.root()) { return; } // We processed the root ==> everything is done
@@ -236,38 +224,6 @@ void Bittner13::fixTree(uint32_t _node, BVH &_bvh) {
     lLastIndex   = lNode;
     lLast        = _bvh[lLastIndex];
     lNode        = NODE->parent;
-  }
-}
-
-void Bittner13::initSumAndMin(BVH &_bvh) {
-  vSumAndMin.resize(_bvh.size(), {numeric_limits<float>::infinity(), numeric_limits<float>::infinity()});
-  if (_bvh.empty()) { return; }
-
-  __uint128_t lBitStack = 0;
-  uint32_t    lNode     = _bvh.root();
-  uint32_t    lRoot     = lNode;
-
-  while (true) {
-    while (!NODE->isLeaf()) {
-      lBitStack <<= 1;
-      lBitStack |= 1;
-      lNode = NODE->left;
-    }
-
-    // Leaf
-    vSumAndMin[lNode] = {NODE->surfaceArea, NODE->surfaceArea};
-
-    // Backtrack if left and right children are processed
-    while ((lBitStack & 1) == 0) {
-      if (lBitStack == 0 && lNode == lRoot) { return; } // We are done
-      lNode             = NODE->parent;
-      vSumAndMin[lNode] = {SUM_OF(NODE->left) + SUM_OF(NODE->right) + NODE->surfaceArea,
-                           min(MIN_OF(NODE->left), MIN_OF(NODE->right))};
-      lBitStack >>= 1;
-    }
-
-    lNode = PARENT->right;
-    lBitStack ^= 1;
   }
 }
 
@@ -312,11 +268,15 @@ ErrorCode Bittner13::runMetric(State &_state) {
       BVHNode const *lNode = _state.bvh[j];
       float          lSA   = lNode->surfaceArea;
 
-      bool lIsRoot       = j == _state.bvh.root();
-      bool lParentIsRoot = lNode->parent == _state.bvh.root();
-      bool lCanRemove    = !lIsRoot && !lParentIsRoot && !lNode->isLeaf();
+      if (lNode->isLeaf()) {
+        lTodoList[j] = {j, 0};
+        continue;
+      }
 
-      float lCost  = lCanRemove ? ((lSA * lSA * lSA * (float)lNode->numChildren) / (SUM_OF(j) * MIN_OF(j))) : 0.0f;
+      float lLeftSA  = _state.bvh[lNode->left]->surfaceArea;
+      float lRightSA = _state.bvh[lNode->right]->surfaceArea;
+
+      float lCost  = (lSA * lSA * lSA * 2.0f) / ((lLeftSA + lRightSA) * min(lLeftSA, lRightSA));
       lTodoList[j] = {j, lCost};
 
       if (lCost > lWorstNode.val) {
@@ -432,17 +392,9 @@ ErrorCode Bittner13::runRandom(State &_state) {
 
 
 ErrorCode Bittner13::runImpl(State &_state) {
-  initSumAndMin(_state.bvh);
+  if (vRandom) { return runRandom(_state); }
 
-  ErrorCode lRet;
-  if (vRandom) {
-    lRet = runRandom(_state);
-  } else {
-    lRet = runMetric(_state);
-  }
-
-  _state.bvh.fixLevels();
-  vector<SumMin>().swap(vSumAndMin); // Clear memory of vSumAndMin
-
-  return lRet;
+  return runMetric(_state);
 }
+
+void Bittner13::teardown(State &_state) { _state.bvh.fixLevels(); }

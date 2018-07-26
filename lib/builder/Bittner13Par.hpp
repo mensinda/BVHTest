@@ -26,12 +26,6 @@ class Bittner13Par final : public OptimizerBase {
  public:
   typedef std::pair<uint32_t, float> TUP;
 
-  struct SumMin {
-    float                sum;
-    float                min;
-    std::atomic_uint32_t flag;
-  };
-
   struct RM_RES {
     struct NodePair {
       uint32_t n1;
@@ -63,19 +57,18 @@ class Bittner13Par final : public OptimizerBase {
   bool     vShuffleList  = true;
   bool     vAltFindNode  = false;
 
-  std::vector<TUP>            vTodoList;
-  std::vector<base::BVHPatch> vPatches;
-  std::vector<bool>           vSkipp;
-  std::vector<uint32_t>       vFixList;
-  std::unique_ptr<SumMin[]>   vSumMin;
+  std::vector<TUP>                        vTodoList;
+  std::vector<base::BVHPatch>             vPatches;
+  std::vector<bool>                       vSkipp;
+  std::vector<uint32_t>                   vFixList;
+  std::unique_ptr<std::atomic_uint32_t[]> vFlags;
 
   uint32_t findNode1(uint32_t _n, base::BVHPatch &_bvh);
   uint32_t findNode2(uint32_t _n, base::BVHPatch &_bvh);
 
-  RM_RES  removeNode(uint32_t _node, base::BVHPatch &_bvh, SumMin *_sumMin);
-  INS_RES reinsert(uint32_t _node, uint32_t _unused, base::BVHPatch &_bvh, bool _update, SumMin *_sumMin);
-  void    fixTree(uint32_t _node, base::BVH &_bvh, SumMin *_sumMin);
-  void    initSumAndMin(base::BVH &_bvh, SumMin *_sumMin);
+  RM_RES  removeNode(uint32_t _node, base::BVHPatch &_bvh);
+  INS_RES reinsert(uint32_t _node, uint32_t _unused, base::BVHPatch &_bvh, bool _update);
+  void    fixTree(uint32_t _node, base::BVH &_bvh);
 
  public:
   Bittner13Par() = default;

@@ -22,11 +22,6 @@ namespace BVHTest::builder {
 
 class Bittner13 final : public OptimizerBase {
  public:
-  struct SumMin {
-    float sum;
-    float min;
-  };
-
   struct RM_RES {
     struct NodePair {
       uint32_t n1;
@@ -48,8 +43,6 @@ class Bittner13 final : public OptimizerBase {
   bool     vSortBatch          = true;
   bool     vStrictSequential   = false;
 
-  std::vector<SumMin> vSumAndMin;
-
   inline float directCost(base::BVHNode const *_l, base::BVHNode const *_x) {
     base::AABB lMerge = _l->bbox;
     lMerge.mergeWith(_x->bbox);
@@ -60,7 +53,6 @@ class Bittner13 final : public OptimizerBase {
   RM_RES   removeNode(uint32_t _node, base::BVH &_bvh);
   void     reinsert(uint32_t _node, uint32_t _unused, base::BVH &_bvh);
   void     fixTree(uint32_t _node, base::BVH &_bvh);
-  void     initSumAndMin(base::BVH &_bvh);
 
   base::ErrorCode runMetric(base::State &_state);
   base::ErrorCode runRandom(base::State &_state);
@@ -73,6 +65,7 @@ class Bittner13 final : public OptimizerBase {
   inline std::string getDesc() const override { return "BVH optimizer based on Bittner et al. 2013"; }
 
   base::ErrorCode runImpl(base::State &_state) override;
+  void            teardown(base::State &_state) override;
 
   void fromJSON(const json &_j) override;
   json toJSON() const override;
