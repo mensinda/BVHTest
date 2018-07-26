@@ -27,13 +27,6 @@ typedef BVHTest::base::MiniPatch MINI_PATCH;
 const size_t                     CUDA_QUEUE_SIZE     = 4096;
 const size_t                     CUDA_ALT_QUEUE_SIZE = 16;
 
-struct SumMinCUDA {
-  float *   sums  = nullptr;
-  float *   mins  = nullptr;
-  uint32_t *flags = nullptr;
-  uint32_t  num   = 0;
-};
-
 struct TodoStruct {
   uint32_t *nodes = nullptr;
   float *   costs = nullptr;
@@ -41,7 +34,6 @@ struct TodoStruct {
 
 struct GPUWorkingMemory {
   bool       result;
-  SumMinCUDA sumMin;
   TodoStruct todoNodes;
   TodoStruct todoSorted;
 
@@ -50,12 +42,14 @@ struct GPUWorkingMemory {
   PATCH *   patches                = nullptr;
   uint32_t *skipped                = nullptr;
   uint32_t *nodesToFix             = nullptr;
+  uint32_t *flags                  = nullptr;
   void *    cubSortTempStorage     = nullptr;
   uint32_t  numLeafNodes           = 0;
   uint32_t  numInnerNodes          = 0;
   uint32_t  numPatches             = 0;
   uint32_t  numSkipped             = 0;
   uint32_t  numNodesToFix          = 0;
+  uint32_t  numFlags               = 0;
   size_t    cubSortTempStorageSize = 0;
 };
 

@@ -264,7 +264,7 @@ __device__ uint32_t findNode2(uint32_t _n, BVHPatch &_bvh) {
 }
 
 
-__device__ CUDA_RM_RES removeNode(uint32_t _node, BVHPatch &_bvh, uint32_t _lockID) {
+__device__ CUDA_RM_RES removeNode(uint32_t _node, BVHPatch &_bvh) {
   CUDA_RM_RES lFalse = {false, {0, 0}, {0, 0}, {0, 0}};
   if (_bvh.getOrig(_node)->isLeaf() || _node == _bvh.root()) { return lFalse; }
 
@@ -305,8 +305,7 @@ __device__ CUDA_RM_RES removeNode(uint32_t _node, BVHPatch &_bvh, uint32_t _lock
 }
 
 
-__device__ CUDA_INS_RES
-           reinsert(uint32_t _node, uint32_t _unused, BVHPatch &_bvh, bool _update, uint32_t _lockID, bool _altFindNode) {
+__device__ CUDA_INS_RES reinsert(uint32_t _node, uint32_t _unused, BVHPatch &_bvh, bool _update, bool _altFindNode) {
   uint32_t lBestIndex = _altFindNode ? findNode2(_node, _bvh) : findNode1(_node, _bvh);
   if (lBestIndex == _bvh.root()) { return {false, 0, 0}; }
 
@@ -370,42 +369,7 @@ __device__ CUDA_INS_RES
 /*                                      */
 /*                                      */
 
-
-extern "C" __global__ void kInitSumMin(uint32_t *_leaf, SumMinCUDA _SMF, BVHNode *_nodes, uint32_t _num) {
-  uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
-  uint32_t stride = blockDim.x * gridDim.x;
-
-  uint32_t lNode;
-  uint32_t lLeft;
-  uint32_t lRight;
-
-  for (uint32_t i = index; i < _num; i += stride) {
-    lNode            = _leaf[i];
-    _SMF.sums[lNode] = _nodes[lNode].surfaceArea;
-    _SMF.mins[lNode] = _nodes[lNode].surfaceArea;
-    lNode            = _nodes[lNode].parent;
-
-    while (true) {
-      uint32_t lOldLock = atomicAdd(&_SMF.flags[lNode], 1);
-
-      // Check if this thread is first. If yes break
-      if (lOldLock == 0) { break; }
-
-      lLeft  = _nodes[lNode].left;
-      lRight = _nodes[lNode].right;
-
-      _SMF.sums[lNode] = _SMF.sums[lLeft] + _SMF.sums[lRight] + _nodes[lNode].surfaceArea;
-      _SMF.mins[lNode] = _SMF.mins[lLeft] < _SMF.mins[lRight] ? _SMF.mins[lLeft] : _SMF.mins[lRight];
-
-      // Check if root
-      if (lNode == _nodes[lNode].parent) { break; }
-      lNode = _nodes[lNode].parent;
-    }
-  }
-}
-
-
-extern "C" __global__ void kFixTree1(uint32_t *_leaf, SumMinCUDA _SMF, BVHNode *_nodes, uint32_t _num) {
+extern "C" __global__ void kFixTree1(uint32_t *_leaf, uint32_t *_flags, BVHNode *_nodes, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
 
@@ -413,16 +377,13 @@ extern "C" __global__ void kFixTree1(uint32_t *_leaf, SumMinCUDA _SMF, BVHNode *
   uint32_t lNode;
   uint32_t lLeft;
   uint32_t lRight;
-  float    lSArea;
 
   for (uint32_t i = index; i < _num; i += stride) {
-    lNode            = _leaf[i];
-    _SMF.sums[lNode] = _nodes[lNode].surfaceArea;
-    _SMF.mins[lNode] = _nodes[lNode].surfaceArea;
-    lNode            = _nodes[lNode].parent;
+    lNode = _leaf[i];
+    lNode = _nodes[lNode].parent;
 
     while (true) {
-      uint32_t lOldLock = atomicCAS(&_SMF.flags[lNode], 0, 1);
+      uint32_t lOldLock = atomicCAS(&_flags[lNode], 0, 1);
 
       // Check if this thread is first. If yes break
       if (lOldLock == 0) { break; }
@@ -431,13 +392,10 @@ extern "C" __global__ void kFixTree1(uint32_t *_leaf, SumMinCUDA _SMF, BVHNode *
       lRight = _nodes[lNode].right;
       lAABB  = _nodes[lLeft].bbox;
       lAABB.mergeWith(_nodes[lRight].bbox);
-      lSArea = lAABB.surfaceArea();
 
       _nodes[lNode].bbox        = lAABB;
-      _nodes[lNode].surfaceArea = lSArea;
+      _nodes[lNode].surfaceArea = lAABB.surfaceArea();
       _nodes[lNode].numChildren = _nodes[lLeft].numChildren + _nodes[lRight].numChildren + 2;
-      _SMF.sums[lNode]          = _SMF.sums[lLeft] + _SMF.sums[lRight] + lSArea;
-      _SMF.mins[lNode]          = _SMF.mins[lLeft] < _SMF.mins[lRight] ? _SMF.mins[lLeft] : _SMF.mins[lRight];
 
       // Check if root
       if (lNode == _nodes[lNode].parent) { break; }
@@ -447,7 +405,7 @@ extern "C" __global__ void kFixTree1(uint32_t *_leaf, SumMinCUDA _SMF, BVHNode *
 }
 
 
-extern "C" __global__ void kFixTree3_1(uint32_t *_toFix, SumMinCUDA _SMF, BVHNode *_nodes, uint32_t _num) {
+extern "C" __global__ void kFixTree3_1(uint32_t *_toFix, uint32_t *_flags, BVHNode *_nodes, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
 
@@ -456,7 +414,7 @@ extern "C" __global__ void kFixTree3_1(uint32_t *_toFix, SumMinCUDA _SMF, BVHNod
     if (lNode == UINT32_MAX) { continue; }
 
     while (true) {
-      if (atomicAdd(&_SMF.flags[lNode], 1) != 0) { break; } // Stop when already locked (locked == 1)
+      if (atomicAdd(&_flags[lNode], 1) != 0) { break; } // Stop when already locked (locked == 1)
 
       // Check if root
       if (lNode == _nodes[lNode].parent) { break; }
@@ -465,7 +423,7 @@ extern "C" __global__ void kFixTree3_1(uint32_t *_toFix, SumMinCUDA _SMF, BVHNod
   }
 }
 
-extern "C" __global__ void kFixTree3_2(uint32_t *_toFix, SumMinCUDA _SMF, BVHNode *_nodes, uint32_t _num) {
+extern "C" __global__ void kFixTree3_2(uint32_t *_toFix, uint32_t *_flags, BVHNode *_nodes, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
 
@@ -473,7 +431,6 @@ extern "C" __global__ void kFixTree3_2(uint32_t *_toFix, SumMinCUDA _SMF, BVHNod
   uint32_t lNode;
   uint32_t lLeft;
   uint32_t lRight;
-  float    lSArea;
   BVHNode  lNodeCPY;
 
   for (uint32_t i = index; i < _num; i += stride) {
@@ -484,25 +441,22 @@ extern "C" __global__ void kFixTree3_2(uint32_t *_toFix, SumMinCUDA _SMF, BVHNod
 
     // Check if leaf node
     if (lNodeCPY.numChildren == 0) {
-      atomicSub(&_SMF.flags[lNode], 1); // Leaf nodes should only be locked once
+      atomicSub(&_flags[lNode], 1); // Leaf nodes should only be locked once
       lNode    = lNodeCPY.parent;
       lNodeCPY = _nodes[lNode];
     }
 
     while (true) {
-      if (atomicSub(&_SMF.flags[lNode], 1) != 1) { break; } // Stop when already locked (locked == 1)
+      if (atomicSub(&_flags[lNode], 1) != 1) { break; } // Stop when already locked (locked == 1)
 
       lLeft  = lNodeCPY.left;
       lRight = lNodeCPY.right;
       lAABB  = _nodes[lLeft].bbox;
       lAABB.mergeWith(_nodes[lRight].bbox);
-      lSArea = lAABB.surfaceArea();
 
       lNodeCPY.bbox        = lAABB;
-      lNodeCPY.surfaceArea = lSArea;
+      lNodeCPY.surfaceArea = lAABB.surfaceArea();
       lNodeCPY.numChildren = _nodes[lLeft].numChildren + _nodes[lRight].numChildren + 2;
-      _SMF.sums[lNode]     = _SMF.sums[lLeft] + _SMF.sums[lRight] + lSArea;
-      _SMF.mins[lNode]     = _SMF.mins[lLeft] < _SMF.mins[lRight] ? _SMF.mins[lLeft] : _SMF.mins[lRight];
 
       _nodes[lNode] = lNodeCPY;
 
@@ -525,15 +479,25 @@ extern "C" __global__ void kFixTree3_2(uint32_t *_toFix, SumMinCUDA _SMF, BVHNod
 /*                                                           */
 /*                                                           */
 
-extern "C" __global__ void kCalcCost(
-    float *_sum, float *_min, BVHNode *_nodes, uint32_t *_nID, float *_costOut, uint32_t _num) {
+extern "C" __global__ void kCalcCost(BVHNode *_nodes, uint32_t *_nID, float *_costOut, uint32_t _num) {
   uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t stride = blockDim.x * gridDim.x;
   for (uint32_t i = index; i < _num; i += stride) {
     uint    lID   = _nID[i];
     BVHNode lNode = _nodes[lID];
-    float   lSA   = lNode.surfaceArea;
-    _costOut[i]   = (lSA * lSA * lSA * (float)lNode.numChildren) / (_sum[lID] * _min[lID]);
+    float   lCost;
+
+    if (lNode.numChildren == 0) {
+      lCost = 0;
+    } else {
+      float lSA      = lNode.surfaceArea;
+      float lLeftSA  = _nodes[lNode.left].surfaceArea;
+      float lRightSA = _nodes[lNode.right].surfaceArea;
+
+      lCost = (lSA * lSA * lSA * 2.0f) / ((lLeftSA + lRightSA) * (lLeftSA < lRightSA ? lLeftSA : lRightSA));
+    }
+
+    _costOut[i] = lCost;
   }
 }
 
@@ -547,19 +511,18 @@ extern "C" __global__ void kRemoveAndReinsert1(uint32_t *_todoList,
                                                uint32_t  _numChunks,
                                                uint32_t  _chunkSize,
                                                bool      _altFindNode) {
-  uint32_t index   = blockIdx.x * blockDim.x + threadIdx.x;
-  uint32_t stride  = blockDim.x * gridDim.x;
-  uint32_t lLockID = index + 1;
+  uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t stride = blockDim.x * gridDim.x;
 
   for (int32_t k = index; k < _chunkSize; k += stride) {
     uint32_t     lNodeIndex = _todoList[_offsetAccess ? k * _numChunks + _chunk : _chunk * _chunkSize + k];
-    CUDA_RM_RES  lRmRes     = removeNode(lNodeIndex, _patches[k], lLockID);
+    CUDA_RM_RES  lRmRes     = removeNode(lNodeIndex, _patches[k]);
     CUDA_INS_RES lR1, lR2;
 
     if (!lRmRes.res) { continue; }
 
-    lR1 = reinsert(lRmRes.toInsert.n1, lRmRes.unused.n1, _patches[k], true, lLockID, _altFindNode);
-    lR2 = reinsert(lRmRes.toInsert.n2, lRmRes.unused.n2, _patches[k], false, lLockID, _altFindNode);
+    lR1 = reinsert(lRmRes.toInsert.n1, lRmRes.unused.n1, _patches[k], true, _altFindNode);
+    lR2 = reinsert(lRmRes.toInsert.n2, lRmRes.unused.n2, _patches[k], false, _altFindNode);
 
     if (!lR1.res || !lR2.res) { continue; }
 
@@ -578,20 +541,19 @@ extern "C" __global__ void kRemoveAndReinsert2(uint32_t *_todoList,
                                                uint32_t  _numChunks,
                                                uint32_t  _chunkSize,
                                                bool      _altFindNode) {
-  uint32_t index   = blockIdx.x * blockDim.x + threadIdx.x;
-  uint32_t stride  = blockDim.x * gridDim.x;
-  uint32_t lLockID = index + 1;
+  uint32_t index  = blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t stride = blockDim.x * gridDim.x;
 
   for (int32_t k = index; k < _chunkSize; k += stride) {
     BVHPatch     lPatch(_bvh);
     uint32_t     lNodeIndex = _todoList[_offsetAccess ? k * _numChunks + _chunk : _chunk * _chunkSize + k];
-    CUDA_RM_RES  lRmRes     = removeNode(lNodeIndex, lPatch, lLockID);
+    CUDA_RM_RES  lRmRes     = removeNode(lNodeIndex, lPatch);
     CUDA_INS_RES lR1, lR2;
 
     if (!lRmRes.res) { continue; }
 
-    lR1 = reinsert(lRmRes.toInsert.n1, lRmRes.unused.n1, lPatch, true, lLockID, _altFindNode);
-    lR2 = reinsert(lRmRes.toInsert.n2, lRmRes.unused.n2, lPatch, false, lLockID, _altFindNode);
+    lR1 = reinsert(lRmRes.toInsert.n1, lRmRes.unused.n1, lPatch, true, _altFindNode);
+    lR2 = reinsert(lRmRes.toInsert.n2, lRmRes.unused.n2, lPatch, false, _altFindNode);
 
     if (!lR1.res || !lR2.res) { continue; }
 
@@ -682,17 +644,17 @@ void fixTree1(GPUWorkingMemory *_data, base::CUDAMemoryBVHPointer *_GPUbvh, uint
   if (!_data || !_GPUbvh) { return; }
 
   uint32_t lNumBlocks = (_data->numLeafNodes + _blockSize - 1) / _blockSize;
-  kFixTree1<<<lNumBlocks, _blockSize>>>(_data->leafNodes, _data->sumMin, _GPUbvh->nodes, _data->numLeafNodes);
+  kFixTree1<<<lNumBlocks, _blockSize>>>(_data->leafNodes, _data->flags, _GPUbvh->nodes, _data->numLeafNodes);
 
-  cudaMemset(_data->sumMin.flags, 0, _data->sumMin.num * sizeof(uint32_t));
+  cudaMemset(_data->flags, 0, _data->numFlags * sizeof(uint32_t));
 }
 
 void fixTree3(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPointer *_GPUbvh, uint32_t _blockSize) {
   if (!_data || !_GPUbvh) { return; }
 
   uint32_t lNumBlocks = (_data->numNodesToFix + _blockSize - 1) / _blockSize;
-  kFixTree3_1<<<lNumBlocks, _blockSize>>>(_data->nodesToFix, _data->sumMin, _GPUbvh->nodes, _data->numNodesToFix);
-  kFixTree3_2<<<lNumBlocks, _blockSize>>>(_data->nodesToFix, _data->sumMin, _GPUbvh->nodes, _data->numNodesToFix);
+  kFixTree3_1<<<lNumBlocks, _blockSize>>>(_data->nodesToFix, _data->flags, _GPUbvh->nodes, _data->numNodesToFix);
+  kFixTree3_2<<<lNumBlocks, _blockSize>>>(_data->nodesToFix, _data->flags, _GPUbvh->nodes, _data->numNodesToFix);
 }
 
 
@@ -706,12 +668,8 @@ void bn13_selectNodes(GPUWorkingMemory *_data, BVHTest::base::CUDAMemoryBVHPoint
 
   ALLOCATE(&lNumSelected, 1, int);
 
-  kCalcCost<<<lNBlkAll, _cfg.blockSize>>>(_data->sumMin.sums,
-                                          _data->sumMin.mins,
-                                          _GPUbvh->nodes,
-                                          _data->todoNodes.nodes,
-                                          _data->todoNodes.costs,
-                                          _data->numInnerNodes);
+  kCalcCost<<<lNBlkAll, _cfg.blockSize>>>(
+      _GPUbvh->nodes, _data->todoNodes.nodes, _data->todoNodes.costs, _data->numInnerNodes);
 
   if (_cfg.sort) {
     if (!_cfg.altSort) {
@@ -798,9 +756,9 @@ void bn13_rmAndReinsChunk(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh
   }
 
   kCheckConflicts<<<lNBlkChunk, _cfg.blockSize>>>(
-      _data->patches, _data->sumMin.flags, _data->skipped, _data->nodesToFix, _cfg.chunkSize);
+      _data->patches, _data->flags, _data->skipped, _data->nodesToFix, _cfg.chunkSize);
 
-  kApplyPatches<<<lNBlkChunk, _cfg.blockSize>>>(_data->patches, _GPUbvh->bvh, _data->sumMin.flags, _cfg.chunkSize);
+  kApplyPatches<<<lNBlkChunk, _cfg.blockSize>>>(_data->patches, _GPUbvh->bvh, _data->flags, _cfg.chunkSize);
 
   if (_cfg.altFixTree) {
     fixTree3(_data, _GPUbvh, _cfg.blockSize);
@@ -893,16 +851,14 @@ GPUWorkingMemory allocateMemory(CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize,
   CUBLeafSelect lSelector(nullptr);
 
   assert(_bvh->numNodes > _numFaces);
-  lMem.sumMin.num    = _bvh->numNodes;
   lMem.numLeafNodes  = _numFaces;
   lMem.numInnerNodes = _bvh->numNodes - _numFaces;
   lMem.numPatches    = _batchSize;
   lMem.numSkipped    = _batchSize;
   lMem.numNodesToFix = _batchSize * 3;
+  lMem.numFlags      = _bvh->numNodes;
 
-  ALLOCATE(&lMem.sumMin.sums, lMem.sumMin.num, float);
-  ALLOCATE(&lMem.sumMin.mins, lMem.sumMin.num, float);
-  ALLOCATE(&lMem.sumMin.flags, lMem.sumMin.num, uint32_t);
+  ALLOCATE(&lMem.flags, lMem.numFlags, uint32_t);
   ALLOCATE(&lMem.todoNodes.nodes, lMem.numInnerNodes, uint32_t);
   ALLOCATE(&lMem.todoNodes.costs, lMem.numInnerNodes, float);
   ALLOCATE(&lMem.todoSorted.nodes, lMem.numInnerNodes, uint32_t);
@@ -949,9 +905,7 @@ GPUWorkingMemory allocateMemory(CUDAMemoryBVHPointer *_bvh, uint32_t _batchSize,
 error:
   lMem.result = false;
 
-  FREE(lMem.sumMin.sums, lMem.sumMin.num);
-  FREE(lMem.sumMin.mins, lMem.sumMin.num);
-  FREE(lMem.sumMin.flags, lMem.sumMin.num);
+  FREE(lMem.flags, lMem.numFlags);
   FREE(lMem.todoNodes.nodes, lMem.numInnerNodes);
   FREE(lMem.todoNodes.costs, lMem.numInnerNodes);
   FREE(lMem.todoSorted.nodes, lMem.numInnerNodes);
@@ -969,9 +923,7 @@ error:
 void freeMemory(GPUWorkingMemory *_data) {
   _data->result = false;
 
-  FREE(_data->sumMin.sums, _data->sumMin.num);
-  FREE(_data->sumMin.mins, _data->sumMin.num);
-  FREE(_data->sumMin.flags, _data->sumMin.num);
+  FREE(_data->flags, _data->numFlags);
   FREE(_data->todoNodes.nodes, _data->numInnerNodes);
   FREE(_data->todoNodes.costs, _data->numInnerNodes);
   FREE(_data->todoSorted.nodes, _data->numInnerNodes);
@@ -1005,7 +957,7 @@ void initData(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, uint32_t _
   kResetTodoData<<<lNumBlocksAll, _blockSize>>>(lTempTODOData, (_data->numLeafNodes + _data->numInnerNodes));
   kInitPatches<<<lNumBlocksPatches, _blockSize>>>(_data->patches, _GPUbvh->bvh, _data->numPatches);
 
-  CUDA_RUN(cudaMemset(_data->sumMin.flags, 0, _data->sumMin.num * sizeof(uint32_t)));
+  CUDA_RUN(cudaMemset(_data->flags, 0, _data->numFlags * sizeof(uint32_t)));
   CUDA_RUN(cudaMemset(_data->skipped, 0, _data->numSkipped * sizeof(uint32_t)));
 
   ALLOCATE(&lNumSelected, 1, int);
@@ -1032,10 +984,6 @@ void initData(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, uint32_t _
 
   assert(lNS1 == _data->numLeafNodes);
   assert(lNS2 == _data->numInnerNodes);
-
-  kInitSumMin<<<lNumBlocksInit, _blockSize>>>(_data->leafNodes, _data->sumMin, _GPUbvh->nodes, _data->numLeafNodes);
-  CUDA_RUN(cudaMemset(_data->sumMin.flags, 0, _data->sumMin.num * sizeof(uint32_t)));
-
 error:
   cudaFree(lNumSelected);
   cudaFree(lTempTODOData);
