@@ -79,7 +79,6 @@ BuilderBase::BuildRes BuilderBase::build(
 
     _bvh.addInner(lNodeBBox,    // AABB
                   _parent,      // parent
-                  2,            // num children
                   lNewNode + 1, // left
                   lNewNode + 2, // right
                   _isLeftChild  // is current node a left child?
@@ -91,7 +90,7 @@ BuilderBase::BuildRes BuilderBase::build(
     ITER lSplitAt = split(_begin, _end, _level);
 
     // Reserve node -- fill content later
-    _bvh.addInner({}, _parent, UINT32_MAX, UINT32_MAX, UINT32_MAX, _isLeftChild);
+    _bvh.addInner({}, _parent, UINT32_MAX, UINT32_MAX, _isLeftChild);
     BVHNode *lNode = _bvh[lNewNode];
 
     auto [lID1, lBBOX1] = build(_begin, lSplitAt, _bvh, lNewNode, true, _level + 1); // Left
@@ -100,7 +99,6 @@ BuilderBase::BuildRes BuilderBase::build(
     lNodeBBox = lBBOX1;
     lNodeBBox.mergeWith(lBBOX2);
     lNode->bbox        = lNodeBBox;
-    lNode->numChildren = 2 + _bvh[lID1]->numChildren + _bvh[lID2]->numChildren;
     lNode->left        = lID1;
     lNode->right       = lID2;
     lNode->surfaceArea = lNodeBBox.surfaceArea();

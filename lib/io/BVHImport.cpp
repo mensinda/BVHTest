@@ -99,7 +99,7 @@ ErrorCode BVHImport::runImpl(State &_state) {
   }
 
   // Read File
-  auto lBeginPos = lBinaryFile.tellg();
+  //   auto lBeginPos = lBinaryFile.tellg();
   lBinaryFile.seekg(0, lBinaryFile.end);
   //   size_t lCompSize = lBinaryFile.tellg() - lBeginPos;
   size_t lDataSize = lSize * sizeof(BVHNode);

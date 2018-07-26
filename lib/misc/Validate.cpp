@@ -73,7 +73,6 @@ bool Validate::checkTree(State &_state) {
       REQUIRE(NODE->left != NODE->right, lSameChildrenErrors);
       REQUIRE(lNode != NODE->right, lSameChildrenErrors);
       REQUIRE(lNode != NODE->left, lSameChildrenErrors);
-      REQUIRE(NODE->numChildren == LEFT->numChildren + RIGHT->numChildren + 2, lWrongCildCountErrors);
       lBitStack <<= 1;
       lBitStack |= 1;
       lLastNode = lNode;
@@ -82,8 +81,6 @@ bool Validate::checkTree(State &_state) {
       lLevel++;
       lMaxLevel = std::max(lLevel, lMaxLevel);
       continue;
-    } else {
-      REQUIRE(NODE->numChildren == 0, lWrongCildCountErrors);
     }
 
     // Backtrack

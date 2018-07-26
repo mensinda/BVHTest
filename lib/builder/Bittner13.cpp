@@ -198,14 +198,11 @@ void Bittner13::reinsert(uint32_t _node, uint32_t _unused, BVH &_bvh) {
 void Bittner13::fixTree(uint32_t _node, BVH &_bvh) {
   uint32_t lNode = _node;
 
-  uint32_t lLastIndex        = NODE->left;
-  BVHNode *lLast             = _bvh[lLastIndex];
   bool     lLastWasLeft      = true;
   uint32_t lCurrSiblingIndex = 0;
   BVHNode *lCurrSibling      = nullptr;
 
-  AABB  lBBox = LEFT->bbox;
-  float lNum  = lLast->numChildren;
+  AABB lBBox = LEFT->bbox;
 
   while (true) {
     lCurrSiblingIndex = lLastWasLeft ? NODE->right : NODE->left;
@@ -215,14 +212,9 @@ void Bittner13::fixTree(uint32_t _node, BVH &_bvh) {
     NODE->bbox        = lBBox;
     NODE->surfaceArea = lBBox.surfaceArea();
 
-    lNum              = lNum + lCurrSibling->numChildren + 2;
-    NODE->numChildren = lNum;
-
     if (lNode == _bvh.root()) { return; } // We processed the root ==> everything is done
 
     lLastWasLeft = NODE->isLeftChild();
-    lLastIndex   = lNode;
-    lLast        = _bvh[lLastIndex];
     lNode        = NODE->parent;
   }
 }

@@ -311,13 +311,11 @@ void Bittner13Par::fixTree(uint32_t _node, BVH &_bvh) {
   uint32_t lLastIndex = NODE->left;
 
   SPINN_LOCK(lLastIndex, _node);
-  BVHNode *lLast             = _bvh[lLastIndex];
   bool     lLastWasLeft      = true;
   uint32_t lCurrSiblingIndex = 0;
   BVHNode *lCurrSibling      = nullptr;
 
-  AABB  lBBox = LEFT->bbox;
-  float lNum  = lLast->numChildren;
+  AABB lBBox = LEFT->bbox;
 
   float lSArea;
   RELEASE_LOCK_S(lLastIndex, _node);
@@ -333,16 +331,12 @@ void Bittner13Par::fixTree(uint32_t _node, BVH &_bvh) {
     NODE->bbox        = lBBox;
     NODE->surfaceArea = lSArea;
 
-    lNum              = lNum + lCurrSibling->numChildren + 2;
-    NODE->numChildren = lNum;
-
     RELEASE_LOCK_S(lCurrSiblingIndex, _node);
 
     if (lNode == _bvh.root()) { break; } // We processed the root ==> everything is done
 
     lLastWasLeft = NODE->isLeftChild();
     lLastIndex   = lNode;
-    lLast        = _bvh[lLastIndex];
     lNode        = NODE->parent;
 
     RELEASE_LOCK_S(lLastIndex, _node);

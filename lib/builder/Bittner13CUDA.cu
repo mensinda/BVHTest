@@ -57,7 +57,7 @@ struct CUBLeafSelect {
 
   CUB_RUNTIME_FUNCTION __forceinline__ CUBLeafSelect(BVHNode *_n) : nodes(_n) {}
 
-  __device__ __forceinline__ bool operator()(const uint32_t &a) const { return nodes[a].numChildren == 0; }
+  __device__ __forceinline__ bool operator()(const uint32_t &a) const { return nodes[a].isLeafFlag != 0; }
 };
 
 struct CUBNodeSelect {
@@ -65,7 +65,7 @@ struct CUBNodeSelect {
 
   CUB_RUNTIME_FUNCTION __forceinline__ CUBNodeSelect(BVHNode *_n) : nodes(_n) {}
 
-  __device__ __forceinline__ bool operator()(const uint32_t &a) const { return nodes[a].numChildren != 0; }
+  __device__ __forceinline__ bool operator()(const uint32_t &a) const { return nodes[a].isLeafFlag == 0; }
 };
 
 struct CUBNodeSlelect {
@@ -395,7 +395,6 @@ extern "C" __global__ void kFixTree1(uint32_t *_leaf, uint32_t *_flags, BVHNode 
 
       _nodes[lNode].bbox        = lAABB;
       _nodes[lNode].surfaceArea = lAABB.surfaceArea();
-      _nodes[lNode].numChildren = _nodes[lLeft].numChildren + _nodes[lRight].numChildren + 2;
 
       // Check if root
       if (lNode == _nodes[lNode].parent) { break; }
@@ -440,7 +439,7 @@ extern "C" __global__ void kFixTree3_2(uint32_t *_toFix, uint32_t *_flags, BVHNo
     lNodeCPY = _nodes[lNode];
 
     // Check if leaf node
-    if (lNodeCPY.numChildren == 0) {
+    if (lNodeCPY.isLeafFlag != 0) {
       atomicSub(&_flags[lNode], 1); // Leaf nodes should only be locked once
       lNode    = lNodeCPY.parent;
       lNodeCPY = _nodes[lNode];
@@ -456,7 +455,6 @@ extern "C" __global__ void kFixTree3_2(uint32_t *_toFix, uint32_t *_flags, BVHNo
 
       lNodeCPY.bbox        = lAABB;
       lNodeCPY.surfaceArea = lAABB.surfaceArea();
-      lNodeCPY.numChildren = _nodes[lLeft].numChildren + _nodes[lRight].numChildren + 2;
 
       _nodes[lNode] = lNodeCPY;
 
@@ -487,14 +485,14 @@ extern "C" __global__ void kCalcCost(BVHNode *_nodes, uint32_t *_nID, float *_co
     BVHNode lNode = _nodes[lID];
     float   lCost;
 
-    if (lNode.numChildren == 0) {
-      lCost = 0;
-    } else {
+    if (lNode.isLeafFlag == 0) {
       float lSA      = lNode.surfaceArea;
       float lLeftSA  = _nodes[lNode.left].surfaceArea;
       float lRightSA = _nodes[lNode.right].surfaceArea;
 
       lCost = (lSA * lSA * lSA * 2.0f) / ((lLeftSA + lRightSA) * (lLeftSA < lRightSA ? lLeftSA : lRightSA));
+    } else {
+      lCost = 0;
     }
 
     _costOut[i] = lCost;
@@ -944,7 +942,6 @@ void initData(GPUWorkingMemory *_data, CUDAMemoryBVHPointer *_GPUbvh, uint32_t _
   cudaError_t   lRes;
   uint32_t      lNumBlocksAll     = (_data->numInnerNodes + _blockSize - 1) / _blockSize;
   uint32_t      lNumBlocksPatches = (_data->numPatches + _blockSize - 1) / _blockSize;
-  uint32_t      lNumBlocksInit    = (_data->numLeafNodes + _blockSize - 1) / _blockSize;
   int *         lNumSelected      = nullptr;
   int           lNS1              = 0;
   int           lNS2              = 0;

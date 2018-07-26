@@ -30,7 +30,7 @@ struct alignas(16) BVHNodePatch {
   uint16_t isLeafFlag; // 0 ==> leaf
   uint16_t isLeft;     // 1 if the Node is the left child of the parent -- 0 otherwise (right child)
 
-  CUDA_CALL bool isLeaf() const noexcept { return isLeafFlag == 0; }
+  CUDA_CALL bool isLeaf() const noexcept { return isLeafFlag != 0; }
   CUDA_CALL uint32_t beginFaces() const noexcept { return left; }
   CUDA_CALL uint32_t numFaces() const noexcept { return right; }
   CUDA_CALL bool     isLeftChild() const noexcept { return isLeft != 0; }
@@ -126,7 +126,7 @@ class alignas(16) BVHPatch final {
     lRes.left       = _n.left;
     lRes.right      = _n.right;
     lRes.isLeft     = _n.isLeft;
-    lRes.isLeafFlag = static_cast<uint16_t>(_n.numChildren);
+    lRes.isLeafFlag = _n.isLeafFlag;
     return lRes;
   }
 

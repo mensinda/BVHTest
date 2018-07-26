@@ -112,19 +112,16 @@ static const uint8_t FALSE = 0;
 
 struct alignas(16) BVHNode {
   AABB     bbox;
-  uint32_t parent;      // Index of the parent
-  uint32_t numChildren; // Total number of children of the node (0 == leaf)
-  uint32_t left;        // Left child or index of first triangle when leaf
-  uint32_t right;       // Right child or number of faces when leaf
+  uint32_t parent;     // Index of the parent
+  uint32_t left;       // Left child or index of first triangle when leaf
+  uint32_t right;      // Right child or number of faces when leaf
+  uint16_t isLeafFlag; // 1 if the node is a leaf node
+  uint16_t isLeft;     // 1 if the Node is the left child of the parent -- 0 otherwise (right child)
+  uint16_t level;      // Tree height of the current node
 
-  uint32_t isLeft : 1;          // 1 if the Node is the left child of the parent -- 0 otherwise (right child)
-  uint32_t : 7;                 // Force alignment
-  uint32_t unused16BitInt : 16; // Find some use for this
-  uint32_t level : 8;           // Tree height of the current node
+  float surfaceArea;
 
-  float surfaceArea; // TODO: Find a better use for these 4 Byte
-
-  CUDA_CALL bool isLeaf() const noexcept { return numChildren == 0; }
+  CUDA_CALL bool isLeaf() const noexcept { return isLeafFlag != FALSE; }
   CUDA_CALL uint32_t beginFaces() const noexcept { return left; }
   CUDA_CALL uint32_t numFaces() const noexcept { return right; }
   CUDA_CALL bool     isLeftChild() const noexcept { return isLeft != 0; }
@@ -200,19 +197,17 @@ class BVH final {
     bvh[vSize]      = {
         _bbox,                  // bbox
         _parent,                // parent
-        0,                      // numChildren
         _firstFace,             // left
         _numFaces,              // right
+        TRUE,                   // isLeafFlag
         _isLeft ? TRUE : FALSE, // isLeft
-        0,                      // unused16BitInt
         lLevel,                 // treeHeight
         _bbox.surfaceArea()     // surfaceArea
     };
     return vSize++;
   }
 
-  CUDA_CALL uint32_t
-            addInner(AABB const &_bbox, uint32_t _parent, uint32_t _numChildren, uint32_t _left, uint32_t _right, bool _isLeft) {
+  CUDA_CALL uint32_t addInner(AABB const &_bbox, uint32_t _parent, uint32_t _left, uint32_t _right, bool _isLeft) {
     assert(vSize < vCapacity);
 
     uint16_t lLevel = empty() ? 0 : bvh[_parent].level + 1;
@@ -220,11 +215,10 @@ class BVH final {
     bvh[vSize]      = {
         _bbox,                  // bbox
         _parent,                // parent
-        _numChildren,           // numChildren
         _left,                  // left
         _right,                 // right
+        FALSE,                  // isLeafFlag
         _isLeft ? TRUE : FALSE, // isLeft
-        0,                      // unused16BitInt
         lLevel,                 // treeHeight
         _bbox.surfaceArea()     // surfaceArea
     };

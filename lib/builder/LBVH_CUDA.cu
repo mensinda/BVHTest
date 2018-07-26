@@ -281,7 +281,7 @@ extern "C" __global__ void kGenLeafNodes(BVHNode *     _nodes,
     BVHNode      lNode;
     lNode.bbox        = lData.bbox;
     lNode.parent      = UINT32_MAX;
-    lNode.numChildren = 0;
+    lNode.isLeafFlag  = TRUE;
     lNode.left        = lData.faceIndex;
     lNode.right       = 1;
     lNode.level       = UINT8_MAX;
@@ -315,6 +315,7 @@ extern "C" __global__ void kBuildTree(BVHNode *_nodes, uint32_t *_sortedMortonCo
 
     _nodes[i].left             = childAIndex;
     _nodes[i].right            = childBIndex;
+    _nodes[i].isLeafFlag       = FALSE;
     _nodes[childAIndex].parent = i;
     _nodes[childAIndex].isLeft = TRUE;
     _nodes[childBIndex].parent = i;
@@ -364,7 +365,6 @@ extern "C" __global__ void kFixAABBTree(BVHNode *_nodes, uint32_t *_locks, uint3
 
       _nodes[lNode].bbox        = lAABB;
       _nodes[lNode].surfaceArea = lSArea;
-      _nodes[lNode].numChildren = _nodes[lLeft].numChildren + _nodes[lRight].numChildren + 2;
 
       // Check if root
       if (lNode == _nodes[lNode].parent) { break; }
