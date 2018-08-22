@@ -136,6 +136,27 @@ ErrorCode LoadAdd::loadVers2(State &_state, json &_cfg, std::fstream &_binFile) 
   return ErrorCode::OK;
 }
 
+ErrorCode LoadAdd::loadVers3(State &_state, json &_cfg, fstream &_binFile) {
+  size_t lVert   = _cfg.at("mesh").at("vert").get<size_t>();
+  size_t lNormal = _cfg.at("mesh").at("normals").get<size_t>();
+  size_t lFaces  = _cfg.at("mesh").at("faces").get<size_t>();
+
+  vOffsetVert  = _state.mesh.vert.size();
+  vOffsetNorm  = _state.mesh.norm.size();
+  vOffsetFaces = _state.mesh.faces.size();
+
+  _state.mesh.vert.resize(vOffsetVert + lVert);
+  _state.mesh.norm.resize(vOffsetNorm + lNormal);
+  _state.mesh.faces.resize(vOffsetFaces + lFaces);
+
+  _binFile.read(reinterpret_cast<char *>(_state.mesh.vert.data() + vOffsetVert), lVert * sizeof(glm::vec3));
+  _binFile.read(reinterpret_cast<char *>(_state.mesh.norm.data() + vOffsetNorm), lNormal * sizeof(glm::vec3));
+  _binFile.read(reinterpret_cast<char *>(_state.mesh.faces.data() + vOffsetFaces), lFaces * sizeof(Triangle));
+  _binFile.close();
+
+  return ErrorCode::OK;
+}
+
 ErrorCode LoadAdd::runImpl(base::State &_state) {
   auto lLogger = getLogger();
 
@@ -176,6 +197,7 @@ ErrorCode LoadAdd::runImpl(base::State &_state) {
   switch (lVers) {
     case 1: lRes = loadVers1(_state, lCfg, lBinFile); break;
     case 2: lRes = loadVers2(_state, lCfg, lBinFile); break;
+    case 3: lRes = loadVers3(_state, lCfg, lBinFile); break;
     default:
       lLogger->error("File format version is {} but {} is required", lVers, vLoaderVersion);
       return ErrorCode::PARSE_ERROR;

@@ -27,6 +27,7 @@
 #include "MeshRenderer.hpp"
 #include <GLFW/glfw3.h>
 #include <chrono>
+#include <fstream>
 
 
 #pragma GCC diagnostic push
@@ -251,11 +252,15 @@ ErrorCode Viewer::runImpl(State &_state) {
   Camera   lCam;
   Text     lControl;
   Text     lUsage;
-  uint32_t lFrames  = 0;
-  uint32_t lLastFPS = 0;
-  uint32_t lFPS     = 0;
+  uint32_t lFrames      = 0;
+  uint32_t lLastFPS     = 0;
+  uint32_t lFPS         = 0;
+  float    lSAH         = 0.0f;
+  uint32_t lFileCounter = 0;
 
   lWindow.setKeyCallback([&](int _key) -> void { keyCallback(lWindow, _state, lCam, _key); });
+
+  vector<pair<uint32_t, float>> lBenchData;
 
   oglSetup();
 
@@ -307,6 +312,7 @@ ErrorCode Viewer::runImpl(State &_state) {
       }
     }
 
+    if (vCalcSAH) { lSAH = CUDAcalcSAH(&_state.cudaMem.bvh); }
     if (vRecording) { _state.camTrac.push_back(make_shared<Camera>(lCam)); }
     if (vPlaybackIndex != UINT32_MAX) {
       Camera *lTempCam = dynamic_cast<Camera *>(_state.camTrac[vPlaybackIndex].get());
@@ -317,8 +323,20 @@ ErrorCode Viewer::runImpl(State &_state) {
         vRenderer->updateMesh(_state, lTempCam, 0);
       }
 
+      if (vPlaybackIndex == 0) {
+        lBenchData.clear();
+        lBenchData.resize(_state.camTrac.size());
+      }
+
+      lBenchData[vPlaybackIndex] = {lFrameTime, lSAH};
       vPlaybackIndex++;
-      if (vPlaybackIndex >= _state.camTrac.size()) { vPlaybackIndex = 0; }
+      if (vPlaybackIndex >= _state.camTrac.size()) {
+        vPlaybackIndex = 0;
+        fstream lOutCSV("bench_" + to_string(lFileCounter++) + ".csv", ios_base::out | ios_base::trunc);
+        lOutCSV << "frameTime,SAH" << endl;
+        for (auto i : lBenchData) { lOutCSV << i.first << "," << i.second << endl; }
+        lOutCSV.close();
+      }
     }
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -331,9 +349,6 @@ ErrorCode Viewer::runImpl(State &_state) {
         lFPS          = (lFrames - lLastFPS - 1) * 2;
         lLastFPS      = lFrames;
       }
-
-      float lSAH = 0.0f;
-      if (vCalcSAH) { lSAH = CUDAcalcSAH(&_state.cudaMem.bvh); }
 
       lControl.set(
           fmt::format("FPS: {}; Frametime: {}ms"
