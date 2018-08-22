@@ -80,7 +80,7 @@ bool Window::create(std::string _title, uint32_t _x, uint32_t _y) {
   glfwSetCursorPosCallback(vWindow, mouseHandler);
   glfwSetScrollCallback(vWindow, scrollHandler);
   glfwSetKeyCallback(vWindow, keyHandler);
-  glfwSwapInterval(1);
+  glfwSwapInterval(0);
 
   vWidth  = _x;
   vHeight = _y;
